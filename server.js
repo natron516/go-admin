@@ -45,19 +45,13 @@ app.get('/api/assets', async (req, res) => {
 // Create a direct upload URL
 app.post('/api/create-upload', async (req, res) => {
   try {
-    const { title, category, date, speaker } = req.body;
-    const passthrough = JSON.stringify({
-      category: category || 'sermon',
-      title: title || 'Untitled',
-      ...(date    && { date }),
-      ...(speaker && { speaker }),
-    });
+    const { title, passthrough } = req.body;
     const data = await mux('POST', '/video/v1/uploads', {
       cors_origin: '*',
       new_asset_settings: {
         playback_policy: ['public'],
         meta: { title: title || 'Untitled' },
-        passthrough,
+        passthrough: passthrough || '',
       },
     });
     res.json(data);
@@ -66,19 +60,13 @@ app.post('/api/create-upload', async (req, res) => {
   }
 });
 
-// Update asset metadata (title / passthrough)
+// Update asset metadata (title + passthrough)
 app.patch('/api/assets/:id', async (req, res) => {
   try {
-    const { title, category, date, speaker } = req.body;
-    const passthrough = JSON.stringify({
-      category: category || 'sermon',
-      title: title || 'Untitled',
-      ...(date    && { date }),
-      ...(speaker && { speaker }),
-    });
+    const { title, passthrough } = req.body;
     const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
       meta: { title: title || 'Untitled' },
-      passthrough,
+      passthrough: passthrough || '',
     });
     res.json(data);
   } catch (e) {

@@ -653,14 +653,12 @@ function slugToTitle(name) {
 function addFiles(list) {
   for (const file of list) {
     pendingFiles.push({
-      uid:      Math.random().toString(36).slice(2),
+      uid:         Math.random().toString(36).slice(2),
       file,
-      title:    slugToTitle(file.name),
-      category: 'sermon',
-      date:     new Date().toISOString().slice(0, 10),
-      speaker:  '',
-      status:   'pending',
-      progress: 0,
+      title:       slugToTitle(file.name),
+      passthrough: 'sermon',
+      status:      'pending',
+      progress:    0,
     });
   }
   renderFileList();
@@ -709,23 +707,11 @@ function renderFileList() {
             ${item.status!=='pending'?'disabled':''}>
         </div>
         <div class="field">
-          <label>Category</label>
-          <select onchange="updateFile('${item.uid}','category',this.value)"
+          <label>Passthrough</label>
+          <select onchange="updateFile('${item.uid}','passthrough',this.value)"
             ${item.status!=='pending'?'disabled':''}>
-            ${catOptions(item.category)}
+            ${catOptions(item.passthrough)}
           </select>
-        </div>
-        <div class="field">
-          <label>Date</label>
-          <input type="date" value="${escAttr(item.date)}"
-            onchange="updateFile('${item.uid}','date',this.value)"
-            ${item.status!=='pending'?'disabled':''}>
-        </div>
-        <div class="field">
-          <label>Speaker</label>
-          <input type="text" value="${escAttr(item.speaker)}" placeholder="Optional"
-            onchange="updateFile('${item.uid}','speaker',this.value)"
-            ${item.status!=='pending'?'disabled':''}>
         </div>
       </div>
 
@@ -801,7 +787,7 @@ async function uploadOne(item) {
     const res = await fetch('/api/create-upload', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ title: item.title, category: item.category, date: item.date, speaker: item.speaker }),
+      body:    JSON.stringify({ title: item.title, passthrough: item.passthrough }),
     });
     const json = await res.json();
     if (!json.data?.url) throw new Error(json.error || 'No upload URL returned');
@@ -937,12 +923,10 @@ function filterAssets() {
   const q   = (document.getElementById('asset-search')?.value || '').toLowerCase();
   const cat = document.getElementById('asset-filter-cat')?.value || '';
   const filtered = allAssets.filter(a => {
-    const pt    = parsePassthrough(a.passthrough);
-    const title = (a.meta?.title || pt.title || '').toLowerCase();
-    const spk   = (pt.speaker || '').toLowerCase();
-    const c     = pt.category || '';
-    const matchQ   = !q   || title.includes(q) || spk.includes(q) || a.id.includes(q);
-    const matchCat = !cat || c === cat;
+    const title = (a.meta?.title || '').toLowerCase();
+    const pt    = (a.passthrough || '').trim().toLowerCase();
+    const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
+    const matchCat = !cat || pt === cat;
     return matchQ && matchCat;
   });
   const countEl = document.getElementById('asset-count');
@@ -950,14 +934,6 @@ function filterAssets() {
   renderAssets(filtered);
 }
 
-function parsePassthrough(str) {
-  if (!str) return {};
-  let obj;
-  try { obj = JSON.parse(str); } catch { obj = { category: str }; }
-  // Normalize category: lowercase + trim
-  if (obj.category) obj.category = obj.category.toString().trim().toLowerCase();
-  return obj;
-}
 
 function renderAssets(assets) {
   const el = document.getElementById('assets-content');
@@ -970,22 +946,16 @@ function renderAssets(assets) {
 }
 
 function assetCardHtml(a) {
-  const pt       = parsePassthrough(a.passthrough);
-  const edits    = assetEdits[a.id] || {};
-  const title    = edits.title    ?? (a.meta?.title || pt.title || '');
-  const cat      = edits.category ?? (pt.category || '');
-  const date     = edits.date     ?? (pt.date || '');
-  const speaker  = edits.speaker  ?? (pt.speaker || '');
-  const pid      = a.playback_ids?.[0]?.id;
-  const thumbUrl = pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=240&time=5` : '';
-  const dur      = a.duration ? fmtDur(a.duration) : '';
-  const uploaded = a.created_at ? new Date(+a.created_at * 1000).toLocaleString() : '—';
-  const isDirty  = !!assetEdits[a.id];
-  const statusCls = { ready:'ready', preparing:'preparing', errored:'errored' }[a.status] || 'preparing';
-  const statusTxt = { ready:'✓ Ready', preparing:'⏳ Processing', errored:'✕ Error' }[a.status] || a.status;
-  const rawJson  = a.passthrough
-    ? JSON.stringify(parsePassthrough(a.passthrough), null, 2)
-    : '(none)';
+  const edits       = assetEdits[a.id] || {};
+  const title       = edits.title       ?? (a.meta?.title || '');
+  const passthrough = edits.passthrough ?? (a.passthrough || '').trim();
+  const pid         = a.playback_ids?.[0]?.id;
+  const thumbUrl    = pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=240&time=5` : '';
+  const dur         = a.duration ? fmtDur(a.duration) : '';
+  const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleString() : '—';
+  const isDirty     = !!assetEdits[a.id];
+  const statusCls   = { ready:'ready', preparing:'preparing', errored:'errored' }[a.status] || 'preparing';
+  const statusTxt   = { ready:'✓ Ready', preparing:'⏳ Processing', errored:'✕ Error' }[a.status] || a.status;
 
   return `
   <div class="asset-card ${isDirty ? 'dirty' : ''}" id="acard-${a.id}">
@@ -1007,37 +977,24 @@ function assetCardHtml(a) {
     </div>
 
     <div class="ac-fields">
-      <div class="ac-section-label">Passthrough Data</div>
       <div class="field-full">
-        <div class="ie-label">title</div>
+        <div class="ie-label">Title</div>
         <input class="ie-input" type="text" value="${escAttr(title)}"
           placeholder="Video title"
           oninput="setEdit('${a.id}','title',this.value)">
       </div>
-      <div>
-        <div class="ie-label">category</div>
+      <div class="field-full">
+        <div class="ie-label">Passthrough</div>
         <select class="ie-input ie-select"
-          onchange="setEdit('${a.id}','category',this.value)">
-          ${catOptions(cat)}
+          onchange="setEdit('${a.id}','passthrough',this.value)">
+          ${catOptions(passthrough)}
         </select>
       </div>
-      <div>
-        <div class="ie-label">date</div>
-        <input class="ie-input" type="date" value="${escAttr(date)}"
-          oninput="setEdit('${a.id}','date',this.value)">
-      </div>
-      <div class="field-full">
-        <div class="ie-label">speaker</div>
-        <input class="ie-input" type="text" value="${escAttr(speaker)}"
-          placeholder="Optional"
-          oninput="setEdit('${a.id}','speaker',this.value)">
-      </div>
-
     </div>
 
     <div class="ac-footer">
       <button class="btn btn-primary btn-sm ac-save-btn" onclick="saveAsset('${a.id}')">
-        💾 Save Changes
+        💾 Save
       </button>
       <button class="btn btn-ghost btn-sm" onclick="discardAsset('${a.id}')" style="${isDirty ? '' : 'display:none'}" id="discard-${a.id}">
         Discard
@@ -1054,26 +1011,12 @@ function setEdit(id, key, val) {
   if (!assetEdits[id]) {
     // seed with current values
     const a  = allAssets.find(x => x.id === id);
-    const pt = a ? parsePassthrough(a.passthrough) : {};
     assetEdits[id] = {
-      title:    a?.meta?.title || pt.title || '',
-      category: pt.category || '',
-      date:     pt.date || '',
-      speaker:  pt.speaker || '',
+      title:       a?.meta?.title || '',
+      passthrough: (a?.passthrough || '').trim(),
     };
   }
   assetEdits[id][key] = val;
-  // Refresh compiled JSON preview
-  const preview = document.getElementById('pt-preview-' + id);
-  if (preview) {
-    const e = assetEdits[id];
-    const obj = {};
-    if (e.category) obj.category = e.category;
-    if (e.title)    obj.title    = e.title;
-    if (e.date)     obj.date     = e.date;
-    if (e.speaker)  obj.speaker  = e.speaker;
-    preview.textContent = JSON.stringify(obj, null, 2);
-  }
   // Mark card dirty visually
   const card = document.getElementById('acard-' + id);
   if (card) {
@@ -1101,7 +1044,7 @@ async function saveAsset(id) {
     if (a) {
       if (!a.meta) a.meta = {};
       a.meta.title  = edits.title;
-      a.passthrough = JSON.stringify({ category: edits.category, title: edits.title, date: edits.date, speaker: edits.speaker });
+      a.passthrough = edits.passthrough;
     }
     if (card) { card.classList.remove('saving'); card.classList.add('saved'); }
     toast('Saved ✓');
