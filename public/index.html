@@ -5,108 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GO Videos Admin</title>
 <style>
-  /* ── Reset & base ─────────────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg:       #0d0f14;
-    --surface:  #181c25;
-    --border:   #2a2f3f;
-    --accent:   #4f8ef7;
-    --accent2:  #7c5cf7;
-    --red:      #e05252;
-    --green:    #3ecf8e;
-    --orange:   #f59e0b;
-    --text:     #e8eaf0;
-    --muted:    #7a8099;
-    --radius:   12px;
-    --shadow:   0 4px 24px rgba(0,0,0,.45);
+    --bg:      #0d0f14;
+    --surface: #181c25;
+    --border:  #2a2f3f;
+    --accent:  #4f8ef7;
+    --accent2: #7c5cf7;
+    --red:     #e05252;
+    --green:   #3ecf8e;
+    --orange:  #f59e0b;
+    --text:    #e8eaf0;
+    --muted:   #7a8099;
+    --radius:  12px;
+    --shadow:  0 4px 24px rgba(0,0,0,.45);
   }
   html { height: 100%; }
-  body {
-    min-height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.5;
-  }
+  body { min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; }
 
-  /* ── Header ───────────────────────────────────────────── */
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 20px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    height: 56px;
-  }
-  .logo {
-    font-weight: 700;
-    font-size: 17px;
-    letter-spacing: -.3px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  nav {
-    display: flex;
-    gap: 4px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    flex: 1;
-  }
+  /* Header */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 16px; height: 56px; }
+  .logo { font-weight: 700; font-size: 17px; letter-spacing: -.3px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; flex-shrink: 0; }
+  nav { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex: 1; }
   nav::-webkit-scrollbar { display: none; }
-  .tab {
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 14px;
-    font-weight: 500;
-    padding: 6px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: color .15s, background .15s;
-  }
+  .tab { background: none; border: none; color: var(--muted); font-size: 14px; font-weight: 500; padding: 6px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: color .15s, background .15s; }
   .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
   .tab.active { color: var(--accent); background: rgba(79,142,247,.12); }
 
-  /* ── Layout ───────────────────────────────────────────── */
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+  /* Layout */
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
   .section { display: none; }
   .section.active { display: block; }
 
-  /* ── Cards ────────────────────────────────────────────── */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 16px;
-    box-shadow: var(--shadow);
-  }
-
-  /* ── Buttons ──────────────────────────────────────────── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 18px;
-    border-radius: 8px;
-    border: none;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity .15s, transform .1s;
-    white-space: nowrap;
-  }
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s, transform .1s; white-space: nowrap; }
   .btn:active { transform: scale(.97); }
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { opacity: .88; }
@@ -114,381 +46,143 @@
   .btn-ghost:hover { background: rgba(255,255,255,.13); }
   .btn-danger { background: rgba(224,82,82,.15); color: var(--red); }
   .btn-danger:hover { background: rgba(224,82,82,.25); }
-  .btn-sm { padding: 6px 12px; font-size: 13px; }
-  .btn-icon { padding: 8px; border-radius: 8px; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
   .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 
-  /* ── Form fields ──────────────────────────────────────── */
-  .field-group {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-    margin-top: 14px;
-  }
+  /* Form fields (upload) */
+  .field-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
   .field { display: flex; flex-direction: column; gap: 5px; }
   .field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-  .field input, .field select, .field textarea {
-    background: rgba(255,255,255,.05);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-size: 14px;
-    padding: 9px 12px;
-    outline: none;
-    transition: border-color .15s;
-    width: 100%;
-    -webkit-appearance: none;
-  }
+  .field input, .field select { background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 9px 12px; outline: none; transition: border-color .15s; width: 100%; -webkit-appearance: none; }
   .field input:focus, .field select:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
   .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-color: rgba(255,255,255,.05); padding-right: 32px; cursor: pointer; }
   .field select option { background: #1e2333; }
-  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.6); }
 
-  /* ── Drop zone ────────────────────────────────────────── */
-  #drop-zone {
-    border: 2px dashed var(--border);
-    border-radius: var(--radius);
-    padding: 48px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color .2s, background .2s;
-    margin-bottom: 24px;
-  }
-  #drop-zone:hover, #drop-zone.dragging {
-    border-color: var(--accent);
-    background: rgba(79,142,247,.05);
-  }
+  /* Drop zone */
+  #drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 48px 24px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; margin-bottom: 24px; }
+  #drop-zone:hover, #drop-zone.dragging { border-color: var(--accent); background: rgba(79,142,247,.05); }
   #drop-zone svg { width: 40px; height: 40px; margin-bottom: 12px; color: var(--muted); display: block; margin-inline: auto; }
   #drop-zone .dz-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
   #drop-zone .dz-sub { font-size: 13px; color: var(--muted); }
   #file-input { display: none; }
 
-  /* ── File cards ───────────────────────────────────────── */
+  /* File cards */
   #file-list { display: grid; gap: 16px; }
-  @media (min-width: 640px) { #file-list { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 640px)  { #file-list { grid-template-columns: 1fr 1fr; } }
   @media (min-width: 1000px) { #file-list { grid-template-columns: 1fr 1fr 1fr; } }
-
-  .file-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    position: relative;
-    transition: border-color .2s;
-  }
+  .file-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: border-color .2s; }
   .file-card.uploading { border-color: var(--accent); }
-  .file-card.done { border-color: var(--green); }
+  .file-card.done  { border-color: var(--green); }
   .file-card.error { border-color: var(--red); }
-
   .file-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
   .file-icon { font-size: 24px; flex-shrink: 0; }
   .file-meta { flex: 1; min-width: 0; }
   .file-name { font-size: 13px; font-weight: 600; word-break: break-all; line-height: 1.3; }
   .file-size { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .file-remove {
-    background: none; border: none; color: var(--muted);
-    cursor: pointer; font-size: 18px; padding: 2px 4px;
-    line-height: 1; border-radius: 4px; flex-shrink: 0;
-    transition: color .15s, background .15s;
-  }
-  .file-remove:hover { color: var(--red); background: rgba(224,82,82,.1); }
-
-  /* Progress */
+  .file-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 2px 4px; line-height: 1; border-radius: 4px; flex-shrink: 0; transition: color .15s; }
+  .file-remove:hover { color: var(--red); }
   .progress-wrap { margin-top: 12px; }
   .progress-bar { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .3s; }
   .progress-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
-
-  /* Status badges */
-  .badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12px; font-weight: 600; padding: 3px 10px;
-    border-radius: 99px; margin-top: 8px;
-  }
-  .badge-pending  { background: rgba(122,128,153,.15); color: var(--muted); }
-  .badge-uploading{ background: rgba(79,142,247,.15);  color: var(--accent); }
-  .badge-done     { background: rgba(62,207,142,.15);  color: var(--green); }
-  .badge-error    { background: rgba(224,82,82,.15);   color: var(--red); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; margin-top: 8px; }
+  .badge-pending   { background: rgba(122,128,153,.15); color: var(--muted); }
+  .badge-uploading { background: rgba(79,142,247,.15);  color: var(--accent); }
+  .badge-done      { background: rgba(62,207,142,.15);  color: var(--green); }
+  .badge-error     { background: rgba(224,82,82,.15);   color: var(--red); }
   .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .badge-dot.pulse { animation: pulse 1.2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-  /* ── Upload toolbar ───────────────────────────────────── */
-  .upload-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
+  /* Upload toolbar */
+  .upload-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
   .upload-toolbar h2 { font-size: 18px; font-weight: 700; flex: 1; }
 
-  /* ── Live stream cards ────────────────────────────────── */
+  /* Live streams */
   .streams-grid { display: grid; gap: 16px; }
   @media (min-width: 700px) { .streams-grid { grid-template-columns: 1fr 1fr; } }
-
-  .stream-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-  }
+  .stream-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
   .stream-card.live { border-color: var(--red); }
   .stream-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-  .stream-status {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12px; font-weight: 700; padding: 3px 10px;
-    border-radius: 99px; margin-bottom: 16px;
-  }
-  .status-active  { background: rgba(224,82,82,.15); color: var(--red); }
-  .status-idle    { background: rgba(122,128,153,.15); color: var(--muted); }
-  .status-disabled{ background: rgba(122,128,153,.1); color: var(--muted); }
-
-  .key-row {
-    margin-bottom: 12px;
-  }
+  .stream-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; margin-bottom: 16px; }
+  .status-active   { background: rgba(224,82,82,.15); color: var(--red); }
+  .status-idle     { background: rgba(122,128,153,.15); color: var(--muted); }
+  .status-disabled { background: rgba(122,128,153,.1); color: var(--muted); }
+  .key-row { margin-bottom: 12px; }
   .key-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
-  .key-box {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(0,0,0,.3); border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px 12px;
-  }
-  .key-value {
-    flex: 1; font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 13px; word-break: break-all; color: var(--text);
-    user-select: all;
-  }
+  .key-box { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+  .key-value { flex: 1; font-family: 'SF Mono','Fira Code',monospace; font-size: 13px; word-break: break-all; color: var(--text); user-select: all; }
   .key-value.masked { letter-spacing: 2px; color: var(--muted); }
-  .copy-btn {
-    background: none; border: none; cursor: pointer; color: var(--muted);
-    font-size: 18px; padding: 2px; transition: color .15s; flex-shrink: 0;
-  }
+  .copy-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 18px; padding: 2px; transition: color .15s; flex-shrink: 0; }
   .copy-btn:hover { color: var(--accent); }
   .copy-btn.copied { color: var(--green); }
 
-  /* ── Assets list ──────────────────────────────────────── */
-  .assets-list { display: grid; gap: 14px; }
-
-  .asset-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    transition: border-color .2s;
-  }
-  .asset-card.dirty { border-color: var(--orange); }
-  .asset-card.saving { border-color: var(--accent); opacity: .8; }
-  .asset-card.saved  { border-color: var(--green); }
-
-  /* Top strip: thumb + header info */
-  .ac-top {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 0;
-  }
-  @media (max-width: 500px) { .ac-top { grid-template-columns: 80px 1fr; } }
-
-  .ac-thumb-wrap { position: relative; }
-  .ac-thumb {
-    width: 100%; aspect-ratio: 16/9;
-    object-fit: cover; display: block;
-    background: var(--border);
-  }
-  .ac-thumb-placeholder {
-    width: 100%; aspect-ratio: 16/9;
-    background: var(--border);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--muted); font-size: 26px;
-  }
-  .ac-dur {
-    position: absolute; bottom: 4px; right: 4px;
-    background: rgba(0,0,0,.75); color: #fff;
-    font-size: 11px; font-weight: 600;
-    padding: 2px 5px; border-radius: 4px;
-  }
-
-  /* Status pill */
-  .ac-status {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 11px; font-weight: 700;
-    padding: 2px 8px; border-radius: 99px;
-  }
-  .ac-status.ready     { background: rgba(62,207,142,.15); color: var(--green); }
-  .ac-status.preparing { background: rgba(79,142,247,.15); color: var(--accent); }
-  .ac-status.errored   { background: rgba(224,82,82,.15);  color: var(--red); }
-
-  .ac-header {
-    padding: 14px 16px;
-    display: flex; flex-direction: column; gap: 6px; min-width: 0;
-  }
-  .ac-header-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .ac-id {
-    font-family: 'SF Mono','Fira Code',monospace;
-    font-size: 11px; color: var(--muted);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    flex: 1; min-width: 0;
-  }
-
-  /* Inline-edit fields */
-  .ac-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    padding: 14px 16px;
-    border-top: 1px solid var(--border);
-  }
-  @media (max-width: 600px) { .ac-fields { grid-template-columns: 1fr; } }
-  .ac-fields .field-full { grid-column: 1 / -1; }
-
-  .ie-label {
-    font-size: 11px; font-weight: 700; color: var(--muted);
-    text-transform: uppercase; letter-spacing: .5px;
-    margin-bottom: 4px;
-  }
-  .ie-input {
-    background: rgba(255,255,255,.05);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    color: var(--text);
-    font-size: 14px;
-    padding: 8px 10px;
-    outline: none;
-    transition: border-color .15s, background .15s;
-    width: 100%;
-    -webkit-appearance: none;
-  }
-  .ie-input:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
-  .ie-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-color: rgba(255,255,255,.05); padding-right: 28px; cursor: pointer; }
-  .ie-select option { background: #1e2333; }
-  input[type="date"].ie-input::-webkit-calendar-picker-indicator { filter: invert(.6); }
-
-  /* Passthrough raw section */
-  .ac-section-label {
-    grid-column: 1 / -1;
-    font-size: 11px; font-weight: 700; color: var(--accent);
-    text-transform: uppercase; letter-spacing: .8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 2px;
-  }
-  .ac-pt-json {
-    background: rgba(0,0,0,.3);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-family: 'SF Mono','Fira Code',monospace;
-    font-size: 12px;
-    color: var(--muted);
-    white-space: pre-wrap;
-    word-break: break-all;
-    margin-top: 4px;
-  }
-  .ac-mux-info {
-    font-size: 12px; color: var(--muted);
-    padding: 8px 16px 10px;
-    display: flex; gap: 16px; flex-wrap: wrap;
-    border-top: 1px solid var(--border);
-  }
-  .ac-mux-info span { display: flex; align-items: center; gap: 4px; }
-
-  /* Footer actions */
-  .ac-footer {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 16px;
-    border-top: 1px solid var(--border);
-    background: rgba(0,0,0,.15);
-  }
-  .ac-save-btn { display: none; }
-  .asset-card.dirty .ac-save-btn { display: inline-flex; }
-
-  /* Search/filter bar */
-  .assets-toolbar {
-    display: flex; gap: 10px; align-items: center;
-    margin-bottom: 16px; flex-wrap: wrap;
-  }
-  .assets-toolbar input {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-size: 14px;
-    padding: 8px 14px;
-    outline: none;
-    flex: 1; min-width: 160px;
-    transition: border-color .15s;
-  }
+  /* ── Assets table ───────────────────────────────────── */
+  .assets-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .assets-toolbar input { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 7px 12px; outline: none; flex: 1; min-width: 160px; transition: border-color .15s; }
   .assets-toolbar input:focus { border-color: var(--accent); }
-  .assets-toolbar select {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-size: 14px;
-    padding: 8px 30px 8px 12px;
-    outline: none; cursor: pointer;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-  }
+  .assets-toolbar select { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 7px 28px 7px 12px; outline: none; cursor: pointer; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
   .assets-toolbar select option { background: #1e2333; }
-  .asset-count { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .asset-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
-  /* Edit modal */
-  .modal-backdrop {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.7); z-index: 200;
-    align-items: center; justify-content: center; padding: 16px;
-  }
+  .assets-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  .assets-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+  .assets-table thead th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: rgba(0,0,0,.2); }
+  .assets-table tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+  .assets-table tbody tr:last-child { border-bottom: none; }
+  .assets-table tbody tr:hover { background: rgba(255,255,255,.03); }
+  .assets-table tbody tr.dirty  { background: rgba(245,158,11,.05); }
+  .assets-table tbody tr.saving { opacity: .6; }
+  .assets-table tbody tr.saved  { background: rgba(62,207,142,.05); }
+  .assets-table td { padding: 8px 12px; vertical-align: middle; }
+
+  /* thumb cell */
+  .td-thumb { width: 90px; }
+  .at-thumb-wrap { position: relative; display: inline-block; }
+  .at-thumb { width: 80px; height: 46px; object-fit: cover; border-radius: 5px; display: block; background: var(--border); }
+  .at-placeholder { width: 80px; height: 46px; background: var(--border); border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted); }
+  .at-dur { position: absolute; bottom: 3px; right: 3px; background: rgba(0,0,0,.8); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 4px; border-radius: 3px; }
+
+  /* inline inputs */
+  .at-input { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 5px 7px; outline: none; width: 100%; min-width: 120px; transition: border-color .15s, background .15s; }
+  .at-input:hover { border-color: var(--border); }
+  .at-input:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
+  .at-select { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 5px 22px 5px 7px; outline: none; cursor: pointer; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; background-color: transparent; transition: border-color .15s, background-color .15s; min-width: 110px; }
+  .at-select:hover { border-color: var(--border); }
+  .at-select:focus { border-color: var(--accent); background-color: rgba(79,142,247,.07); }
+  .at-select option { background: #1e2333; }
+
+  /* status pill */
+  .at-status { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
+  .at-status.ready     { background: rgba(62,207,142,.15); color: var(--green); }
+  .at-status.preparing { background: rgba(79,142,247,.15); color: var(--accent); }
+  .at-status.errored   { background: rgba(224,82,82,.15);  color: var(--red); }
+
+  .td-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .td-actions { white-space: nowrap; }
+  .td-actions-inner { display: flex; gap: 5px; align-items: center; }
+  .at-save { display: none !important; }
+  tr.dirty .at-save { display: inline-flex !important; }
+
+  /* Modal */
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
   .modal-backdrop.open { display: flex; }
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    width: 100%; max-width: 480px;
-    box-shadow: var(--shadow);
-  }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 100%; max-width: 480px; box-shadow: var(--shadow); }
   .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
   .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
 
-  /* ── Empty / loading states ───────────────────────────── */
-  .empty {
-    text-align: center; padding: 48px 24px; color: var(--muted);
-  }
+  /* Empty / loading */
+  .empty { text-align: center; padding: 48px 24px; color: var(--muted); }
   .empty .icon { font-size: 40px; margin-bottom: 12px; }
   .empty p { font-size: 14px; }
-  .spinner {
-    width: 28px; height: 28px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    margin: 40px auto;
-  }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 40px auto; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Toast ────────────────────────────────────────────── */
-  #toast {
-    position: fixed; bottom: 24px; left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    background: #2a3050; border: 1px solid var(--border);
-    color: var(--text); padding: 10px 20px;
-    border-radius: 99px; font-size: 13px; font-weight: 500;
-    white-space: nowrap; box-shadow: var(--shadow);
-    transition: transform .25s ease; z-index: 300;
-    pointer-events: none;
-  }
+  /* Toast */
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #2a3050; border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; white-space: nowrap; box-shadow: var(--shadow); transition: transform .25s ease; z-index: 300; pointer-events: none; }
   #toast.show { transform: translateX(-50%) translateY(0); }
 
-  /* ── Responsive tweaks ───────────────────────────────── */
-  @media (max-width: 480px) {
-    header { padding: 0 12px; }
-    main { padding: 16px 12px 60px; }
-    .asset-row { grid-template-columns: 60px 1fr; }
-    .asset-actions { grid-column: 1/-1; }
-    .card { padding: 16px; }
-  }
+  @media (max-width: 480px) { header { padding: 0 12px; } main { padding: 16px 12px 60px; } }
 </style>
 </head>
 <body>
@@ -504,7 +198,7 @@
 
 <main>
 
-  <!-- ═══════════════════ UPLOAD ═══════════════════ -->
+  <!-- UPLOAD -->
   <section id="tab-upload" class="section active">
     <div id="drop-zone">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -515,20 +209,17 @@
       <div class="dz-sub">or click to browse · MP4, MOV, MKV, M4V supported</div>
     </div>
     <input type="file" id="file-input" multiple accept="video/*">
-
     <div id="pending-wrap" style="display:none">
       <div class="upload-toolbar">
         <h2 id="pending-count"></h2>
         <button class="btn btn-ghost btn-sm" onclick="clearDone()">Clear Done</button>
-        <button class="btn btn-primary" id="upload-btn" onclick="uploadAll()">
-          ⬆️ Upload All
-        </button>
+        <button class="btn btn-primary" id="upload-btn" onclick="uploadAll()">⬆️ Upload All</button>
       </div>
       <div id="file-list"></div>
     </div>
   </section>
 
-  <!-- ═══════════════════ LIVE ═══════════════════ -->
+  <!-- LIVE STREAMS -->
   <section id="tab-live" class="section">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
       <h2 style="font-size:18px;font-weight:700;flex:1;">Live Streams</h2>
@@ -538,14 +229,14 @@
     <div id="live-content"><div class="spinner"></div></div>
   </section>
 
-  <!-- ═══════════════════ ASSETS ═══════════════════ -->
+  <!-- ASSETS -->
   <section id="tab-assets" class="section">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
       <h2 style="font-size:18px;font-weight:700;flex:1;">All Assets</h2>
       <button class="btn btn-ghost btn-sm" onclick="loadAssets()">↺ Refresh</button>
     </div>
     <div class="assets-toolbar">
-      <input type="search" id="asset-search" placeholder="🔍 Search title, speaker…" oninput="filterAssets()">
+      <input type="search" id="asset-search" placeholder="🔍 Search title…" oninput="filterAssets()">
       <select id="asset-filter-cat" onchange="filterAssets()">
         <option value="">All Categories</option>
         <option value="sermon">📖 Sermon</option>
@@ -560,8 +251,6 @@
   </section>
 
 </main>
-
-<!-- (edit modal removed — all editing is now inline) -->
 
 <!-- New Live Stream Modal -->
 <div class="modal-backdrop" id="new-stream-modal">
@@ -587,30 +276,27 @@
 <div id="toast"></div>
 
 <script>
-// ── Config ────────────────────────────────────────────────
 const CATEGORIES = [
   { value: 'sermon',      label: '📖 Sermon' },
-  { value: 'children',   label: '⭐ Children\'s' },
-  { value: 'music',      label: '🎵 Music' },
-  { value: 'performance',label: '🎭 Performance / Show' },
-  { value: 'funzone',    label: '🎉 FunZone' },
+  { value: 'children',    label: "⭐ Children's" },
+  { value: 'music',       label: '🎵 Music' },
+  { value: 'performance', label: '🎭 Performance' },
+  { value: 'funzone',     label: '🎉 FunZone' },
 ];
 
 function catOptions(selected = '') {
-  const blank   = `<option value="" ${!selected ? 'selected' : ''} disabled>-- not set --</option>`;
-  const known   = CATEGORIES.map(c =>
+  const blank  = `<option value="" ${!selected ? 'selected' : ''} disabled>-- not set --</option>`;
+  const known  = CATEGORIES.map(c =>
     `<option value="${c.value}" ${c.value === selected ? 'selected' : ''}>${c.label}</option>`
   ).join('');
-  // If selected value isn't in our list, add it as a custom option so it stays visible
   const isKnown = !selected || CATEGORIES.some(c => c.value === selected);
   const custom  = isKnown ? '' : `<option value="${escAttr(selected)}" selected>${escHtml(selected)}</option>`;
   return blank + custom + known;
 }
 
-// Populate static selects
 document.getElementById('ns-category').innerHTML = catOptions();
 
-// ── Tabs ─────────────────────────────────────────────────
+// Tabs
 function showTab(name, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -620,7 +306,7 @@ function showTab(name, btn) {
   if (name === 'assets') loadAssets();
 }
 
-// ── Toast ─────────────────────────────────────────────────
+// Toast
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -628,296 +314,141 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2500);
 }
 
-// ── Upload logic ──────────────────────────────────────────
+// ── Upload ────────────────────────────────────────────────
 let pendingFiles = [];
-
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
-
 dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragging'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
 dropZone.addEventListener('drop',      e => { e.preventDefault(); dropZone.classList.remove('dragging'); addFiles(e.dataTransfer.files); });
 dropZone.addEventListener('click',     () => fileInput.click());
 fileInput.addEventListener('change',   e => { addFiles(e.target.files); fileInput.value = ''; });
 
-function formatSize(bytes) {
-  if (bytes < 1024)       return bytes + ' B';
-  if (bytes < 1048576)    return (bytes/1024).toFixed(1) + ' KB';
-  if (bytes < 1073741824) return (bytes/1048576).toFixed(1) + ' MB';
-  return (bytes/1073741824).toFixed(2) + ' GB';
-}
-
-function slugToTitle(name) {
-  return name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
+function formatSize(b) { if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB'; if(b<1073741824) return (b/1048576).toFixed(1)+' MB'; return (b/1073741824).toFixed(2)+' GB'; }
+function slugToTitle(n) { return n.replace(/\.[^/.]+$/,'').replace(/[-_]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 
 function addFiles(list) {
   for (const file of list) {
-    pendingFiles.push({
-      uid:         Math.random().toString(36).slice(2),
-      file,
-      title:       slugToTitle(file.name),
-      passthrough: 'sermon',
-      status:      'pending',
-      progress:    0,
-    });
+    pendingFiles.push({ uid: Math.random().toString(36).slice(2), file, title: slugToTitle(file.name), passthrough: 'sermon', status: 'pending', progress: 0 });
   }
   renderFileList();
 }
-
-function updateFile(uid, key, val) {
-  const item = pendingFiles.find(f => f.uid === uid);
-  if (item) item[key] = val;
-}
-
-function removeFile(uid) {
-  pendingFiles = pendingFiles.filter(f => f.uid !== uid);
-  renderFileList();
-}
-
-function clearDone() {
-  pendingFiles = pendingFiles.filter(f => f.status !== 'done');
-  renderFileList();
-}
+function updateFile(uid, key, val) { const item = pendingFiles.find(f => f.uid === uid); if (item) item[key] = val; }
+function removeFile(uid) { pendingFiles = pendingFiles.filter(f => f.uid !== uid); renderFileList(); }
+function clearDone() { pendingFiles = pendingFiles.filter(f => f.status !== 'done'); renderFileList(); }
 
 function renderFileList() {
   const wrap = document.getElementById('pending-wrap');
-  const list = document.getElementById('file-list');
-  const count = document.getElementById('pending-count');
-
   if (pendingFiles.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  count.textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
-
-  list.innerHTML = pendingFiles.map(item => `
+  document.getElementById('pending-count').textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
+  document.getElementById('file-list').innerHTML = pendingFiles.map(item => `
     <div class="file-card ${item.status}" id="card-${item.uid}">
       <div class="file-header">
         <div class="file-icon">🎬</div>
-        <div class="file-meta">
-          <div class="file-name">${escHtml(item.file.name)}</div>
-          <div class="file-size">${formatSize(item.file.size)}</div>
-        </div>
-        <button class="file-remove" onclick="removeFile('${item.uid}')" title="Remove" ${item.status==='uploading'?'disabled':''}>✕</button>
+        <div class="file-meta"><div class="file-name">${escHtml(item.file.name)}</div><div class="file-size">${formatSize(item.file.size)}</div></div>
+        <button class="file-remove" onclick="removeFile('${item.uid}')" ${item.status==='uploading'?'disabled':''}>✕</button>
       </div>
-
       <div class="field-group">
-        <div class="field">
-          <label>Title</label>
-          <input type="text" value="${escAttr(item.title)}"
-            onchange="updateFile('${item.uid}','title',this.value)"
-            ${item.status!=='pending'?'disabled':''}>
-        </div>
-        <div class="field">
-          <label>Passthrough</label>
-          <select onchange="updateFile('${item.uid}','passthrough',this.value)"
-            ${item.status!=='pending'?'disabled':''}>
-            ${catOptions(item.passthrough)}
-          </select>
-        </div>
+        <div class="field"><label>Title</label><input type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${item.status!=='pending'?'disabled':''}></div>
+        <div class="field"><label>Passthrough</label><select onchange="updateFile('${item.uid}','passthrough',this.value)" ${item.status!=='pending'?'disabled':''}>${catOptions(item.passthrough)}</select></div>
       </div>
-
-      ${item.status === 'uploading' ? `
-        <div class="progress-wrap">
-          <div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div>
-          <div class="progress-label">${item.progress}%</div>
-        </div>` : ''}
-
-      <div>
-        ${badgeHtml(item.status)}
-      </div>
-    </div>
-  `).join('');
+      ${item.status==='uploading'?`<div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div><div class="progress-label">${item.progress}%</div></div>`:''}
+      <div>${badgeHtml(item.status)}</div>
+    </div>`).join('');
 }
 
-function badgeHtml(status) {
-  const map = {
-    pending:   ['badge-pending',   false, 'Queued'],
-    uploading: ['badge-uploading', true,  'Uploading…'],
-    done:      ['badge-done',      false, '✓ Done'],
-    error:     ['badge-error',     false, '✕ Error'],
-  };
-  const [cls, pulse, label] = map[status] || map.pending;
+function badgeHtml(s) {
+  const m = { pending:['badge-pending',false,'Queued'], uploading:['badge-uploading',true,'Uploading…'], done:['badge-done',false,'✓ Done'], error:['badge-error',false,'✕ Error'] };
+  const [cls,pulse,label] = m[s]||m.pending;
   return `<span class="badge ${cls}"><span class="badge-dot${pulse?' pulse':''}"></span>${label}</span>`;
 }
 
 function updateCard(item) {
-  const card = document.getElementById('card-' + item.uid);
+  const card = document.getElementById('card-'+item.uid);
   if (!card) return;
-  // Update progress bar
-  const fill = card.querySelector('.progress-fill');
-  const pct  = card.querySelector('.progress-label');
-  if (fill) fill.style.width = item.progress + '%';
-  if (pct)  pct.textContent  = item.progress + '%';
-  // Update class
-  card.className = 'file-card ' + item.status;
-  // Update badge
-  const badge = card.querySelector('.badge');
-  if (badge) badge.outerHTML = badgeHtml(item.status);
+  const fill = card.querySelector('.progress-fill'); if (fill) fill.style.width = item.progress+'%';
+  const pct  = card.querySelector('.progress-label'); if (pct)  pct.textContent  = item.progress+'%';
+  card.className = 'file-card '+item.status;
+  const badge = card.querySelector('.badge'); if (badge) badge.outerHTML = badgeHtml(item.status);
 }
 
 async function uploadAll() {
   const pending = pendingFiles.filter(f => f.status === 'pending');
   if (!pending.length) { toast('Nothing to upload!'); return; }
   document.getElementById('upload-btn').disabled = true;
-  for (const item of pending) {
-    await uploadOne(item);
-  }
+  for (const item of pending) await uploadOne(item);
   document.getElementById('upload-btn').disabled = false;
   toast('All uploads complete! 🎉');
 }
 
 async function uploadOne(item) {
-  item.status   = 'uploading';
-  item.progress = 0;
-
-  // Show progress bar
-  const card = document.getElementById('card-' + item.uid);
-  if (card) {
-    card.className = 'file-card uploading';
-    const fields = card.querySelector('.field-group');
-    if (fields) {
-      const pw = document.createElement('div');
-      pw.className = 'progress-wrap';
-      pw.innerHTML = `<div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div><div class="progress-label">0%</div>`;
-      card.insertBefore(pw, card.lastElementChild);
-    }
-  }
-
+  item.status = 'uploading'; item.progress = 0;
+  const card = document.getElementById('card-'+item.uid);
+  if (card) { card.className = 'file-card uploading'; const fields = card.querySelector('.field-group'); if (fields) { const pw = document.createElement('div'); pw.className='progress-wrap'; pw.innerHTML=`<div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div><div class="progress-label">0%</div>`; card.insertBefore(pw, card.lastElementChild); } }
   try {
-    // 1. Get Mux direct upload URL
-    const res = await fetch('/api/create-upload', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ title: item.title, passthrough: item.passthrough }),
-    });
+    const res = await fetch('/api/create-upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: item.title, passthrough: item.passthrough }) });
     const json = await res.json();
-    if (!json.data?.url) throw new Error(json.error || 'No upload URL returned');
-    const uploadUrl = json.data.url;
-
-    // 2. PUT file directly to Mux (with progress)
+    if (!json.data?.url) throw new Error(json.error || 'No upload URL');
     await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.upload.addEventListener('progress', e => {
-        if (e.lengthComputable) {
-          item.progress = Math.round(e.loaded / e.total * 100);
-          updateCard(item);
-        }
-      });
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else reject(new Error('Upload failed: ' + xhr.status));
-      });
+      xhr.upload.addEventListener('progress', e => { if (e.lengthComputable) { item.progress = Math.round(e.loaded/e.total*100); updateCard(item); } });
+      xhr.addEventListener('load', () => { if (xhr.status>=200&&xhr.status<300) resolve(); else reject(new Error(''+xhr.status)); });
       xhr.addEventListener('error', () => reject(new Error('Network error')));
-      xhr.open('PUT', uploadUrl);
-      xhr.setRequestHeader('Content-Type', item.file.type || 'video/mp4');
+      xhr.open('PUT', json.data.url);
+      xhr.setRequestHeader('Content-Type', item.file.type||'video/mp4');
       xhr.send(item.file);
     });
-
-    item.status   = 'done';
-    item.progress = 100;
-    updateCard(item);
-  } catch (err) {
-    console.error(err);
-    item.status = 'error';
-    updateCard(item);
-  }
+    item.status = 'done'; item.progress = 100; updateCard(item);
+  } catch (err) { console.error(err); item.status = 'error'; updateCard(item); }
 }
 
 // ── Live Streams ──────────────────────────────────────────
 async function loadLive() {
   const el = document.getElementById('live-content');
   el.innerHTML = '<div class="spinner"></div>';
-  try {
-    const res  = await fetch('/api/live-streams');
-    const json = await res.json();
-    renderLive(json.data || []);
-  } catch {
-    el.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>';
-  }
+  try { const res = await fetch('/api/live-streams'); const json = await res.json(); renderLive(json.data||[]); }
+  catch { el.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>'; }
 }
 
 const RTMP_SERVER = 'rtmps://global-live.mux.com:443/app/';
 
 function renderLive(streams) {
   const el = document.getElementById('live-content');
-  if (!streams.length) {
-    el.innerHTML = `<div class="empty"><div class="icon">📡</div><p>No live streams yet. Create one to get started.</p></div>`;
-    return;
-  }
-
+  if (!streams.length) { el.innerHTML = '<div class="empty"><div class="icon">📡</div><p>No live streams yet.</p></div>'; return; }
   el.innerHTML = `<div class="streams-grid">${streams.map(s => {
-    const isLive    = s.status === 'active';
-    const statusCls = `status-${s.status}`;
-    const statusTxt = isLive ? '🔴 LIVE' : s.status === 'idle' ? '⚪ IDLE' : '⛔ DISABLED';
-    const title     = s.meta?.title || 'Untitled Stream';
-    const streamKey = s.stream_key || '';
-    const playbackId = s.playback_ids?.[0]?.id;
-
-    return `
-      <div class="stream-card ${isLive ? 'live' : ''}">
-        <div class="stream-title">${escHtml(title)}</div>
-        <span class="stream-status ${statusCls}">${statusTxt}</span>
-
-        <div class="key-row">
-          <div class="key-label">RTMP Server</div>
-          <div class="key-box">
-            <span class="key-value">${RTMP_SERVER}</span>
-            <button class="copy-btn" onclick="copyText('${RTMP_SERVER}', this)" title="Copy">📋</button>
-          </div>
-        </div>
-
-        <div class="key-row">
-          <div class="key-label">Stream Key</div>
-          <div class="key-box">
-            <span class="key-value masked" id="key-${s.id}">••••••••••••••••</span>
-            <button class="copy-btn" onclick="toggleKey('${s.id}','${escAttr(streamKey)}')" title="Show/Copy" id="eye-${s.id}">👁️</button>
-            <button class="copy-btn" onclick="copyText('${escAttr(streamKey)}', this)" title="Copy">📋</button>
-          </div>
-        </div>
-
-        ${playbackId ? `
-        <div class="key-row">
-          <div class="key-label">Playback URL</div>
-          <div class="key-box">
-            <span class="key-value" style="font-size:12px">https://stream.mux.com/${playbackId}.m3u8</span>
-            <button class="copy-btn" onclick="copyText('https://stream.mux.com/${playbackId}.m3u8', this)" title="Copy">📋</button>
-          </div>
-        </div>` : ''}
-      </div>
-    `;
+    const isLive = s.status==='active';
+    const title = s.meta?.title||'Untitled Stream';
+    const streamKey = s.stream_key||'';
+    const pid = s.playback_ids?.[0]?.id;
+    return `<div class="stream-card ${isLive?'live':''}">
+      <div class="stream-title">${escHtml(title)}</div>
+      <span class="stream-status status-${s.status}">${isLive?'🔴 LIVE':s.status==='idle'?'⚪ IDLE':'⛔ DISABLED'}</span>
+      <div class="key-row"><div class="key-label">RTMP Server</div><div class="key-box"><span class="key-value">${RTMP_SERVER}</span><button class="copy-btn" onclick="copyText('${RTMP_SERVER}',this)">📋</button></div></div>
+      <div class="key-row"><div class="key-label">Stream Key</div><div class="key-box"><span class="key-value masked" id="key-${s.id}">••••••••••••••••</span><button class="copy-btn" onclick="toggleKey('${s.id}','${escAttr(streamKey)}')" id="eye-${s.id}">👁️</button><button class="copy-btn" onclick="copyText('${escAttr(streamKey)}',this)">📋</button></div></div>
+      ${pid?`<div class="key-row"><div class="key-label">Playback URL</div><div class="key-box"><span class="key-value" style="font-size:12px">https://stream.mux.com/${pid}.m3u8</span><button class="copy-btn" onclick="copyText('https://stream.mux.com/${pid}.m3u8',this)">📋</button></div></div>`:''}
+    </div>`;
   }).join('')}</div>`;
 }
 
 function toggleKey(id, key) {
-  const el  = document.getElementById('key-' + id);
-  const btn = document.getElementById('eye-' + id);
-  if (el.classList.contains('masked')) {
-    el.textContent = key;
-    el.classList.remove('masked');
-    btn.textContent = '🙈';
-  } else {
-    el.textContent = '••••••••••••••••';
-    el.classList.add('masked');
-    btn.textContent = '👁️';
-  }
+  const el = document.getElementById('key-'+id), btn = document.getElementById('eye-'+id);
+  if (el.classList.contains('masked')) { el.textContent=key; el.classList.remove('masked'); btn.textContent='🙈'; }
+  else { el.textContent='••••••••••••••••'; el.classList.add('masked'); btn.textContent='👁️'; }
 }
 
 // ── Assets ────────────────────────────────────────────────
-let allAssets = [];
-let assetEdits = {}; // id → { title, category, date, speaker }
+let allAssets = [], assetEdits = {};
 
 async function loadAssets() {
-  const el = document.getElementById('assets-content');
-  el.innerHTML = '<div class="spinner"></div>';
+  document.getElementById('assets-content').innerHTML = '<div class="spinner"></div>';
   try {
-    const res  = await fetch('/api/assets');
+    const res = await fetch('/api/assets');
     const json = await res.json();
-    allAssets  = (json.data || []);
+    allAssets = json.data || [];
     assetEdits = {};
     filterAssets();
-  } catch {
-    el.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>';
-  }
+  } catch { document.getElementById('assets-content').innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>'; }
 }
 
 function filterAssets() {
@@ -931,217 +462,134 @@ function filterAssets() {
     return matchQ && matchCat;
   });
   const countEl = document.getElementById('asset-count');
-  if (countEl) {
-    countEl.textContent = cat && filtered.length === 0
-      ? `0 results — no assets tagged "${cat}" yet`
-      : `${filtered.length} of ${allAssets.length}`;
-  }
+  if (countEl) countEl.textContent = cat && filtered.length === 0 ? `0 — no assets tagged "${cat}" yet` : `${filtered.length} of ${allAssets.length}`;
   renderAssets(filtered);
 }
 
-
 function renderAssets(assets) {
   const el = document.getElementById('assets-content');
-  if (!assets || !assets.length) {
-    el.innerHTML = `<div class="empty"><div class="icon">🎞</div><p>No assets found.</p></div>`;
-    return;
-  }
-
-  el.innerHTML = `<div class="assets-list">${assets.map(a => assetCardHtml(a)).join('')}</div>`;
+  if (!assets || !assets.length) { el.innerHTML = '<div class="empty"><div class="icon">🎞</div><p>No assets found.</p></div>'; return; }
+  el.innerHTML = `
+  <div class="assets-wrap">
+  <table class="assets-table">
+    <thead><tr>
+      <th class="td-thumb"></th>
+      <th>Title</th>
+      <th>Passthrough</th>
+      <th>Status</th>
+      <th>Uploaded</th>
+      <th>Actions</th>
+    </tr></thead>
+    <tbody>${assets.map(a => assetRowHtml(a)).join('')}</tbody>
+  </table>
+  </div>`;
 }
 
-function assetCardHtml(a) {
+function assetRowHtml(a) {
   const edits       = assetEdits[a.id] || {};
   const title       = edits.title       ?? (a.meta?.title || '');
   const passthrough = edits.passthrough ?? (a.passthrough || '').trim();
   const pid         = a.playback_ids?.[0]?.id;
-  const thumbUrl    = pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=240&time=5` : '';
+  const thumbUrl    = pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=5` : '';
   const dur         = a.duration ? fmtDur(a.duration) : '';
-  const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleString() : '—';
+  const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
   const isDirty     = !!assetEdits[a.id];
   const statusCls   = { ready:'ready', preparing:'preparing', errored:'errored' }[a.status] || 'preparing';
   const statusTxt   = { ready:'✓ Ready', preparing:'⏳ Processing', errored:'✕ Error' }[a.status] || a.status;
 
-  return `
-  <div class="asset-card ${isDirty ? 'dirty' : ''}" id="acard-${a.id}">
-    <div class="ac-top">
-      <div class="ac-thumb-wrap">
-        ${thumbUrl
-          ? `<img class="ac-thumb" src="${thumbUrl}" loading="lazy" alt="">`
-          : `<div class="ac-thumb-placeholder">🎬</div>`}
-        ${dur ? `<span class="ac-dur">${dur}</span>` : ''}
+  return `<tr class="${isDirty ? 'dirty' : ''}" id="arow-${a.id}">
+    <td class="td-thumb">
+      <div class="at-thumb-wrap">
+        ${thumbUrl ? `<img class="at-thumb" src="${thumbUrl}" loading="lazy" alt="">` : `<div class="at-placeholder">🎬</div>`}
+        ${dur ? `<span class="at-dur">${dur}</span>` : ''}
       </div>
-      <div class="ac-header">
-        <div class="ac-header-top">
-          <span class="ac-status ${statusCls}">${statusTxt}</span>
-          <button class="copy-btn" style="font-size:14px" onclick="copyText('${escAttr(a.id)}',this)" title="Copy Mux ID">📋</button>
-        </div>
-        <div class="ac-id" title="${escAttr(a.id)}">ID: ${escHtml(a.id)}</div>
-        <div style="font-size:12px;color:var(--muted)">Uploaded: ${uploaded}</div>
+    </td>
+    <td><input class="at-input" type="text" value="${escAttr(title)}" placeholder="Untitled" oninput="setEdit('${a.id}','title',this.value)"></td>
+    <td><select class="at-select" onchange="setEdit('${a.id}','passthrough',this.value)">${catOptions(passthrough)}</select></td>
+    <td><span class="at-status ${statusCls}">${statusTxt}</span></td>
+    <td class="td-meta">${uploaded}</td>
+    <td class="td-actions">
+      <div class="td-actions-inner">
+        <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾 Save</button>
+        <div id="del-${a.id}"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></div>
       </div>
-    </div>
-
-    <div class="ac-fields">
-      <div class="field-full">
-        <div class="ie-label">Title</div>
-        <input class="ie-input" type="text" value="${escAttr(title)}"
-          placeholder="Video title"
-          oninput="setEdit('${a.id}','title',this.value)">
-      </div>
-      <div class="field-full">
-        <div class="ie-label">Passthrough</div>
-        <select class="ie-input ie-select"
-          onchange="setEdit('${a.id}','passthrough',this.value)">
-          ${catOptions(passthrough)}
-        </select>
-      </div>
-    </div>
-
-    <div class="ac-footer">
-      <button class="btn btn-primary btn-sm ac-save-btn" onclick="saveAsset('${a.id}')">
-        💾 Save
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="discardAsset('${a.id}')" style="${isDirty ? '' : 'display:none'}" id="discard-${a.id}">
-        Discard
-      </button>
-      <span style="flex:1"></span>
-      <div id="del-${a.id}" style="display:flex;align-items:center;gap:8px;">
-        <button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">
-          🗑 Delete
-        </button>
-      </div>
-    </div>
-  </div>`;
+    </td>
+  </tr>`;
 }
 
 function setEdit(id, key, val) {
   if (!assetEdits[id]) {
-    // seed with current values
-    const a  = allAssets.find(x => x.id === id);
-    assetEdits[id] = {
-      title:       a?.meta?.title || '',
-      passthrough: (a?.passthrough || '').trim(),
-    };
+    const a = allAssets.find(x => x.id === id);
+    assetEdits[id] = { title: a?.meta?.title || '', passthrough: (a?.passthrough || '').trim() };
   }
   assetEdits[id][key] = val;
-  // Mark card dirty visually
-  const card = document.getElementById('acard-' + id);
-  if (card) {
-    card.classList.add('dirty');
-    card.classList.remove('saved');
-    const dis = document.getElementById('discard-' + id);
-    if (dis) dis.style.display = 'inline-flex';
-  }
+  const row = document.getElementById('arow-'+id);
+  if (row) row.classList.add('dirty');
 }
 
 async function saveAsset(id) {
-  const edits = assetEdits[id];
-  if (!edits) return;
-  const card = document.getElementById('acard-' + id);
-  if (card) { card.classList.add('saving'); card.classList.remove('dirty'); }
+  const edits = assetEdits[id]; if (!edits) return;
+  const row = document.getElementById('arow-'+id);
+  if (row) { row.classList.add('saving'); row.classList.remove('dirty'); }
   try {
-    await fetch(`/api/assets/${id}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(edits),
-    });
+    await fetch(`/api/assets/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(edits) });
     delete assetEdits[id];
-    // Update in-memory asset
     const a = allAssets.find(x => x.id === id);
-    if (a) {
-      if (!a.meta) a.meta = {};
-      a.meta.title  = edits.title;
-      a.passthrough = edits.passthrough;
-    }
-    if (card) { card.classList.remove('saving'); card.classList.add('saved'); }
+    if (a) { if (!a.meta) a.meta = {}; a.meta.title = edits.title; a.passthrough = edits.passthrough; }
+    if (row) { row.classList.remove('saving'); row.classList.add('saved'); }
     toast('Saved ✓');
-    setTimeout(() => { if (card) card.classList.remove('saved'); }, 2000);
+    setTimeout(() => { if (row) row.classList.remove('saved'); }, 2000);
   } catch {
-    if (card) { card.classList.add('dirty'); card.classList.remove('saving'); }
+    if (row) { row.classList.add('dirty'); row.classList.remove('saving'); }
     toast('Save failed ✕');
   }
 }
 
-function discardAsset(id) {
-  delete assetEdits[id];
-  // Re-render just this card
-  const a    = allAssets.find(x => x.id === id);
-  const card = document.getElementById('acard-' + id);
-  if (a && card) card.outerHTML = assetCardHtml(a);
-}
-
-function fmtDur(s) {
-  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2,'0')}`;
-}
+function fmtDur(s) { const m = Math.floor(s/60), sec = Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}`; }
 
 function confirmDelete(id) {
-  const wrap = document.getElementById('del-' + id);
-  if (!wrap) return;
-  wrap.innerHTML = `
-    <span style="font-size:13px;color:var(--red);font-weight:600;">Delete?</span>
-    <button class="btn btn-ghost btn-sm" onclick="cancelDelete('${id}')">Cancel</button>
-    <button class="btn btn-danger btn-sm" onclick="deleteAsset('${id}')">✓ Yes, Delete</button>
-  `;
+  const wrap = document.getElementById('del-'+id); if (!wrap) return;
+  wrap.innerHTML = `<span style="font-size:12px;color:var(--red);font-weight:600;">Sure?</span> <button class="btn btn-ghost btn-sm" onclick="cancelDelete('${id}')">No</button> <button class="btn btn-danger btn-sm" onclick="deleteAsset('${id}')">Yes</button>`;
 }
-
 function cancelDelete(id) {
-  const wrap = document.getElementById('del-' + id);
-  if (!wrap) return;
-  wrap.innerHTML = `<button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}')">🗑 Delete</button>`;
+  const wrap = document.getElementById('del-'+id); if (!wrap) return;
+  wrap.innerHTML = `<button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}')">🗑</button>`;
 }
-
 async function deleteAsset(id) {
   const a = allAssets.find(x => x.id === id);
-  const title = a?.meta?.title || id;
-  await fetch(`/api/assets/${id}`, { method: 'DELETE' });
-  toast(`Deleted "${title}"`);
+  await fetch(`/api/assets/${id}`, { method:'DELETE' });
+  toast(`Deleted "${a?.meta?.title || id}"`);
   loadAssets();
 }
 
-// ── New Stream ────────────────────────────────────────────
+// ── Live stream modal ─────────────────────────────────────
 function openNewStreamModal() {
   document.getElementById('ns-title').value = '';
   document.getElementById('ns-category').innerHTML = catOptions();
   document.getElementById('new-stream-modal').classList.add('open');
 }
-
 async function createStream() {
-  const title    = document.getElementById('ns-title').value || 'Live Service';
+  const title = document.getElementById('ns-title').value || 'Live Service';
   const category = document.getElementById('ns-category').value;
   try {
-    const res  = await fetch('/api/live-streams', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ title, category }),
-    });
-    const json = await res.json();
+    await fetch('/api/live-streams', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, category }) });
     document.getElementById('new-stream-modal').classList.remove('open');
-    toast('Live stream created!');
-    loadLive();
-  } catch { toast('Failed to create stream ✕'); }
+    toast('Live stream created!'); loadLive();
+  } catch { toast('Failed ✕'); }
 }
 
 // ── Clipboard ─────────────────────────────────────────────
 function copyText(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
-    const orig = btn.textContent;
-    btn.textContent = '✅';
-    btn.classList.add('copied');
+    const orig = btn.textContent; btn.textContent = '✅'; btn.classList.add('copied');
     setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
     toast('Copied!');
   });
 }
 
-// ── Helpers ───────────────────────────────────────────────
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function escAttr(s) {
-  return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
-}
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
 
-// Close modals on backdrop click
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
