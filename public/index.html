@@ -439,7 +439,7 @@ function renderLive(streams) {
       <span class="stream-status status-${s.status}">${isLive?'🔴 LIVE':s.status==='idle'?'⚪ IDLE':'⛔ DISABLED'}</span>
       <div class="key-row"><div class="key-label">RTMP Server</div><div class="key-box"><span class="key-value">${RTMP_SERVER}</span><button class="copy-btn" onclick="copyText('${RTMP_SERVER}',this)">📋</button></div></div>
       <div class="key-row"><div class="key-label">Stream Key</div><div class="key-box"><span class="key-value masked" id="key-${s.id}">••••••••••••••••</span><button class="copy-btn" onclick="toggleKey('${s.id}','${escAttr(streamKey)}')" id="eye-${s.id}">👁️</button><button class="copy-btn" onclick="copyText('${escAttr(streamKey)}',this)">📋</button></div></div>
-      ${pid?`<div class="key-row"><div class="key-label">Playback URL</div><div class="key-box"><span class="key-value" style="font-size:12px">https://stream.mux.com/${pid}.m3u8</span><button class="copy-btn" onclick="copyText('https://stream.mux.com/${pid}.m3u8',this)">📋</button></div></div>`:''}
+
     </div>`;
   }).join('')}</div>`;
 }
