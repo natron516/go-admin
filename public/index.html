@@ -597,13 +597,14 @@ const CATEGORIES = [
 ];
 
 function catOptions(selected = '') {
-  const known = CATEGORIES.map(c =>
+  const blank   = `<option value="" ${!selected ? 'selected' : ''} disabled>-- not set --</option>`;
+  const known   = CATEGORIES.map(c =>
     `<option value="${c.value}" ${c.value === selected ? 'selected' : ''}>${c.label}</option>`
   ).join('');
   // If selected value isn't in our list, add it as a custom option so it stays visible
   const isKnown = !selected || CATEGORIES.some(c => c.value === selected);
   const custom  = isKnown ? '' : `<option value="${escAttr(selected)}" selected>${escHtml(selected)}</option>`;
-  return custom + known;
+  return blank + custom + known;
 }
 
 // Populate static selects
