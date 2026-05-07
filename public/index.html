@@ -1005,9 +1005,11 @@ function assetCardHtml(a) {
         Discard
       </button>
       <span style="flex:1"></span>
-      <button class="btn btn-danger btn-sm" onclick="deleteAsset('${a.id}','${escAttr(title)}')">
-        🗑 Delete
-      </button>
+      <div id="del-${a.id}" style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">
+          🗑 Delete
+        </button>
+      </div>
     </div>
   </div>`;
 }
@@ -1073,10 +1075,27 @@ function fmtDur(s) {
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 
-async function deleteAsset(id, title) {
-  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+function confirmDelete(id) {
+  const wrap = document.getElementById('del-' + id);
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <span style="font-size:13px;color:var(--red);font-weight:600;">Delete?</span>
+    <button class="btn btn-ghost btn-sm" onclick="cancelDelete('${id}')">Cancel</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteAsset('${id}')">✓ Yes, Delete</button>
+  `;
+}
+
+function cancelDelete(id) {
+  const wrap = document.getElementById('del-' + id);
+  if (!wrap) return;
+  wrap.innerHTML = `<button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}')">🗑 Delete</button>`;
+}
+
+async function deleteAsset(id) {
+  const a = allAssets.find(x => x.id === id);
+  const title = a?.meta?.title || id;
   await fetch(`/api/assets/${id}`, { method: 'DELETE' });
-  toast('Deleted');
+  toast(`Deleted "${title}"`);
   loadAssets();
 }
 
