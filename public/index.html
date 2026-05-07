@@ -363,23 +363,14 @@
   input[type="date"].ie-input::-webkit-calendar-picker-indicator { filter: invert(.6); }
 
   /* Passthrough raw section */
-  .ac-pt {
-    border-top: 1px solid var(--border);
-    padding: 0;
+  .ac-section-label {
+    grid-column: 1 / -1;
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    text-transform: uppercase; letter-spacing: .8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
   }
-  .ac-pt-toggle {
-    background: none; border: none; color: var(--muted);
-    font-size: 12px; font-weight: 600; cursor: pointer;
-    padding: 10px 16px; width: 100%; text-align: left;
-    display: flex; align-items: center; gap: 6px;
-    transition: color .15s;
-  }
-  .ac-pt-toggle:hover { color: var(--text); }
-  .ac-pt-body {
-    display: none;
-    padding: 0 16px 14px;
-  }
-  .ac-pt-body.open { display: block; }
   .ac-pt-json {
     background: rgba(0,0,0,.3);
     border: 1px solid var(--border);
@@ -1016,38 +1007,34 @@ function assetCardHtml(a) {
     </div>
 
     <div class="ac-fields">
+      <div class="ac-section-label">Passthrough Data</div>
       <div class="field-full">
-        <div class="ie-label">Title</div>
+        <div class="ie-label">title</div>
         <input class="ie-input" type="text" value="${escAttr(title)}"
           placeholder="Video title"
           oninput="setEdit('${a.id}','title',this.value)">
       </div>
       <div>
-        <div class="ie-label">Category</div>
+        <div class="ie-label">category</div>
         <select class="ie-input ie-select"
           onchange="setEdit('${a.id}','category',this.value)">
           ${catOptions(cat)}
         </select>
       </div>
       <div>
-        <div class="ie-label">Date</div>
+        <div class="ie-label">date</div>
         <input class="ie-input" type="date" value="${escAttr(date)}"
           oninput="setEdit('${a.id}','date',this.value)">
       </div>
       <div class="field-full">
-        <div class="ie-label">Speaker</div>
+        <div class="ie-label">speaker</div>
         <input class="ie-input" type="text" value="${escAttr(speaker)}"
-          placeholder="e.g. Pastor John (optional)"
+          placeholder="Optional"
           oninput="setEdit('${a.id}','speaker',this.value)">
       </div>
-    </div>
-
-    <div class="ac-pt">
-      <button class="ac-pt-toggle" onclick="togglePT('${a.id}')">
-        <span id="pt-arrow-${a.id}">▶</span> Raw Passthrough JSON
-      </button>
-      <div class="ac-pt-body" id="pt-body-${a.id}">
-        <div class="ac-pt-json">${escHtml(rawJson)}</div>
+      <div class="field-full">
+        <div class="ie-label">compiled JSON <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(read-only preview)</span></div>
+        <div class="ac-pt-json" id="pt-preview-${a.id}">${escHtml(rawJson)}</div>
       </div>
     </div>
 
@@ -1079,6 +1066,17 @@ function setEdit(id, key, val) {
     };
   }
   assetEdits[id][key] = val;
+  // Refresh compiled JSON preview
+  const preview = document.getElementById('pt-preview-' + id);
+  if (preview) {
+    const e = assetEdits[id];
+    const obj = {};
+    if (e.category) obj.category = e.category;
+    if (e.title)    obj.title    = e.title;
+    if (e.date)     obj.date     = e.date;
+    if (e.speaker)  obj.speaker  = e.speaker;
+    preview.textContent = JSON.stringify(obj, null, 2);
+  }
   // Mark card dirty visually
   const card = document.getElementById('acard-' + id);
   if (card) {
@@ -1123,13 +1121,6 @@ function discardAsset(id) {
   const a    = allAssets.find(x => x.id === id);
   const card = document.getElementById('acard-' + id);
   if (a && card) card.outerHTML = assetCardHtml(a);
-}
-
-function togglePT(id) {
-  const body  = document.getElementById('pt-body-' + id);
-  const arrow = document.getElementById('pt-arrow-' + id);
-  const open  = body.classList.toggle('open');
-  if (arrow) arrow.textContent = open ? '▼' : '▶';
 }
 
 function fmtDur(s) {
