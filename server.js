@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const MUX_TOKEN_ID  = process.env.MUX_TOKEN_ID  || '25cd1f0d-e6d4-445b-a106-e9ccc7a9f103';
 const MUX_SECRET    = process.env.MUX_SECRET     || 'AcQYv3xI4uyhDIOmgAfaP+rAX9ei6bXzpT95dcAc74ALgOAl04BLg6o9PYwGh/iljlF4FTYz2VM';
 const ADMIN_USER    = process.env.ADMIN_USER     || 'admin';
-const ADMIN_PASS    = process.env.ADMIN_PASS     || 'govideos2024';
+const ADMIN_PASS    = process.env.ADMIN_PASS     || 'gomedia';
 
 const MUX_AUTH = Buffer.from(`${MUX_TOKEN_ID}:${MUX_SECRET}`).toString('base64');
 
