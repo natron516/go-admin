@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GO Videos Admin</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #0d0f14;
+    --surface:  #181c25;
+    --border:   #2a2f3f;
+    --accent:   #4f8ef7;
+    --accent2:  #7c5cf7;
+    --red:      #e05252;
+    --green:    #3ecf8e;
+    --orange:   #f59e0b;
+    --text:     #e8eaf0;
+    --muted:    #7a8099;
+    --radius:   12px;
+    --shadow:   0 4px 24px rgba(0,0,0,.45);
+  }
+  html { height: 100%; }
+  body {
+    min-height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ───────────────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 56px;
+  }
+  .logo {
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -.3px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  nav {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex: 1;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  .tab {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .15s, background .15s;
+  }
+  .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
+  .tab.active { color: var(--accent); background: rgba(79,142,247,.12); }
+
+  /* ── Layout ───────────────────────────────────────────── */
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── Cards ────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Buttons ──────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-ghost { background: rgba(255,255,255,.07); color: var(--text); }
+  .btn-ghost:hover { background: rgba(255,255,255,.13); }
+  .btn-danger { background: rgba(224,82,82,.15); color: var(--red); }
+  .btn-danger:hover { background: rgba(224,82,82,.25); }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+  .btn-icon { padding: 8px; border-radius: 8px; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  /* ── Form fields ──────────────────────────────────────── */
+  .field-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .field input, .field select, .field textarea {
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color .15s;
+    width: 100%;
+    -webkit-appearance: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
+  .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-color: rgba(255,255,255,.05); padding-right: 32px; cursor: pointer; }
+  .field select option { background: #1e2333; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.6); }
+
+  /* ── Drop zone ────────────────────────────────────────── */
+  #drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    margin-bottom: 24px;
+  }
+  #drop-zone:hover, #drop-zone.dragging {
+    border-color: var(--accent);
+    background: rgba(79,142,247,.05);
+  }
+  #drop-zone svg { width: 40px; height: 40px; margin-bottom: 12px; color: var(--muted); display: block; margin-inline: auto; }
+  #drop-zone .dz-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  #drop-zone .dz-sub { font-size: 13px; color: var(--muted); }
+  #file-input { display: none; }
+
+  /* ── File cards ───────────────────────────────────────── */
+  #file-list { display: grid; gap: 16px; }
+  @media (min-width: 640px) { #file-list { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1000px) { #file-list { grid-template-columns: 1fr 1fr 1fr; } }
+
+  .file-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    position: relative;
+    transition: border-color .2s;
+  }
+  .file-card.uploading { border-color: var(--accent); }
+  .file-card.done { border-color: var(--green); }
+  .file-card.error { border-color: var(--red); }
+
+  .file-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+  .file-icon { font-size: 24px; flex-shrink: 0; }
+  .file-meta { flex: 1; min-width: 0; }
+  .file-name { font-size: 13px; font-weight: 600; word-break: break-all; line-height: 1.3; }
+  .file-size { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .file-remove {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 18px; padding: 2px 4px;
+    line-height: 1; border-radius: 4px; flex-shrink: 0;
+    transition: color .15s, background .15s;
+  }
+  .file-remove:hover { color: var(--red); background: rgba(224,82,82,.1); }
+
+  /* Progress */
+  .progress-wrap { margin-top: 12px; }
+  .progress-bar { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .3s; }
+  .progress-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* Status badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 600; padding: 3px 10px;
+    border-radius: 99px; margin-top: 8px;
+  }
+  .badge-pending  { background: rgba(122,128,153,.15); color: var(--muted); }
+  .badge-uploading{ background: rgba(79,142,247,.15);  color: var(--accent); }
+  .badge-done     { background: rgba(62,207,142,.15);  color: var(--green); }
+  .badge-error    { background: rgba(224,82,82,.15);   color: var(--red); }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge-dot.pulse { animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── Upload toolbar ───────────────────────────────────── */
+  .upload-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .upload-toolbar h2 { font-size: 18px; font-weight: 700; flex: 1; }
+
+  /* ── Live stream cards ────────────────────────────────── */
+  .streams-grid { display: grid; gap: 16px; }
+  @media (min-width: 700px) { .streams-grid { grid-template-columns: 1fr 1fr; } }
+
+  .stream-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .stream-card.live { border-color: var(--red); }
+  .stream-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .stream-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700; padding: 3px 10px;
+    border-radius: 99px; margin-bottom: 16px;
+  }
+  .status-active  { background: rgba(224,82,82,.15); color: var(--red); }
+  .status-idle    { background: rgba(122,128,153,.15); color: var(--muted); }
+  .status-disabled{ background: rgba(122,128,153,.1); color: var(--muted); }
+
+  .key-row {
+    margin-bottom: 12px;
+  }
+  .key-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+  .key-box {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,0,0,.3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px;
+  }
+  .key-value {
+    flex: 1; font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px; word-break: break-all; color: var(--text);
+    user-select: all;
+  }
+  .key-value.masked { letter-spacing: 2px; color: var(--muted); }
+  .copy-btn {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: 18px; padding: 2px; transition: color .15s; flex-shrink: 0;
+  }
+  .copy-btn:hover { color: var(--accent); }
+  .copy-btn.copied { color: var(--green); }
+
+  /* ── Assets list ──────────────────────────────────────── */
+  .assets-grid { display: grid; gap: 12px; }
+
+  .asset-row {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    transition: border-color .2s;
+  }
+  .asset-row:hover { border-color: rgba(79,142,247,.3); }
+  .asset-thumb {
+    width: 80px; height: 52px;
+    object-fit: cover; border-radius: 6px;
+    background: var(--border);
+    display: block;
+  }
+  .asset-thumb-placeholder {
+    width: 80px; height: 52px;
+    background: var(--border); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 22px;
+  }
+  .asset-info { min-width: 0; }
+  .asset-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .asset-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .asset-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+  /* Edit modal */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.7); z-index: 200;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%; max-width: 480px;
+    box-shadow: var(--shadow);
+  }
+  .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+
+  /* ── Empty / loading states ───────────────────────────── */
+  .empty {
+    text-align: center; padding: 48px 24px; color: var(--muted);
+  }
+  .empty .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    margin: 40px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast ────────────────────────────────────────────── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #2a3050; border: 1px solid var(--border);
+    color: var(--text); padding: 10px 20px;
+    border-radius: 99px; font-size: 13px; font-weight: 500;
+    white-space: nowrap; box-shadow: var(--shadow);
+    transition: transform .25s ease; z-index: 300;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── Responsive tweaks ───────────────────────────────── */
+  @media (max-width: 480px) {
+    header { padding: 0 12px; }
+    main { padding: 16px 12px 60px; }
+    .asset-row { grid-template-columns: 60px 1fr; }
+    .asset-actions { grid-column: 1/-1; }
+    .card { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎬 GO Admin</div>
+  <nav>
+    <button class="tab active" onclick="showTab('upload',this)">⬆️ Upload</button>
+    <button class="tab" onclick="showTab('live',this)">📡 Live Streams</button>
+    <button class="tab" onclick="showTab('assets',this)">🎞 Assets</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ═══════════════════ UPLOAD ═══════════════════ -->
+  <section id="tab-upload" class="section active">
+    <div id="drop-zone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
+      </svg>
+      <div class="dz-title">Drop video files here</div>
+      <div class="dz-sub">or click to browse · MP4, MOV, MKV, M4V supported</div>
+    </div>
+    <input type="file" id="file-input" multiple accept="video/*">
+
+    <div id="pending-wrap" style="display:none">
+      <div class="upload-toolbar">
+        <h2 id="pending-count"></h2>
+        <button class="btn btn-ghost btn-sm" onclick="clearDone()">Clear Done</button>
+        <button class="btn btn-primary" id="upload-btn" onclick="uploadAll()">
+          ⬆️ Upload All
+        </button>
+      </div>
+      <div id="file-list"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ LIVE ═══════════════════ -->
+  <section id="tab-live" class="section">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+      <h2 style="font-size:18px;font-weight:700;flex:1;">Live Streams</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadLive()">↺ Refresh</button>
+      <button class="btn btn-primary btn-sm" onclick="openNewStreamModal()">+ New Stream</button>
+    </div>
+    <div id="live-content"><div class="spinner"></div></div>
+  </section>
+
+  <!-- ═══════════════════ ASSETS ═══════════════════ -->
+  <section id="tab-assets" class="section">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+      <h2 style="font-size:18px;font-weight:700;flex:1;">Uploaded Assets</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadAssets()">↺ Refresh</button>
+    </div>
+    <div id="assets-content"><div class="spinner"></div></div>
+  </section>
+
+</main>
+
+<!-- Edit Asset Modal -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Asset</h3>
+    <input type="hidden" id="edit-asset-id">
+    <div class="field-group" style="grid-template-columns:1fr;">
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="edit-title" placeholder="Video title">
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="edit-category"></select>
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="edit-date">
+      </div>
+      <div class="field">
+        <label>Speaker (optional)</label>
+        <input type="text" id="edit-speaker" placeholder="e.g. Pastor John">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Live Stream Modal -->
+<div class="modal-backdrop" id="new-stream-modal">
+  <div class="modal">
+    <h3>New Live Stream</h3>
+    <div class="field-group" style="grid-template-columns:1fr;">
+      <div class="field">
+        <label>Stream Name</label>
+        <input type="text" id="ns-title" placeholder="e.g. Sunday Morning Service">
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="ns-category"></select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('new-stream-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="createStream()">Create Stream</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────
+const CATEGORIES = [
+  { value: 'sermon',      label: '📖 Sermon' },
+  { value: 'children',   label: '⭐ Children\'s' },
+  { value: 'music',      label: '🎵 Music' },
+  { value: 'performance',label: '🎭 Performance / Show' },
+  { value: 'funzone',    label: '🎉 FunZone' },
+];
+
+function catOptions(selected = 'sermon') {
+  return CATEGORIES.map(c =>
+    `<option value="${c.value}" ${c.value === selected ? 'selected' : ''}>${c.label}</option>`
+  ).join('');
+}
+
+// Populate static selects
+document.getElementById('edit-category').innerHTML = catOptions();
+document.getElementById('ns-category').innerHTML   = catOptions();
+
+// ── Tabs ─────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'live')   loadLive();
+  if (name === 'assets') loadAssets();
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── Upload logic ──────────────────────────────────────────
+let pendingFiles = [];
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop',      e => { e.preventDefault(); dropZone.classList.remove('dragging'); addFiles(e.dataTransfer.files); });
+dropZone.addEventListener('click',     () => fileInput.click());
+fileInput.addEventListener('change',   e => { addFiles(e.target.files); fileInput.value = ''; });
+
+function formatSize(bytes) {
+  if (bytes < 1024)       return bytes + ' B';
+  if (bytes < 1048576)    return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824) return (bytes/1048576).toFixed(1) + ' MB';
+  return (bytes/1073741824).toFixed(2) + ' GB';
+}
+
+function slugToTitle(name) {
+  return name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function addFiles(list) {
+  for (const file of list) {
+    pendingFiles.push({
+      uid:      Math.random().toString(36).slice(2),
+      file,
+      title:    slugToTitle(file.name),
+      category: 'sermon',
+      date:     new Date().toISOString().slice(0, 10),
+      speaker:  '',
+      status:   'pending',
+      progress: 0,
+    });
+  }
+  renderFileList();
+}
+
+function updateFile(uid, key, val) {
+  const item = pendingFiles.find(f => f.uid === uid);
+  if (item) item[key] = val;
+}
+
+function removeFile(uid) {
+  pendingFiles = pendingFiles.filter(f => f.uid !== uid);
+  renderFileList();
+}
+
+function clearDone() {
+  pendingFiles = pendingFiles.filter(f => f.status !== 'done');
+  renderFileList();
+}
+
+function renderFileList() {
+  const wrap = document.getElementById('pending-wrap');
+  const list = document.getElementById('file-list');
+  const count = document.getElementById('pending-count');
+
+  if (pendingFiles.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  count.textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
+
+  list.innerHTML = pendingFiles.map(item => `
+    <div class="file-card ${item.status}" id="card-${item.uid}">
+      <div class="file-header">
+        <div class="file-icon">🎬</div>
+        <div class="file-meta">
+          <div class="file-name">${escHtml(item.file.name)}</div>
+          <div class="file-size">${formatSize(item.file.size)}</div>
+        </div>
+        <button class="file-remove" onclick="removeFile('${item.uid}')" title="Remove" ${item.status==='uploading'?'disabled':''}>✕</button>
+      </div>
+
+      <div class="field-group">
+        <div class="field">
+          <label>Title</label>
+          <input type="text" value="${escAttr(item.title)}"
+            onchange="updateFile('${item.uid}','title',this.value)"
+            ${item.status!=='pending'?'disabled':''}>
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select onchange="updateFile('${item.uid}','category',this.value)"
+            ${item.status!=='pending'?'disabled':''}>
+            ${catOptions(item.category)}
+          </select>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input type="date" value="${escAttr(item.date)}"
+            onchange="updateFile('${item.uid}','date',this.value)"
+            ${item.status!=='pending'?'disabled':''}>
+        </div>
+        <div class="field">
+          <label>Speaker</label>
+          <input type="text" value="${escAttr(item.speaker)}" placeholder="Optional"
+            onchange="updateFile('${item.uid}','speaker',this.value)"
+            ${item.status!=='pending'?'disabled':''}>
+        </div>
+      </div>
+
+      ${item.status === 'uploading' ? `
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div>
+          <div class="progress-label">${item.progress}%</div>
+        </div>` : ''}
+
+      <div>
+        ${badgeHtml(item.status)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function badgeHtml(status) {
+  const map = {
+    pending:   ['badge-pending',   false, 'Queued'],
+    uploading: ['badge-uploading', true,  'Uploading…'],
+    done:      ['badge-done',      false, '✓ Done'],
+    error:     ['badge-error',     false, '✕ Error'],
+  };
+  const [cls, pulse, label] = map[status] || map.pending;
+  return `<span class="badge ${cls}"><span class="badge-dot${pulse?' pulse':''}"></span>${label}</span>`;
+}
+
+function updateCard(item) {
+  const card = document.getElementById('card-' + item.uid);
+  if (!card) return;
+  // Update progress bar
+  const fill = card.querySelector('.progress-fill');
+  const pct  = card.querySelector('.progress-label');
+  if (fill) fill.style.width = item.progress + '%';
+  if (pct)  pct.textContent  = item.progress + '%';
+  // Update class
+  card.className = 'file-card ' + item.status;
+  // Update badge
+  const badge = card.querySelector('.badge');
+  if (badge) badge.outerHTML = badgeHtml(item.status);
+}
+
+async function uploadAll() {
+  const pending = pendingFiles.filter(f => f.status === 'pending');
+  if (!pending.length) { toast('Nothing to upload!'); return; }
+  document.getElementById('upload-btn').disabled = true;
+  for (const item of pending) {
+    await uploadOne(item);
+  }
+  document.getElementById('upload-btn').disabled = false;
+  toast('All uploads complete! 🎉');
+}
+
+async function uploadOne(item) {
+  item.status   = 'uploading';
+  item.progress = 0;
+
+  // Show progress bar
+  const card = document.getElementById('card-' + item.uid);
+  if (card) {
+    card.className = 'file-card uploading';
+    const fields = card.querySelector('.field-group');
+    if (fields) {
+      const pw = document.createElement('div');
+      pw.className = 'progress-wrap';
+      pw.innerHTML = `<div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div><div class="progress-label">0%</div>`;
+      card.insertBefore(pw, card.lastElementChild);
+    }
+  }
+
+  try {
+    // 1. Get Mux direct upload URL
+    const res = await fetch('/api/create-upload', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ title: item.title, category: item.category, date: item.date, speaker: item.speaker }),
+    });
+    const json = await res.json();
+    if (!json.data?.url) throw new Error(json.error || 'No upload URL returned');
+    const uploadUrl = json.data.url;
+
+    // 2. PUT file directly to Mux (with progress)
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.addEventListener('progress', e => {
+        if (e.lengthComputable) {
+          item.progress = Math.round(e.loaded / e.total * 100);
+          updateCard(item);
+        }
+      });
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error('Upload failed: ' + xhr.status));
+      });
+      xhr.addEventListener('error', () => reject(new Error('Network error')));
+      xhr.open('PUT', uploadUrl);
+      xhr.setRequestHeader('Content-Type', item.file.type || 'video/mp4');
+      xhr.send(item.file);
+    });
+
+    item.status   = 'done';
+    item.progress = 100;
+    updateCard(item);
+  } catch (err) {
+    console.error(err);
+    item.status = 'error';
+    updateCard(item);
+  }
+}
+
+// ── Live Streams ──────────────────────────────────────────
+async function loadLive() {
+  const el = document.getElementById('live-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const res  = await fetch('/api/live-streams');
+    const json = await res.json();
+    renderLive(json.data || []);
+  } catch {
+    el.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>';
+  }
+}
+
+const RTMP_SERVER = 'rtmps://global-live.mux.com:443/app/';
+
+function renderLive(streams) {
+  const el = document.getElementById('live-content');
+  if (!streams.length) {
+    el.innerHTML = `<div class="empty"><div class="icon">📡</div><p>No live streams yet. Create one to get started.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="streams-grid">${streams.map(s => {
+    const isLive    = s.status === 'active';
+    const statusCls = `status-${s.status}`;
+    const statusTxt = isLive ? '🔴 LIVE' : s.status === 'idle' ? '⚪ IDLE' : '⛔ DISABLED';
+    const title     = s.meta?.title || 'Untitled Stream';
+    const streamKey = s.stream_key || '';
+    const playbackId = s.playback_ids?.[0]?.id;
+
+    return `
+      <div class="stream-card ${isLive ? 'live' : ''}">
+        <div class="stream-title">${escHtml(title)}</div>
+        <span class="stream-status ${statusCls}">${statusTxt}</span>
+
+        <div class="key-row">
+          <div class="key-label">RTMP Server</div>
+          <div class="key-box">
+            <span class="key-value">${RTMP_SERVER}</span>
+            <button class="copy-btn" onclick="copyText('${RTMP_SERVER}', this)" title="Copy">📋</button>
+          </div>
+        </div>
+
+        <div class="key-row">
+          <div class="key-label">Stream Key</div>
+          <div class="key-box">
+            <span class="key-value masked" id="key-${s.id}">••••••••••••••••</span>
+            <button class="copy-btn" onclick="toggleKey('${s.id}','${escAttr(streamKey)}')" title="Show/Copy" id="eye-${s.id}">👁️</button>
+            <button class="copy-btn" onclick="copyText('${escAttr(streamKey)}', this)" title="Copy">📋</button>
+          </div>
+        </div>
+
+        ${playbackId ? `
+        <div class="key-row">
+          <div class="key-label">Playback URL</div>
+          <div class="key-box">
+            <span class="key-value" style="font-size:12px">https://stream.mux.com/${playbackId}.m3u8</span>
+            <button class="copy-btn" onclick="copyText('https://stream.mux.com/${playbackId}.m3u8', this)" title="Copy">📋</button>
+          </div>
+        </div>` : ''}
+      </div>
+    `;
+  }).join('')}</div>`;
+}
+
+function toggleKey(id, key) {
+  const el  = document.getElementById('key-' + id);
+  const btn = document.getElementById('eye-' + id);
+  if (el.classList.contains('masked')) {
+    el.textContent = key;
+    el.classList.remove('masked');
+    btn.textContent = '🙈';
+  } else {
+    el.textContent = '••••••••••••••••';
+    el.classList.add('masked');
+    btn.textContent = '👁️';
+  }
+}
+
+// ── Assets ────────────────────────────────────────────────
+let allAssets = [];
+
+async function loadAssets() {
+  const el = document.getElementById('assets-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const res  = await fetch('/api/assets');
+    const json = await res.json();
+    allAssets  = (json.data || []).filter(a => a.status === 'ready' || a.status === 'preparing');
+    renderAssets();
+  } catch {
+    el.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>';
+  }
+}
+
+function parsePassthrough(str) {
+  if (!str) return {};
+  try { return JSON.parse(str); } catch { return { category: str }; }
+}
+
+function renderAssets() {
+  const el = document.getElementById('assets-content');
+  if (!allAssets.length) {
+    el.innerHTML = `<div class="empty"><div class="icon">🎞</div><p>No assets yet.</p></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="assets-grid">${allAssets.map(a => {
+    const pt        = parsePassthrough(a.passthrough);
+    const title     = a.meta?.title || pt.title || 'Untitled';
+    const cat       = pt.category   || '—';
+    const date      = pt.date       || (a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—');
+    const speaker   = pt.speaker    || '';
+    const pid       = a.playback_ids?.[0]?.id;
+    const thumbUrl  = pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=5` : '';
+    const dur       = a.duration ? fmtDur(a.duration) : '';
+    const catLabel  = CATEGORIES.find(c => c.value === cat)?.label || cat;
+
+    return `
+      <div class="asset-row">
+        ${thumbUrl
+          ? `<img class="asset-thumb" src="${thumbUrl}" loading="lazy" alt="">`
+          : `<div class="asset-thumb-placeholder">🎬</div>`}
+        <div class="asset-info">
+          <div class="asset-title">${escHtml(title)}</div>
+          <div class="asset-meta">${catLabel}${dur ? ' · ' + dur : ''}${date !== '—' ? ' · ' + date : ''}${speaker ? ' · ' + escHtml(speaker) : ''}</div>
+        </div>
+        <div class="asset-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openEdit('${a.id}')">✏️ Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAsset('${a.id}', '${escAttr(title)}')">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('')}</div>`;
+}
+
+function fmtDur(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function openEdit(assetId) {
+  const a  = allAssets.find(x => x.id === assetId);
+  if (!a) return;
+  const pt = parsePassthrough(a.passthrough);
+  document.getElementById('edit-asset-id').value   = assetId;
+  document.getElementById('edit-title').value       = a.meta?.title || pt.title || '';
+  document.getElementById('edit-date').value        = pt.date  || '';
+  document.getElementById('edit-speaker').value     = pt.speaker || '';
+  document.getElementById('edit-category').innerHTML = catOptions(pt.category || 'sermon');
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+}
+
+async function saveEdit() {
+  const id      = document.getElementById('edit-asset-id').value;
+  const title   = document.getElementById('edit-title').value;
+  const category= document.getElementById('edit-category').value;
+  const date    = document.getElementById('edit-date').value;
+  const speaker = document.getElementById('edit-speaker').value;
+  try {
+    await fetch(`/api/assets/${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ title, category, date, speaker }),
+    });
+    closeEditModal();
+    toast('Saved! ✓');
+    loadAssets();
+  } catch { toast('Save failed ✕'); }
+}
+
+async function deleteAsset(id, title) {
+  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+  await fetch(`/api/assets/${id}`, { method: 'DELETE' });
+  toast('Deleted');
+  loadAssets();
+}
+
+// ── New Stream ────────────────────────────────────────────
+function openNewStreamModal() {
+  document.getElementById('ns-title').value = '';
+  document.getElementById('ns-category').innerHTML = catOptions();
+  document.getElementById('new-stream-modal').classList.add('open');
+}
+
+async function createStream() {
+  const title    = document.getElementById('ns-title').value || 'Live Service';
+  const category = document.getElementById('ns-category').value;
+  try {
+    const res  = await fetch('/api/live-streams', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ title, category }),
+    });
+    const json = await res.json();
+    document.getElementById('new-stream-modal').classList.remove('open');
+    toast('Live stream created!');
+    loadLive();
+  } catch { toast('Failed to create stream ✕'); }
+}
+
+// ── Clipboard ─────────────────────────────────────────────
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✅';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+    toast('Copied!');
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+}
+
+// Close modals on backdrop click
+document.querySelectorAll('.modal-backdrop').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
