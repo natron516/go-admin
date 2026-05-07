@@ -1032,10 +1032,7 @@ function assetCardHtml(a) {
           placeholder="Optional"
           oninput="setEdit('${a.id}','speaker',this.value)">
       </div>
-      <div class="field-full">
-        <div class="ie-label">compiled JSON <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(read-only preview)</span></div>
-        <div class="ac-pt-json" id="pt-preview-${a.id}">${escHtml(rawJson)}</div>
-      </div>
+
     </div>
 
     <div class="ac-footer">
