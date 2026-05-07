@@ -67,20 +67,35 @@
   #file-input { display: none; }
 
   /* File cards */
-  #file-list { display: grid; gap: 16px; }
-  @media (min-width: 640px)  { #file-list { grid-template-columns: 1fr 1fr; } }
-  @media (min-width: 1000px) { #file-list { grid-template-columns: 1fr 1fr 1fr; } }
-  .file-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: border-color .2s; }
-  .file-card.uploading { border-color: var(--accent); }
-  .file-card.done  { border-color: var(--green); }
-  .file-card.error { border-color: var(--red); }
-  .file-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
-  .file-icon { font-size: 24px; flex-shrink: 0; }
-  .file-meta { flex: 1; min-width: 0; }
-  .file-name { font-size: 13px; font-weight: 600; word-break: break-all; line-height: 1.3; }
-  .file-size { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .file-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 2px 4px; line-height: 1; border-radius: 4px; flex-shrink: 0; transition: color .15s; }
-  .file-remove:hover { color: var(--red); }
+  /* upload queue table */
+  .upload-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  .upload-table { width: 100%; border-collapse: collapse; min-width: 520px; }
+  .upload-table thead th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); background: rgba(0,0,0,.2); white-space: nowrap; }
+  .upload-table tbody tr { border-bottom: 1px solid var(--border); }
+  .upload-table tbody tr:last-child { border-bottom: none; }
+  .upload-table tbody tr.uploading { background: rgba(79,142,247,.05); }
+  .upload-table tbody tr.done  { background: rgba(62,207,142,.05); }
+  .upload-table tbody tr.error { background: rgba(224,82,82,.05); }
+  .upload-table td { padding: 7px 12px; vertical-align: middle; }
+  .ut-name { font-size: 13px; font-weight: 500; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ut-size { font-size: 11px; color: var(--muted); }
+  .ut-input { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 4px 7px; outline: none; width: 100%; min-width: 120px; transition: border-color .15s, background .15s; }
+  .ut-input:hover { border-color: var(--border); }
+  .ut-input:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
+  .ut-select { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 4px 22px 4px 7px; outline: none; cursor: pointer; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; min-width: 110px; transition: border-color .15s, background-color .15s; }
+  .ut-select:hover { border-color: var(--border); }
+  .ut-select:focus { border-color: var(--accent); background-color: rgba(79,142,247,.07); }
+  .ut-select option { background: #1e2333; }
+  .ut-progress { height: 3px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 3px; }
+  .ut-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+  .ut-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .ut-badge.pending   { background: rgba(122,128,153,.15); color: var(--muted); }
+  .ut-badge.uploading { background: rgba(79,142,247,.15);  color: var(--accent); }
+  .ut-badge.done      { background: rgba(62,207,142,.15);  color: var(--green); }
+  .ut-badge.error     { background: rgba(224,82,82,.15);   color: var(--red); }
+  .ut-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .ut-dot.pulse { animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
   .progress-wrap { margin-top: 12px; }
   .progress-bar { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .3s; }
@@ -342,35 +357,34 @@ function renderFileList() {
   if (pendingFiles.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   document.getElementById('pending-count').textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
-  document.getElementById('file-list').innerHTML = pendingFiles.map(item => `
-    <div class="file-card ${item.status}" id="card-${item.uid}">
-      <div class="file-header">
-        <div class="file-icon">🎬</div>
-        <div class="file-meta"><div class="file-name">${escHtml(item.file.name)}</div><div class="file-size">${formatSize(item.file.size)}</div></div>
-        <button class="file-remove" onclick="removeFile('${item.uid}')" ${item.status==='uploading'?'disabled':''}>✕</button>
-      </div>
-      <div class="field-group">
-        <div class="field"><label>Title</label><input type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${item.status!=='pending'?'disabled':''}></div>
-        <div class="field"><label>Passthrough</label><select onchange="updateFile('${item.uid}','passthrough',this.value)" ${item.status!=='pending'?'disabled':''}>${catOptions(item.passthrough)}</select></div>
-      </div>
-      ${item.status==='uploading'?`<div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div><div class="progress-label">${item.progress}%</div></div>`:''}
-      <div>${badgeHtml(item.status)}</div>
-    </div>`).join('');
+  document.getElementById('file-list').innerHTML = `
+    <div class="upload-table-wrap">
+    <table class="upload-table">
+      <thead><tr><th>File</th><th>Title</th><th>Passthrough</th><th>Status</th><th></th></tr></thead>
+      <tbody>${pendingFiles.map(item => {
+        const dis = item.status !== 'pending';
+        return `<tr class="${item.status}" id="card-${item.uid}">
+          <td><div class="ut-name">${escHtml(item.file.name)}</div><div class="ut-size">${formatSize(item.file.size)}</div></td>
+          <td><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${dis?'disabled':''}></td>
+          <td><select class="ut-select" onchange="updateFile('${item.uid}','passthrough',this.value)" ${dis?'disabled':''}>${catOptions(item.passthrough)}</select></td>
+          <td id="status-${item.uid}">${utBadge(item)}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="removeFile('${item.uid}')" ${dis?'disabled':''}>✕</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
 }
 
-function badgeHtml(s) {
-  const m = { pending:['badge-pending',false,'Queued'], uploading:['badge-uploading',true,'Uploading…'], done:['badge-done',false,'✓ Done'], error:['badge-error',false,'✕ Error'] };
-  const [cls,pulse,label] = m[s]||m.pending;
-  return `<span class="badge ${cls}"><span class="badge-dot${pulse?' pulse':''}"></span>${label}</span>`;
+function utBadge(item) {
+  if (item.status === 'uploading') return `<span class="ut-badge uploading"><span class="ut-dot pulse"></span>${item.progress}%</span><div class="ut-progress"><div class="ut-progress-fill" style="width:${item.progress}%"></div></div>`;
+  const map = { pending:['pending','Queued'], done:['done','✓ Done'], error:['error','✕ Error'] };
+  const [cls,label] = map[item.status]||['pending','Queued'];
+  return `<span class="ut-badge ${cls}">${label}</span>`;
 }
 
 function updateCard(item) {
-  const card = document.getElementById('card-'+item.uid);
-  if (!card) return;
-  const fill = card.querySelector('.progress-fill'); if (fill) fill.style.width = item.progress+'%';
-  const pct  = card.querySelector('.progress-label'); if (pct)  pct.textContent  = item.progress+'%';
-  card.className = 'file-card '+item.status;
-  const badge = card.querySelector('.badge'); if (badge) badge.outerHTML = badgeHtml(item.status);
+  const row = document.getElementById('card-'+item.uid); if (!row) return;
+  row.className = item.status;
+  const sc = document.getElementById('status-'+item.uid); if (sc) sc.innerHTML = utBadge(item);
 }
 
 async function uploadAll() {
@@ -384,8 +398,7 @@ async function uploadAll() {
 
 async function uploadOne(item) {
   item.status = 'uploading'; item.progress = 0;
-  const card = document.getElementById('card-'+item.uid);
-  if (card) { card.className = 'file-card uploading'; const fields = card.querySelector('.field-group'); if (fields) { const pw = document.createElement('div'); pw.className='progress-wrap'; pw.innerHTML=`<div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div><div class="progress-label">0%</div>`; card.insertBefore(pw, card.lastElementChild); } }
+  updateCard(item);
   try {
     const res = await fetch('/api/create-upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: item.title, passthrough: item.passthrough }) });
     const json = await res.json();
