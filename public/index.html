@@ -605,10 +605,14 @@ const CATEGORIES = [
   { value: 'funzone',    label: '🎉 FunZone' },
 ];
 
-function catOptions(selected = 'sermon') {
-  return CATEGORIES.map(c =>
+function catOptions(selected = '') {
+  const known = CATEGORIES.map(c =>
     `<option value="${c.value}" ${c.value === selected ? 'selected' : ''}>${c.label}</option>`
   ).join('');
+  // If selected value isn't in our list, add it as a custom option so it stays visible
+  const isKnown = !selected || CATEGORIES.some(c => c.value === selected);
+  const custom  = isKnown ? '' : `<option value="${escAttr(selected)}" selected>${escHtml(selected)}</option>`;
+  return custom + known;
 }
 
 // Populate static selects
@@ -957,7 +961,11 @@ function filterAssets() {
 
 function parsePassthrough(str) {
   if (!str) return {};
-  try { return JSON.parse(str); } catch { return { category: str }; }
+  let obj;
+  try { obj = JSON.parse(str); } catch { obj = { category: str }; }
+  // Normalize category: lowercase + trim
+  if (obj.category) obj.category = obj.category.toString().trim().toLowerCase();
+  return obj;
 }
 
 function renderAssets(assets) {
@@ -974,7 +982,7 @@ function assetCardHtml(a) {
   const pt       = parsePassthrough(a.passthrough);
   const edits    = assetEdits[a.id] || {};
   const title    = edits.title    ?? (a.meta?.title || pt.title || '');
-  const cat      = edits.category ?? (pt.category || 'sermon');
+  const cat      = edits.category ?? (pt.category || '');
   const date     = edits.date     ?? (pt.date || '');
   const speaker  = edits.speaker  ?? (pt.speaker || '');
   const pid      = a.playback_ids?.[0]?.id;
@@ -1065,7 +1073,7 @@ function setEdit(id, key, val) {
     const pt = a ? parsePassthrough(a.passthrough) : {};
     assetEdits[id] = {
       title:    a?.meta?.title || pt.title || '',
-      category: pt.category || 'sermon',
+      category: pt.category || '',
       date:     pt.date || '',
       speaker:  pt.speaker || '',
     };

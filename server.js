@@ -86,6 +86,19 @@ app.patch('/api/assets/:id', async (req, res) => {
   }
 });
 
+// Debug: raw passthrough for all assets
+app.get('/api/debug/passthrough', async (req, res) => {
+  try {
+    const data = await mux('GET', '/video/v1/assets?limit=100&order_direction=desc');
+    const rows = (data.data || []).map(a => ({
+      id: a.id,
+      title: a.meta?.title,
+      passthrough: a.passthrough,
+    }));
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Delete an asset
 app.delete('/api/assets/:id', async (req, res) => {
   try {
