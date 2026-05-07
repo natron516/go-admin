@@ -927,11 +927,15 @@ function filterAssets() {
     const title = (a.meta?.title || '').toLowerCase();
     const pt    = (a.passthrough || '').trim().toLowerCase();
     const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
-    const matchCat = !cat || pt === cat;
+    const matchCat = !cat || pt === cat.toLowerCase();
     return matchQ && matchCat;
   });
   const countEl = document.getElementById('asset-count');
-  if (countEl) countEl.textContent = `${filtered.length} of ${allAssets.length}`;
+  if (countEl) {
+    countEl.textContent = cat && filtered.length === 0
+      ? `0 results — no assets tagged "${cat}" yet`
+      : `${filtered.length} of ${allAssets.length}`;
+  }
   renderAssets(filtered);
 }
 
