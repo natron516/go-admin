@@ -117,7 +117,7 @@ app.post('/api/live-streams', async (req, res) => {
     const passthrough = JSON.stringify({ category: category || 'sermon', title: title || 'Live Service' });
     const data = await mux('POST', '/video/v1/live-streams', {
       playback_policy: ['public'],
-      new_asset_settings: { playback_policy: ['public'], passthrough },
+      new_asset_settings: { playback_policy: ['public'] },
       meta: { title: title || 'Live Service' },
       passthrough,
       latency_mode: 'standard',
