@@ -128,4 +128,18 @@ app.post('/api/live-streams', async (req, res) => {
   }
 });
 
+// Update live stream passthrough (category)
+app.patch('/api/live-streams/:id', async (req, res) => {
+  try {
+    const { category } = req.body;
+    // Mux PATCH updates passthrough on the live stream
+    const data = await mux('PATCH', `/video/v1/live-streams/${req.params.id}`, {
+      passthrough: category || '',
+    });
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));

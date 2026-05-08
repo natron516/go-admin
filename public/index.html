@@ -439,14 +439,27 @@ function renderLive(streams) {
     const title = s.meta?.title||'Untitled Stream';
     const streamKey = s.stream_key||'';
     const pid = s.playback_ids?.[0]?.id;
+    const currentCat = s.passthrough || '';
     return `<div class="stream-card ${isLive?'live':''}">
       <div class="stream-title">${escHtml(title)}</div>
       <span class="stream-status status-${s.status}">${isLive?'🔴 LIVE':s.status==='idle'?'⚪ IDLE':'⛔ DISABLED'}</span>
+      <div class="key-row"><div class="key-label">Category</div><div class="key-box"><select class="at-select" onchange="updateStreamCat('${s.id}',this.value)">${streamCatOptions(currentCat)}</select></div></div>
       <div class="key-row"><div class="key-label">RTMP Server</div><div class="key-box"><span class="key-value">${RTMP_SERVER}</span><button class="copy-btn" onclick="copyText('${RTMP_SERVER}',this)">📋</button></div></div>
       <div class="key-row"><div class="key-label">Stream Key</div><div class="key-box"><span class="key-value masked" id="key-${s.id}">••••••••••••••••</span><button class="copy-btn" onclick="toggleKey('${s.id}','${escAttr(streamKey)}')" id="eye-${s.id}">👁️</button><button class="copy-btn" onclick="copyText('${escAttr(streamKey)}',this)">📋</button></div></div>
-
     </div>`;
   }).join('')}</div>`;
+}
+
+function streamCatOptions(selected) {
+  const opts = [{value:'',label:'None'}, ...CATEGORIES];
+  return opts.map(c => `<option value="${c.value}"${c.value===selected?' selected':''}>${c.label}</option>`).join('');
+}
+
+async function updateStreamCat(id, category) {
+  try {
+    await fetch(`/api/live-streams/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ category }) });
+    toast('Category updated!');
+  } catch { toast('Failed to update category', true); }
 }
 
 function toggleKey(id, key) {
