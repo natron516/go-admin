@@ -439,7 +439,8 @@ function renderLive(streams) {
     const title = s.meta?.title||'Untitled Stream';
     const streamKey = s.stream_key||'';
     const pid = s.playback_ids?.[0]?.id;
-    const currentCat = s.passthrough || '';
+    let currentCat = '';
+    try { const pt = JSON.parse(s.passthrough||''); currentCat = pt.category||''; } catch { currentCat = s.passthrough||''; }
     return `<div class="stream-card ${isLive?'live':''}">
       <div class="stream-title">${escHtml(title)}</div>
       <span class="stream-status status-${s.status}">${isLive?'🔴 LIVE':s.status==='idle'?'⚪ IDLE':'⛔ DISABLED'}</span>
