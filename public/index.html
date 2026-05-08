@@ -27,7 +27,7 @@
   header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 16px; height: 56px; flex-wrap: wrap; }
   .logo { font-weight: 700; font-size: 17px; letter-spacing: -.3px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; flex-shrink: 0; }
   nav { display: flex; gap: 4px; flex: 1; min-width: 0; }
-  .tab { background: none; border: none; color: var(--muted); font-size: 14px; font-weight: 500; padding: 6px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: color .15s, background .15s; flex-shrink: 1; min-width: 0; }
+  .tab { background: none; border: none; color: var(--muted); font-size: 14px; font-weight: 500; padding: 6px 10px; border-radius: 8px; cursor: pointer; transition: color .15s, background .15s; }
   .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
   .tab.active { color: var(--accent); background: rgba(79,142,247,.12); }
 
@@ -210,9 +210,9 @@
 <header>
   <div class="logo">🎬 GO Admin</div>
   <nav>
-    <button class="tab active" onclick="showTab('upload',this)">⬆️ Upload</button>
-    <button class="tab" onclick="showTab('live',this)">📡 Live Streams</button>
-    <button class="tab" onclick="showTab('assets',this)">🎞 Assets</button>
+    <button class="tab active" onclick="showTab('upload',this)">Upload</button>
+    <button class="tab" onclick="showTab('live',this)">Live</button>
+    <button class="tab" onclick="showTab('assets',this)">Assets</button>
   </nav>
 </header>
 
