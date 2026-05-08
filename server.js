@@ -114,7 +114,7 @@ app.get('/api/live-streams', async (req, res) => {
 app.post('/api/live-streams', async (req, res) => {
   try {
     const { title, category } = req.body;
-    const passthrough = JSON.stringify({ category: category || 'sermon', title: title || 'Live Service' });
+    const passthrough = category || 'sermon';
     const data = await mux('POST', '/video/v1/live-streams', {
       playback_policy: ['public'],
       new_asset_settings: { playback_policy: ['public'] },
@@ -128,20 +128,12 @@ app.post('/api/live-streams', async (req, res) => {
   }
 });
 
-// Update live stream category (passthrough)
+// Update live stream passthrough (category) — plain string, same as assets
 app.patch('/api/live-streams/:id', async (req, res) => {
   try {
     const { category } = req.body;
-    // Read current stream to preserve title in passthrough JSON
-    const current = await mux('GET', `/video/v1/live-streams/${req.params.id}`);
-    const stream = current.data || current;
-    let pt = {};
-    try { pt = JSON.parse(stream.passthrough || '{}'); } catch { pt = {}; }
-    pt.category = category || '';
-    const title = stream.meta?.title || pt.title || 'Live Service';
-    pt.title = title;
     const data = await mux('PATCH', `/video/v1/live-streams/${req.params.id}`, {
-      passthrough: JSON.stringify(pt),
+      passthrough: category || '',
     });
     res.json(data);
   } catch (e) {
