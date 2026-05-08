@@ -128,13 +128,20 @@ app.post('/api/live-streams', async (req, res) => {
   }
 });
 
-// Update live stream passthrough (category)
+// Update live stream category (passthrough)
 app.patch('/api/live-streams/:id', async (req, res) => {
   try {
     const { category } = req.body;
-    // Mux PATCH updates passthrough on the live stream
+    // Read current stream to preserve title in passthrough JSON
+    const current = await mux('GET', `/video/v1/live-streams/${req.params.id}`);
+    const stream = current.data || current;
+    let pt = {};
+    try { pt = JSON.parse(stream.passthrough || '{}'); } catch { pt = {}; }
+    pt.category = category || '';
+    const title = stream.meta?.title || pt.title || 'Live Service';
+    pt.title = title;
     const data = await mux('PATCH', `/video/v1/live-streams/${req.params.id}`, {
-      passthrough: category || '',
+      passthrough: JSON.stringify(pt),
     });
     res.json(data);
   } catch (e) {
