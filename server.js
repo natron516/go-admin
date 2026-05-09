@@ -2,6 +2,16 @@ const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
 const sharp = require('sharp');
+const admin = require('firebase-admin');
+
+// ── Firebase Admin SDK ───────────────────────────────────
+const sa = process.env.FIREBASE_SA ? JSON.parse(process.env.FIREBASE_SA) : null;
+if (sa) {
+  admin.initializeApp({ credential: admin.credential.cert(sa) });
+  console.log('Firebase Admin SDK initialized');
+} else {
+  console.warn('FIREBASE_SA not set — user management disabled');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -276,6 +286,65 @@ app.get('/api/thumbnails/:assetId', async (req, res) => {
 app.delete('/api/thumbnails/:assetId', async (req, res) => {
   try {
     await fsDelete('thumbnails', req.params.assetId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── User management (Firebase Auth) ────────────────────────────────
+
+// List all users
+app.get('/api/users', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const users = [];
+    let pageToken;
+    do {
+      const result = await admin.auth().listUsers(1000, pageToken);
+      result.users.forEach(u => users.push({
+        uid: u.uid,
+        email: u.email || '',
+        displayName: u.displayName || '',
+        photoURL: u.photoURL || '',
+        disabled: u.disabled,
+        provider: u.providerData?.[0]?.providerId || 'email',
+        createdAt: u.metadata.creationTime,
+        lastSignIn: u.metadata.lastSignInTime,
+      }));
+      pageToken = result.pageToken;
+    } while (pageToken);
+    // Sort newest first
+    users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json({ users });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Block (disable) or unblock (enable) a user
+app.patch('/api/users/:uid/block', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { blocked } = req.body; // true = block, false = unblock
+    await admin.auth().updateUser(req.params.uid, { disabled: !!blocked });
+    // Also write to Firestore so the app can detect it
+    await admin.firestore().collection('users').doc(req.params.uid).set(
+      { blocked: !!blocked, blockedAt: new Date().toISOString() },
+      { merge: true }
+    );
+    res.json({ ok: true, uid: req.params.uid, disabled: !!blocked });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a user account
+app.delete('/api/users/:uid', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    await admin.auth().deleteUser(req.params.uid);
+    await admin.firestore().collection('users').doc(req.params.uid).delete().catch(() => {});
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -203,6 +203,21 @@
   .thumb-drop p { font-size: 13px; color: var(--muted); margin-top: 6px; }
   .thumb-progress { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 12px; display: none; }
   .thumb-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+  /* Users tab */
+  .users-table { width:100%; border-collapse:collapse; min-width:500px; }
+  .users-table thead th { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:9px 12px; text-align:left; border-bottom:1px solid var(--border); background:rgba(0,0,0,.2); white-space:nowrap; }
+  .users-table tbody tr { border-bottom:1px solid var(--border); transition:background .12s; }
+  .users-table tbody tr:last-child { border-bottom:none; }
+  .users-table tbody tr.blocked { background:rgba(224,82,82,.06); }
+  .users-table td { padding:9px 12px; vertical-align:middle; font-size:13px; }
+  .user-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; background:var(--border); }
+  .user-name { font-weight:600; }
+  .user-email { font-size:12px; color:var(--muted); }
+  .user-provider { font-size:11px; background:rgba(255,255,255,.07); border-radius:4px; padding:2px 6px; color:var(--muted); }
+  .user-blocked-badge { font-size:11px; font-weight:700; background:rgba(224,82,82,.15); color:var(--red); border-radius:99px; padding:2px 8px; }
+  .users-search { background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; padding:7px 12px; outline:none; width:100%; max-width:300px; margin-bottom:12px; }
+  .users-search:focus { border-color:var(--accent); }
+
   /* Featured tab */
   .feat-list { display: flex; flex-direction: column; gap: 6px; }
   .feat-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; cursor: default; transition: background .15s; }
@@ -242,6 +257,7 @@
     <button class="tab" onclick="showTab('live',this)">Live</button>
     <button class="tab" onclick="showTab('assets',this)">Assets</button>
     <button class="tab" onclick="showTab('featured',this)">⭐ Featured</button>
+    <button class="tab" onclick="showTab('users',this)">👥 Users</button>
   </nav>
 </header>
 
@@ -297,6 +313,29 @@
       <span class="asset-count" id="asset-count"></span>
     </div>
     <div id="assets-content"><div class="spinner"></div></div>
+  </section>
+
+  <!-- USERS -->
+  <section id="tab-users" class="section">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+      <h2 style="font-size:18px;font-weight:700;flex:1">👥 Users</h2>
+      <span id="user-count" style="font-size:12px;color:var(--muted)"></span>
+      <button class="btn btn-ghost btn-sm" onclick="loadUsers()">&#8634; Refresh</button>
+    </div>
+    <input class="users-search" type="search" placeholder="🔍 Search name or email…" oninput="filterUsers(this.value)" id="user-search">
+    <div class="assets-wrap">
+      <table class="users-table">
+        <thead><tr>
+          <th>User</th>
+          <th>Provider</th>
+          <th>Joined</th>
+          <th>Last Sign In</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="users-tbody"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- FEATURED -->
@@ -536,6 +575,7 @@ function showTab(name, btn) {
   if (name === 'live')     loadLive();
   if (name === 'assets')   loadAssets();
   if (name === 'featured') loadFeatured();
+  if (name === 'users')    loadUsers();
 }
 
 // Toast
@@ -856,6 +896,73 @@ function escAttr(s) { return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
+
+// ── Users tab ─────────────────────────────────────────
+let allUsers = [];
+
+async function loadUsers() {
+  document.getElementById('users-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
+  try {
+    const r = await fetch('/api/users');
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    allUsers = d.users || [];
+    document.getElementById('user-count').textContent = `${allUsers.length} users`;
+    renderUsers(allUsers);
+  } catch(e) {
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+function filterUsers(q) {
+  const lq = q.toLowerCase();
+  renderUsers(allUsers.filter(u =>
+    !lq || u.email.toLowerCase().includes(lq) || u.displayName.toLowerCase().includes(lq)
+  ));
+}
+
+function renderUsers(users) {
+  if (!users.length) {
+    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
+    return;
+  }
+  document.getElementById('users-tbody').innerHTML = users.map(u => {
+    const joined = u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—';
+    const lastIn = u.lastSignIn ? new Date(u.lastSignIn).toLocaleDateString() : '—';
+    const providerLabel = { 'google.com':'🔵 Google', 'apple.com':'⚫ Apple', 'password':'✉️ Email', 'phone':'📞 Phone' }[u.provider] || u.provider;
+    const avatar = u.photoURL ? `<img class="user-avatar" src="${escHtml(u.photoURL)}" onerror="this.style.display='none'">` : `<div class="user-avatar" style="display:inline-flex;align-items:center;justify-content:center;font-size:14px;">👤</div>`;
+    const blockBtn = u.disabled
+      ? `<button class="btn btn-ghost btn-sm" onclick="setUserBlocked('${u.uid}',false)">✅ Unblock</button>`
+      : `<button class="btn btn-danger btn-sm" onclick="setUserBlocked('${u.uid}',true)">🚫 Block</button>`;
+    return `<tr class="${u.disabled?'blocked':''}">
+      <td><div style="display:flex;align-items:center;gap:8px">${avatar}<div><div class="user-name">${escHtml(u.displayName||'(no name)')}</div><div class="user-email">${escHtml(u.email||'no email')}</div></div></div></td>
+      <td><span class="user-provider">${providerLabel}</span></td>
+      <td style="color:var(--muted);font-size:12px">${joined}</td>
+      <td style="color:var(--muted);font-size:12px">${lastIn}</td>
+      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>'}</td>
+      <td>${blockBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function setUserBlocked(uid, blocked) {
+  try {
+    const r = await fetch(`/api/users/${uid}/block`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blocked }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const u = allUsers.find(x => x.uid === uid);
+    if (u) u.disabled = blocked;
+    const q = document.getElementById('user-search')?.value || '';
+    filterUsers(q);
+    toast(blocked ? '🚫 User blocked' : '✅ User unblocked');
+  } catch(e) {
+    toast('Failed: ' + e.message);
+  }
+}
 
 // ── Featured tab ─────────────────────────────────────
 // Also add Firebase Firestore compat SDK dynamically (lazy)
