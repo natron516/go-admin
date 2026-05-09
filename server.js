@@ -292,6 +292,37 @@ app.delete('/api/thumbnails/:assetId', async (req, res) => {
   }
 });
 
+// ── App Feedback ────────────────────────────────
+
+app.get('/api/feedback', async (req, res) => {
+  try {
+    const snap = await admin.firestore()
+      .collection('feedback')
+      .orderBy('timestamp', 'desc')
+      .get();
+    const feedback = snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || null,
+    }));
+    res.json({ feedback });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/feedback/:id/read', async (req, res) => {
+  try {
+    await admin.firestore().collection('feedback').doc(req.params.id).update({ read: true });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    await admin.firestore().collection('feedback').doc(req.params.id).delete();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Sermon PIN ─────────────────────────────────────────────────
 
 app.get('/api/config/pin', async (req, res) => {
