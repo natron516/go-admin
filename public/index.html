@@ -203,6 +203,19 @@
   .thumb-drop p { font-size: 13px; color: var(--muted); margin-top: 6px; }
   .thumb-progress { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 12px; display: none; }
   .thumb-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+  /* Featured tab */
+  .feat-list { display: flex; flex-direction: column; gap: 6px; }
+  .feat-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; cursor: default; transition: background .15s; }
+  .feat-row.is-featured { border-color: var(--accent); background: rgba(79,142,247,.07); }
+  .feat-row.dragging { opacity: .45; }
+  .feat-row.drag-over { border-color: var(--accent2); background: rgba(124,92,247,.12); }
+  .feat-handle { cursor: grab; color: var(--muted); font-size: 18px; flex-shrink: 0; user-select: none; }
+  .feat-thumb { width: 72px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; background: #111; }
+  .feat-title { flex: 1; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feat-cat { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+  .feat-check { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+  .feat-order { font-size: 12px; font-weight: 700; color: var(--accent); width: 20px; text-align: center; flex-shrink: 0; }
+
   .at-cam-btn { position: absolute; bottom: 3px; left: 3px; background: rgba(0,0,0,.75); border: none; border-radius: 4px; color: #fff; font-size: 13px; padding: 2px 5px; cursor: pointer; opacity: 0; transition: opacity .15s; }
   .at-thumb-wrap:hover .at-cam-btn { opacity: 1; }
   .thumb-custom-badge { position: absolute; top: 3px; left: 3px; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; letter-spacing: .3px; }
@@ -228,6 +241,7 @@
     <button class="tab active" onclick="showTab('upload',this)">Upload</button>
     <button class="tab" onclick="showTab('live',this)">Live</button>
     <button class="tab" onclick="showTab('assets',this)">Assets</button>
+    <button class="tab" onclick="showTab('featured',this)">⭐ Featured</button>
   </nav>
 </header>
 
@@ -283,6 +297,17 @@
       <span class="asset-count" id="asset-count"></span>
     </div>
     <div id="assets-content"><div class="spinner"></div></div>
+  </section>
+
+  <!-- FEATURED -->
+  <section id="tab-featured" class="section">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap;">
+      <h2 style="font-size:18px;font-weight:700;flex:1">⭐ Featured Videos</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadFeatured()">&#8634; Refresh</button>
+      <button class="btn btn-primary" onclick="saveFeatured()" id="featured-save-btn">&#128190; Save Order</button>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Check videos to feature them on the home screen. Drag rows to reorder. Changes go live instantly — no app update needed.</p>
+    <div id="featured-content"><div class="spinner"></div></div>
   </section>
 
 </main>
@@ -507,8 +532,9 @@ function showTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
-  if (name === 'live')   loadLive();
-  if (name === 'assets') loadAssets();
+  if (name === 'live')     loadLive();
+  if (name === 'assets')   loadAssets();
+  if (name === 'featured') loadFeatured();
 }
 
 // Toast
@@ -817,6 +843,144 @@ function escAttr(s) { return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
+
+// ── Featured tab ─────────────────────────────────────
+// Also add Firebase Firestore compat SDK dynamically (lazy)
+const FIRESTORE_SDK = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js';
+let firestoreReady = false;
+function loadFirestore() {
+  return new Promise(resolve => {
+    if (firestoreReady) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = FIRESTORE_SDK;
+    s.onload = () => { firestoreReady = true; resolve(); };
+    document.head.appendChild(s);
+  });
+}
+
+const FB_PROJECT = 'gospel-outreach-tv';
+const FEAT_DOC = `config/featured`;
+let featuredIds = [];   // current saved order from Firestore
+let featuredDraft = []; // working list (all assets, sorted by featured-first)
+
+async function getFirestore() {
+  await loadFirestore();
+  ensureFirebase();
+  return firebase.firestore();
+}
+
+async function loadFeatured() {
+  const el = document.getElementById('featured-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    // Load assets and current featured list in parallel
+    const [assetsResp, db] = await Promise.all([fetch('/api/assets'), getFirestore()]);
+    const assetsData = await assetsResp.json();
+    const assets = assetsData.data || [];
+
+    // Ensure anonymous auth
+    if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
+
+    // Fetch featured doc
+    const doc = await db.collection('config').document
+      ? db.collection('config').doc('featured').get()
+      : Promise.resolve({ data: () => null });
+    const snap = await doc;
+    featuredIds = snap.data()?.ids || [];
+
+    // Build draft: featured first (in order), then rest alphabetically
+    const featSet = new Set(featuredIds);
+    const featAssets = featuredIds.map(id => assets.find(a => a.id === id)).filter(Boolean);
+    const restAssets = assets.filter(a => !featSet.has(a.id)).sort((a,b) => (a.meta?.title||'').localeCompare(b.meta?.title||''));
+    featuredDraft = [...featAssets, ...restAssets];
+
+    renderFeatured(el);
+  } catch(err) {
+    el.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(err.message)}</p>`;
+  }
+}
+
+function renderFeatured(el) {
+  if (!featuredDraft.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px;">No assets found. Upload some videos first.</p>'; return; }
+  const featSet = new Set(featuredIds);
+  let order = 0;
+  const rows = featuredDraft.map((a, idx) => {
+    const isFeat = featSet.has(a.id);
+    const pid = a.playback_ids?.[0]?.id;
+    const ptData = parsePassthrough(a.passthrough);
+    const thumb = ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=5` : '');
+    const cat = (ptData.category || a.passthrough || '').trim();
+    const num = isFeat ? `<span class="feat-order">${++order}</span>` : `<span class="feat-order" style="color:var(--muted)"></span>`;
+    return `<div class="feat-row ${isFeat?'is-featured':''}" data-id="${a.id}" draggable="true"
+        ondragstart="featDragStart(event)" ondragover="featDragOver(event)" ondragleave="featDragLeave(event)" ondrop="featDrop(event)">
+      <span class="feat-handle" title="Drag to reorder">≡</span>
+      ${num}
+      ${thumb ? `<img class="feat-thumb" src="${escHtml(thumb)}" loading="lazy" alt="">` : `<div class="feat-thumb" style="background:#222;border-radius:5px;"></div>`}
+      <span class="feat-title">${escHtml(a.meta?.title || 'Untitled')}</span>
+      ${cat ? `<span class="feat-cat">${escHtml(cat)}</span>` : ''}
+      <input class="feat-check" type="checkbox" title="Feature this video" ${isFeat?'checked':''}
+        onchange="featToggle('${a.id}', this.checked)">
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="feat-list" id="feat-list">${rows}</div>`;
+}
+
+function featToggle(id, checked) {
+  if (checked) {
+    if (!featuredIds.includes(id)) featuredIds.push(id);
+    // move to top of draft list
+    const idx = featuredDraft.findIndex(a => a.id === id);
+    if (idx > 0) { const [a] = featuredDraft.splice(idx, 1); featuredDraft.unshift(a); }
+  } else {
+    featuredIds = featuredIds.filter(x => x !== id);
+  }
+  renderFeatured(document.getElementById('featured-content'));
+}
+
+// Drag-to-reorder
+let dragSrcId = null;
+function featDragStart(e) {
+  dragSrcId = e.currentTarget.dataset.id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function featDragOver(e) {
+  e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.feat-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+function featDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function featDrop(e) {
+  e.preventDefault();
+  const targetId = e.currentTarget.dataset.id;
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragSrcId || dragSrcId === targetId) return;
+  const srcIdx = featuredDraft.findIndex(a => a.id === dragSrcId);
+  const tgtIdx = featuredDraft.findIndex(a => a.id === targetId);
+  if (srcIdx < 0 || tgtIdx < 0) return;
+  const [moved] = featuredDraft.splice(srcIdx, 1);
+  featuredDraft.splice(tgtIdx, 0, moved);
+  // Rebuild featuredIds to match new order (only featured items)
+  const featSet = new Set(featuredIds);
+  featuredIds = featuredDraft.filter(a => featSet.has(a.id)).map(a => a.id);
+  renderFeatured(document.getElementById('featured-content'));
+}
+
+async function saveFeatured() {
+  const btn = document.getElementById('featured-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    ensureFirebase();
+    if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
+    const db = firebase.firestore();
+    await db.collection('config').doc('featured').set({ ids: featuredIds });
+    toast(`Featured list saved (${featuredIds.length} videos) ✓`);
+  } catch(err) {
+    toast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '\uD83D\uDCBE Save Order';
+  }
+}
 </script>
 </body>
 </html>
