@@ -1002,11 +1002,8 @@ async function loadFeatured() {
     if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
 
     // Fetch featured doc
-    const doc = await db.collection('config').document
-      ? db.collection('config').doc('featured').get()
-      : Promise.resolve({ data: () => null });
-    const snap = await doc;
-    featuredIds = snap.data()?.ids || [];
+    const snap = await db.collection('config').doc('featured').get();
+    featuredIds = snap.exists ? (snap.data()?.ids || []) : [];
 
     // Build draft: featured first (in order), then rest alphabetically
     const featSet = new Set(featuredIds);
