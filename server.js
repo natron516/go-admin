@@ -292,6 +292,24 @@ app.delete('/api/thumbnails/:assetId', async (req, res) => {
   }
 });
 
+// ── Sermon PIN ─────────────────────────────────────────────────
+
+app.get('/api/config/pin', async (req, res) => {
+  try {
+    const doc = await admin.firestore().collection('config').doc('app').get();
+    res.json({ pin: doc.data()?.sermon_pin || '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/config/pin', async (req, res) => {
+  try {
+    const { pin } = req.body;
+    if (!pin || !/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    await admin.firestore().collection('config').doc('app').set({ sermon_pin: pin }, { merge: true });
+    res.json({ ok: true, pin });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── User management (Firebase Auth) ────────────────────────────────
 
 // List all users

@@ -322,6 +322,17 @@
       <span id="user-count" style="font-size:12px;color:var(--muted)"></span>
       <button class="btn btn-ghost btn-sm" onclick="loadUsers()">&#8634; Refresh</button>
     </div>
+    <!-- PIN Editor -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span style="font-size:14px;font-weight:600;">🔒 Sermon PIN</span>
+      <input id="pin-input" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]*"
+        placeholder="4-digit PIN"
+        style="background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:20px;font-weight:700;letter-spacing:6px;padding:6px 12px;width:110px;text-align:center;outline:none;"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)">
+      <button class="btn btn-primary btn-sm" onclick="savePin()">Save PIN</button>
+      <span id="pin-status" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+
     <input class="users-search" type="search" placeholder="🔍 Search name or email…" oninput="filterUsers(this.value)" id="user-search">
     <div class="assets-wrap">
       <table class="users-table">
@@ -901,6 +912,18 @@ document.querySelectorAll('.modal-backdrop').forEach(el => {
 let allUsers = [];
 
 async function loadUsers() {
+  // Load current PIN
+  try {
+    const r = await fetch('/api/config/pin');
+    const d = await r.json();
+    const inp = document.getElementById('pin-input');
+    if (inp) inp.value = d.pin || '';
+    const st = document.getElementById('pin-status');
+    if (st) st.textContent = d.pin ? `Current: ${d.pin}` : 'No PIN set';
+  } catch {}
+
+  // Then load users
+
   document.getElementById('users-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
   try {
     const r = await fetch('/api/users');
@@ -943,6 +966,29 @@ function renderUsers(users) {
       <td>${blockBtn}</td>
     </tr>`;
   }).join('');
+}
+
+async function savePin() {
+  const pin = document.getElementById('pin-input')?.value?.trim();
+  const status = document.getElementById('pin-status');
+  if (!pin || pin.length !== 4 || !/^\d+$/.test(pin)) {
+    if (status) status.textContent = 'Must be exactly 4 digits';
+    return;
+  }
+  try {
+    const r = await fetch('/api/config/pin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    if (status) status.textContent = `Saved ✓ Current: ${pin}`;
+    toast(`🔒 PIN updated to ${pin}`);
+  } catch(e) {
+    if (status) status.textContent = 'Save failed: ' + e.message;
+    toast('Failed: ' + e.message);
+  }
 }
 
 async function setUserBlocked(uid, blocked) {
