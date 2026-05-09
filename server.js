@@ -30,6 +30,20 @@ async function mux(method, path, body) {
   return res.json();
 }
 
+// Parse passthrough: supports plain string ("sermon") or JSON string
+function parsePassthrough(raw) {
+  try { return JSON.parse(raw || '{}'); } catch { return raw ? { category: raw } : {}; }
+}
+
+// Serialize passthrough back: if only has category and nothing else, keep as plain string
+// for backwards compat. If has extra fields (thumbnail etc), use JSON.
+function serializePassthrough(pt) {
+  const keys = Object.keys(pt).filter(k => pt[k] != null && pt[k] !== '');
+  if (keys.length === 1 && keys[0] === 'category') return pt.category;
+  if (keys.length === 0) return '';
+  return JSON.stringify(pt);
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // List all assets (recent 100)
@@ -60,13 +74,37 @@ app.post('/api/create-upload', async (req, res) => {
   }
 });
 
-// Update asset metadata (title + passthrough)
+// Update asset metadata (title + category) — preserves thumbnail and other JSON keys
 app.patch('/api/assets/:id', async (req, res) => {
   try {
-    const { title, passthrough } = req.body;
+    const { title, passthrough: category } = req.body;
+    // Fetch current asset so we can preserve existing passthrough fields
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const existing = parsePassthrough(current.data?.passthrough);
+    existing.category = category || '';
     const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
       meta: { title: title || 'Untitled' },
-      passthrough: passthrough || '',
+      passthrough: serializePassthrough(existing),
+    });
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Set or clear a custom thumbnail URL for an asset
+app.patch('/api/assets/:id/thumbnail', async (req, res) => {
+  try {
+    const { thumbnailUrl } = req.body; // pass null/empty to clear
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const pt = parsePassthrough(current.data?.passthrough);
+    if (thumbnailUrl) {
+      pt.thumbnail = thumbnailUrl;
+    } else {
+      delete pt.thumbnail;
+    }
+    const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
+      passthrough: serializePassthrough(pt),
     });
     res.json(data);
   } catch (e) {
@@ -128,7 +166,7 @@ app.post('/api/live-streams', async (req, res) => {
   }
 });
 
-// Update live stream passthrough (category) — plain string, same as assets
+// Update live stream passthrough (category)
 app.patch('/api/live-streams/:id', async (req, res) => {
   try {
     const { category } = req.body;

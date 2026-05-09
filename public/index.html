@@ -196,6 +196,17 @@
   #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #2a3050; border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; white-space: nowrap; box-shadow: var(--shadow); transition: transform .25s ease; z-index: 300; pointer-events: none; }
   #toast.show { transform: translateX(-50%) translateY(0); }
 
+  /* Thumbnail modal */
+  .thumb-modal-img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; background: #111; display: block; margin-bottom: 16px; }
+  .thumb-drop { border: 2px dashed var(--border); border-radius: 10px; padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; margin-bottom: 12px; }
+  .thumb-drop:hover, .thumb-drop.drag { border-color: var(--accent); background: rgba(79,142,247,.05); }
+  .thumb-drop p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .thumb-progress { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 12px; display: none; }
+  .thumb-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+  .at-cam-btn { position: absolute; bottom: 3px; left: 3px; background: rgba(0,0,0,.75); border: none; border-radius: 4px; color: #fff; font-size: 13px; padding: 2px 5px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .at-thumb-wrap:hover .at-cam-btn { opacity: 1; }
+  .thumb-custom-badge { position: absolute; top: 3px; left: 3px; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; letter-spacing: .3px; }
+
   @media (max-width: 580px) {
     header { padding: 8px 12px; height: auto; flex-direction: column; align-items: stretch; gap: 6px; }
     .logo { text-align: center; }
@@ -204,6 +215,10 @@
     main { padding: 16px 12px 60px; }
   }
 </style>
+<!-- Firebase (compat — works with onclick handlers) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 </head>
 <body>
 
@@ -272,6 +287,26 @@
 
 </main>
 
+<!-- Thumbnail Modal -->
+<div class="modal-backdrop" id="thumb-modal">
+  <div class="modal" style="max-width:520px">
+    <h3 id="thumb-modal-title">Set Thumbnail</h3>
+    <img id="thumb-preview" class="thumb-modal-img" src="" alt="Current thumbnail" style="display:none">
+    <div id="thumb-drop" class="thumb-drop">
+      <div style="font-size:32px">🖼️</div>
+      <p>Click or drop an image here<br><span style="font-size:11px">JPEG or PNG recommended</span></p>
+      <input type="file" id="thumb-file-input" accept="image/*" style="display:none">
+    </div>
+    <div class="thumb-progress" id="thumb-progress"><div class="thumb-progress-fill" id="thumb-progress-fill" style="width:0%"></div></div>
+    <p id="thumb-status" style="font-size:12px;color:var(--muted);margin-bottom:12px;"></p>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove Custom</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('thumb-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" id="thumb-upload-btn" onclick="uploadThumbnail()" disabled>⬆️ Upload</button>
+    </div>
+  </div>
+</div>
+
 <!-- New Live Stream Modal -->
 <div class="modal-backdrop" id="new-stream-modal">
   <div class="modal">
@@ -296,6 +331,156 @@
 <div id="toast"></div>
 
 <script>
+// ── Firebase Storage ────────────────────────────────────
+const FB_CONFIG = {
+  apiKey: 'AIzaSyAIP7-0-Ciop8tK0yOLwcSJhvwW6jPSKEo',
+  projectId: 'gospel-outreach-tv',
+  storageBucket: 'gospel-outreach-tv.firebasestorage.app',
+};
+let fbApp, fbStorage, fbAuth;
+function ensureFirebase() {
+  if (fbApp) return;
+  fbApp    = firebase.initializeApp(FB_CONFIG);
+  fbStorage = firebase.storage();
+  fbAuth   = firebase.auth();
+}
+
+// Thumbnail modal state
+let thumbAssetId = null, thumbSelectedFile = null;
+
+function parsePassthrough(raw) {
+  try { return JSON.parse(raw || '{}'); } catch { return raw ? { category: raw } : {}; }
+}
+
+function openThumbModal(assetId, title, playbackId, currentThumb) {
+  thumbAssetId = assetId;
+  thumbSelectedFile = null;
+  const modal = document.getElementById('thumb-modal');
+  document.getElementById('thumb-modal-title').textContent = `Thumbnail — ${title || 'Untitled'}`;
+  const preview = document.getElementById('thumb-preview');
+  const fallback = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=5` : '';
+  const showUrl = currentThumb || fallback;
+  if (showUrl) { preview.src = showUrl; preview.style.display = 'block'; }
+  else { preview.style.display = 'none'; }
+  document.getElementById('thumb-remove-btn').style.display = currentThumb ? 'inline-flex' : 'none';
+  document.getElementById('thumb-upload-btn').disabled = true;
+  document.getElementById('thumb-status').textContent = '';
+  document.getElementById('thumb-progress').style.display = 'none';
+  document.getElementById('thumb-progress-fill').style.width = '0%';
+  modal.classList.add('open');
+}
+
+const thumbDrop = document.getElementById('thumb-drop');
+const thumbFileInput = document.getElementById('thumb-file-input');
+thumbDrop.addEventListener('click', () => thumbFileInput.click());
+thumbDrop.addEventListener('dragover', e => { e.preventDefault(); thumbDrop.classList.add('drag'); });
+thumbDrop.addEventListener('dragleave', () => thumbDrop.classList.remove('drag'));
+thumbDrop.addEventListener('drop', e => { e.preventDefault(); thumbDrop.classList.remove('drag'); if (e.dataTransfer.files[0]) setThumbFile(e.dataTransfer.files[0]); });
+thumbFileInput.addEventListener('change', e => { if (e.target.files[0]) setThumbFile(e.target.files[0]); thumbFileInput.value = ''; });
+
+function setThumbFile(file) {
+  thumbSelectedFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const preview = document.getElementById('thumb-preview');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  document.getElementById('thumb-status').textContent = file.name;
+  document.getElementById('thumb-upload-btn').disabled = false;
+}
+
+async function uploadThumbnail() {
+  if (!thumbSelectedFile || !thumbAssetId) return;
+  const btn = document.getElementById('thumb-upload-btn');
+  const prog = document.getElementById('thumb-progress');
+  const fill = document.getElementById('thumb-progress-fill');
+  const status = document.getElementById('thumb-status');
+  btn.disabled = true;
+  prog.style.display = 'block';
+  status.textContent = 'Signing in…';
+  try {
+    ensureFirebase();
+    // Anonymous sign-in so Storage rules allow write
+    if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
+    const ext = thumbSelectedFile.name.split('.').pop() || 'jpg';
+    const path = `thumbnails/${thumbAssetId}_${Date.now()}.${ext}`;
+    const storageRef = fbStorage.ref(path);
+    status.textContent = 'Uploading…';
+    const uploadTask = storageRef.put(thumbSelectedFile);
+    await new Promise((resolve, reject) => {
+      uploadTask.on('state_changed',
+        snap => { const pct = Math.round(snap.bytesTransferred / snap.totalBytes * 100); fill.style.width = pct + '%'; },
+        reject,
+        resolve
+      );
+    });
+    const url = await storageRef.getDownloadURL();
+    status.textContent = 'Saving…';
+    await fetch(`/api/assets/${thumbAssetId}/thumbnail`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thumbnailUrl: url }),
+    });
+    // Update the local asset cache
+    const a = allAssets.find(x => x.id === thumbAssetId);
+    if (a) {
+      const pt = parsePassthrough(a.passthrough);
+      pt.thumbnail = url;
+      a.passthrough = JSON.stringify(pt);
+      // Refresh the row thumbnail preview
+      const img = document.querySelector(`#arow-${thumbAssetId} .at-thumb`);
+      if (img) img.src = url;
+      const badge = document.querySelector(`#arow-${thumbAssetId} .thumb-custom-badge`);
+      if (!badge) {
+        const wrap = document.querySelector(`#arow-${thumbAssetId} .at-thumb-wrap`);
+        if (wrap) { const b = document.createElement('span'); b.className='thumb-custom-badge'; b.textContent='CUSTOM'; wrap.appendChild(b); }
+      }
+      // Show remove button next time
+      document.getElementById('thumb-remove-btn').style.display = 'inline-flex';
+    }
+    document.getElementById('thumb-modal').classList.remove('open');
+    toast('Thumbnail saved! ✓');
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'Upload failed: ' + (err.message || err);
+    btn.disabled = false;
+  }
+}
+
+async function removeThumbnail() {
+  if (!thumbAssetId) return;
+  const btn = document.getElementById('thumb-remove-btn');
+  btn.disabled = true;
+  try {
+    await fetch(`/api/assets/${thumbAssetId}/thumbnail`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thumbnailUrl: null }),
+    });
+    const a = allAssets.find(x => x.id === thumbAssetId);
+    if (a) {
+      const pt = parsePassthrough(a.passthrough);
+      delete pt.thumbnail;
+      a.passthrough = JSON.stringify(pt);
+      // Restore Mux auto-thumbnail in the row
+      const pid = a.playback_ids?.[0]?.id;
+      if (pid) {
+        const img = document.querySelector(`#arow-${thumbAssetId} .at-thumb`);
+        if (img) img.src = `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=5`;
+      }
+      const badge = document.querySelector(`#arow-${thumbAssetId} .thumb-custom-badge`);
+      if (badge) badge.remove();
+    }
+    document.getElementById('thumb-modal').classList.remove('open');
+    toast('Custom thumbnail removed');
+  } catch (err) {
+    btn.disabled = false;
+    toast('Failed to remove thumbnail');
+  }
+}
+
 const CATEGORIES = [
   { value: 'sermon',      label: '📖 Sermon' },
   { value: 'children',    label: "⭐ Children's" },
@@ -487,10 +672,12 @@ function filterAssets() {
   const q   = (document.getElementById('asset-search')?.value || '').toLowerCase();
   const cat = document.getElementById('asset-filter-cat')?.value || '';
   const filtered = allAssets.filter(a => {
-    const title = (a.meta?.title || '').toLowerCase();
-    const pt    = (a.passthrough || '').trim().toLowerCase();
+    const title   = (a.meta?.title || '').toLowerCase();
+    const pt      = (a.passthrough || '').trim().toLowerCase();
+    const ptData  = parsePassthrough(a.passthrough);
+    const assetCat = (ptData.category || a.passthrough || '').trim().toLowerCase();
     const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
-    const matchCat = !cat || pt === cat.toLowerCase();
+    const matchCat = !cat || assetCat === cat.toLowerCase();
     return matchQ && matchCat;
   });
   const countEl = document.getElementById('asset-count');
@@ -522,18 +709,23 @@ function assetRowHtml(a) {
   const title       = edits.title       ?? (a.meta?.title || '');
   const passthrough = edits.passthrough ?? (a.passthrough || '').trim();
   const pid         = a.playback_ids?.[0]?.id;
-  const thumbUrl    = pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=5` : '';
+  const ptData      = parsePassthrough(a.passthrough);
+  const customThumb = ptData.thumbnail || null;
+  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=5` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
   const isDirty     = !!assetEdits[a.id];
   const statusCls   = { ready:'ready', preparing:'preparing', errored:'errored' }[a.status] || 'preparing';
   const statusTxt   = { ready:'✓ Ready', preparing:'⏳ Processing', errored:'✕ Error' }[a.status] || a.status;
+  const camTitle    = escAttr(title); const camPid = escAttr(pid||''); const camThumb = escAttr(customThumb||'');
 
   return `<tr class="${isDirty ? 'dirty' : ''}" id="arow-${a.id}">
     <td class="td-thumb">
       <div class="at-thumb-wrap">
         ${thumbUrl ? `<img class="at-thumb" src="${thumbUrl}" loading="lazy" alt="">` : `<div class="at-placeholder">🎬</div>`}
         ${dur ? `<span class="at-dur">${dur}</span>` : ''}
+        ${customThumb ? `<span class="thumb-custom-badge">CUSTOM</span>` : ''}
+        <button class="at-cam-btn" onclick="openThumbModal('${a.id}','${camTitle}','${camPid}','${camThumb}')" title="Set thumbnail">📷</button>
       </div>
     </td>
     <td><input class="at-input" type="text" value="${escAttr(title)}" placeholder="Untitled" oninput="setEdit('${a.id}','title',this.value)"></td>
