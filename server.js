@@ -1,6 +1,7 @@
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
+const sharp = require('sharp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,8 +17,8 @@ const FB_API_KEY  = process.env.FB_API_KEY || 'AIzaSyAIP7-0-Ciop8tK0yOLwcSJhvwW6
 const FB_PROJECT  = 'gospel-outreach-tv';
 const FIRESTORE   = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
 
-// Multer: memory storage, 800 KB limit
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 800 * 1024 } });
+// Multer: memory storage, 20 MB limit — sharp will compress it down
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // ── Firestore helper (no auth — thumbnails collection is public) ────────────
 async function fsGet(collection, docId) {
@@ -230,8 +231,14 @@ app.post('/api/thumbnails/upload', (req, res, next) => {
     if (!assetId) return res.status(400).json({ error: 'assetId required' });
     if (!req.file) return res.status(400).json({ error: 'No image file received. Make sure the field name is "image".' });
     console.log(`Thumbnail upload: assetId=${assetId} size=${req.file.size} type=${req.file.mimetype}`);
-    const base64 = req.file.buffer.toString('base64');
-    const contentType = req.file.mimetype || 'image/jpeg';
+    // Resize to max 640px wide, compress to JPEG — keeps Firestore doc well under 1MB
+    const compressed = await sharp(req.file.buffer)
+      .resize({ width: 640, withoutEnlargement: true })
+      .jpeg({ quality: 75 })
+      .toBuffer();
+    console.log(`Compressed: ${req.file.size} → ${compressed.length} bytes`);
+    const base64 = compressed.toString('base64');
+    const contentType = 'image/jpeg';
     await fsSet('thumbnails', assetId, { data: base64, contentType, assetId });
     const host = req.headers['x-forwarded-host'] || req.get('host');
     const proto = req.headers['x-forwarded-proto'] || req.protocol;
