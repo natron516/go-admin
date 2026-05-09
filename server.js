@@ -48,7 +48,12 @@ async function fsDelete(collection, docId) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-app.use(basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' }));
+// Thumbnail serving is public (the app needs to load these without credentials)
+const requireAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' });
+app.use((req, res, next) => {
+  if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
+  requireAuth(req, res, next);
+});
 
 app.use(express.json());
 app.use(express.static('public'));
