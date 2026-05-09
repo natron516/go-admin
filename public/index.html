@@ -676,6 +676,9 @@ async function loadFeedback() {
         <div id="fb-${f.id}" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;opacity:${f.read ? '.5' : '1'};">
           <div style="font-size:15px;line-height:1.6;white-space:pre-wrap;margin-bottom:10px;">${f.read ? '' : '<span style="display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:50%;margin-right:8px;vertical-align:middle;"></span>'}<span>${escHtml(f.text)}</span></div>
           <div style="display:flex;gap:12px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap;">
+            ${f.name || f.email ? `<span style="color:var(--text);font-weight:600;">${escHtml(f.name || f.email)}</span>` : '<span style="font-style:italic;">Anonymous</span>'}
+            ${f.email && f.name ? `<span>${escHtml(f.email)}</span>` : ''}
+            <span>·</span>
             <span>${ts}</span>
             <span style="background:rgba(255,255,255,.08);border-radius:4px;padding:2px 8px;color:${platformColor};font-weight:600;">${f.platform || 'Unknown'}</span>
             ${f.appVersion ? `<span style="background:rgba(255,255,255,.08);border-radius:4px;padding:2px 8px;">v${escHtml(f.appVersion)}</span>` : ''}
