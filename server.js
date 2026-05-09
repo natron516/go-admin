@@ -1,5 +1,6 @@
 const express = require('express');
 const basicAuth = require('express-basic-auth');
+const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,6 +11,37 @@ const ADMIN_USER    = process.env.ADMIN_USER     || 'admin';
 const ADMIN_PASS    = process.env.ADMIN_PASS     || 'gomedia';
 
 const MUX_AUTH = Buffer.from(`${MUX_TOKEN_ID}:${MUX_SECRET}`).toString('base64');
+
+const FB_API_KEY  = process.env.FB_API_KEY || 'AIzaSyAIP7-0-Ciop8tK0yOLwcSJhvwW6jPSKEo';
+const FB_PROJECT  = 'gospel-outreach-tv';
+const FIRESTORE   = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
+
+// Multer: memory storage, 800 KB limit
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 800 * 1024 } });
+
+// ── Firestore helper (no auth — thumbnails collection is public) ────────────
+async function fsGet(collection, docId) {
+  const r = await fetch(`${FIRESTORE}/${collection}/${docId}?key=${FB_API_KEY}`);
+  return r.json();
+}
+async function fsSet(collection, docId, fields) {
+  // Build Firestore field map
+  const fieldMap = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (typeof v === 'string') fieldMap[k] = { stringValue: v };
+    else if (typeof v === 'number') fieldMap[k] = { integerValue: String(v) };
+    else if (typeof v === 'boolean') fieldMap[k] = { booleanValue: v };
+  }
+  const r = await fetch(`${FIRESTORE}/${collection}/${docId}?key=${FB_API_KEY}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: fieldMap }),
+  });
+  return r.json();
+}
+async function fsDelete(collection, docId) {
+  await fetch(`${FIRESTORE}/${collection}/${docId}?key=${FB_API_KEY}`, { method: 'DELETE' });
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.use(basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' }));
@@ -174,6 +206,54 @@ app.patch('/api/live-streams/:id', async (req, res) => {
       passthrough: category || '',
     });
     res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Thumbnail upload — stores image in Firestore, serves via this server ──────
+// POST /api/thumbnails/upload  (multipart: field "image", query: assetId)
+app.post('/api/thumbnails/upload', upload.single('image'), async (req, res) => {
+  try {
+    const assetId = req.query.assetId || req.body.assetId;
+    if (!assetId) return res.status(400).json({ error: 'assetId required' });
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const base64 = req.file.buffer.toString('base64');
+    const contentType = req.file.mimetype || 'image/jpeg';
+    await fsSet('thumbnails', assetId, {
+      data: base64,
+      contentType,
+      assetId,
+      createdAt: Date.now(),
+    });
+    const url = `${req.protocol}://${req.get('host')}/api/thumbnails/${assetId}`;
+    res.json({ url });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/thumbnails/:assetId  — serve the stored image
+app.get('/api/thumbnails/:assetId', async (req, res) => {
+  try {
+    const doc = await fsGet('thumbnails', req.params.assetId);
+    if (doc.error || !doc.fields) return res.status(404).send('Not found');
+    const base64 = doc.fields.data?.stringValue;
+    const contentType = doc.fields.contentType?.stringValue || 'image/jpeg';
+    if (!base64) return res.status(404).send('Not found');
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=31536000');
+    res.send(Buffer.from(base64, 'base64'));
+  } catch (e) {
+    res.status(500).send('Error');
+  }
+});
+
+// DELETE /api/thumbnails/:assetId
+app.delete('/api/thumbnails/:assetId', async (req, res) => {
+  try {
+    await fsDelete('thumbnails', req.params.assetId);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
