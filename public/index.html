@@ -242,6 +242,28 @@
     .tab { flex: 1; text-align: center; padding: 8px 4px; font-size: 12px; }
     main { padding: 16px 12px 60px; }
   }
+  /* Mobile-responsive assets table — no horizontal scroll */
+  @media (max-width: 700px) {
+    .assets-wrap { overflow-x: unset; border: none; border-radius: 0; }
+    .assets-table { min-width: unset; }
+    .assets-table thead { display: none; }
+    .assets-table tbody tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      margin-bottom: 8px; padding: 8px; }
+    .assets-table td { display: block; padding: 0; border: none; }
+    .td-thumb { flex-shrink: 0; }
+    .at-thumb { width: 64px; height: 36px; }
+    .td-title { flex: 1; min-width: 0; }
+    .at-input { font-size: 13px; padding: 4px 6px; min-width: 0; width: 100%; }
+    .td-cat { flex-shrink: 0; }
+    .at-select { font-size: 12px; min-width: 90px; }
+    .td-status { flex-shrink: 0; }
+    .td-meta { display: none; }
+    .td-actions { margin-left: auto; flex-shrink: 0; }
+    .td-actions-inner { gap: 4px; }
+    .assets-toolbar { flex-wrap: wrap; }
+    .assets-toolbar input { min-width: 140px; }
+  }
 </style>
 <!-- Firebase (compat — works with onclick handlers) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -253,9 +275,8 @@
 <header>
   <div class="logo">🎬 GO Admin</div>
   <nav>
-    <button class="tab active" onclick="showTab('upload',this)">Upload</button>
+    <button class="tab active" onclick="showTab('assets',this)">Assets</button>
     <button class="tab" onclick="showTab('live',this)">Live</button>
-    <button class="tab" onclick="showTab('assets',this)">Assets</button>
     <button class="tab" onclick="showTab('featured',this)">⭐ Featured</button>
     <button class="tab" onclick="showTab('users',this)">👥 Users</button>
   </nav>
@@ -263,8 +284,8 @@
 
 <main>
 
-  <!-- UPLOAD -->
-  <section id="tab-upload" class="section active">
+  <!-- UPLOAD (embedded in Assets, hidden standalone tab) -->
+  <section id="tab-upload" class="section">
     <div id="drop-zone">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -295,10 +316,31 @@
   </section>
 
   <!-- ASSETS -->
-  <section id="tab-assets" class="section">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
-      <h2 style="font-size:18px;font-weight:700;flex:1;">All Assets</h2>
+  <section id="tab-assets" class="section active">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+      <h2 style="font-size:18px;font-weight:700;flex:1;">Assets</h2>
       <button class="btn btn-ghost btn-sm" onclick="loadAssets()">↺ Refresh</button>
+      <button class="btn btn-primary btn-sm" onclick="toggleUploadPanel()">⬆️ Upload</button>
+    </div>
+    <!-- Inline upload panel -->
+    <div id="upload-panel" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+      <div id="drop-zone-inline">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;margin:0 auto 8px;display:block;color:var(--muted)">
+          <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
+        </svg>
+        <div style="text-align:center;font-size:14px;font-weight:600;">Drop video files here</div>
+        <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:4px;">or click to browse · MP4, MOV, MKV, M4V</div>
+      </div>
+      <input type="file" id="file-input-inline" multiple accept="video/*" style="display:none">
+      <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <span id="pending-count-inline" style="font-size:13px;font-weight:600;flex:1;"></span>
+          <button class="btn btn-ghost btn-sm" onclick="clearDone()">Clear Done</button>
+          <button class="btn btn-primary btn-sm" id="upload-btn-inline" onclick="uploadAll()">⬆️ Upload All</button>
+        </div>
+        <div id="file-list"></div>
+      </div>
     </div>
     <div class="assets-toolbar">
       <input type="search" id="asset-search" placeholder="🔍 Search title…" oninput="filterAssets()">
@@ -589,6 +631,26 @@ function showTab(name, btn) {
   if (name === 'users')    loadUsers();
 }
 
+function toggleUploadPanel() {
+  const panel = document.getElementById('upload-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+// Wire inline drop zone to the same upload logic as the old standalone tab
+const dropZoneInline = document.getElementById('drop-zone-inline');
+const fileInputInline = document.getElementById('file-input-inline');
+if (dropZoneInline) {
+  dropZoneInline.style.cssText += ';border:2px dashed var(--border);border-radius:10px;padding:24px 16px;cursor:pointer;transition:border-color .2s';
+  dropZoneInline.addEventListener('click', () => fileInputInline.click());
+  dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); dropZoneInline.style.borderColor='var(--accent)'; });
+  dropZoneInline.addEventListener('dragleave', () => { dropZoneInline.style.borderColor='var(--border)'; });
+  dropZoneInline.addEventListener('drop', e => {
+    e.preventDefault(); dropZoneInline.style.borderColor='var(--border)';
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInputInline.addEventListener('change', e => { handleFiles(e.target.files); fileInputInline.value=''; });
+}
+
 // Toast
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -621,10 +683,15 @@ function removeFile(uid) { pendingFiles = pendingFiles.filter(f => f.uid !== uid
 function clearDone() { pendingFiles = pendingFiles.filter(f => f.status !== 'done'); renderFileList(); }
 
 function renderFileList() {
-  const wrap = document.getElementById('pending-wrap');
+  // Support both inline panel and legacy standalone tab
+  const wrap = document.getElementById('pending-wrap-inline') || document.getElementById('pending-wrap');
+  const countEl = document.getElementById('pending-count-inline') || document.getElementById('pending-count');
   if (pendingFiles.length === 0) { wrap.style.display = 'none'; return; }
+  // Make sure upload panel is visible
+  const panel = document.getElementById('upload-panel');
+  if (panel) panel.style.display = 'block';
   wrap.style.display = 'block';
-  document.getElementById('pending-count').textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
+  countEl.textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
   document.getElementById('file-list').innerHTML = `
     <div class="upload-table-wrap">
     <table class="upload-table">
@@ -809,9 +876,9 @@ function assetRowHtml(a) {
         <button class="at-cam-btn" onclick="openThumbModal('${a.id}','${camTitle}','${camPid}','${camThumb}')" title="Set thumbnail">📷</button>
       </div>
     </td>
-    <td><input class="at-input" type="text" value="${escAttr(title)}" placeholder="Untitled" oninput="setEdit('${a.id}','title',this.value)"></td>
-    <td><select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select></td>
-    <td><span class="at-status ${statusCls}">${statusTxt}</span></td>
+    <td class="td-title"><input class="at-input" type="text" value="${escAttr(title)}" placeholder="Untitled" oninput="setEdit('${a.id}','title',this.value)"></td>
+    <td class="td-cat"><select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select></td>
+    <td class="td-status"><span class="at-status ${statusCls}">${statusTxt}</span></td>
     <td class="td-meta">${uploaded}</td>
     <td class="td-actions">
       <div class="td-actions-inner">
@@ -907,6 +974,9 @@ function escAttr(s) { return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
+
+// Load assets on page init (Assets is now the default tab)
+loadAssets();
 
 // ── Users tab ─────────────────────────────────────────
 let allUsers = [];
