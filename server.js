@@ -25,19 +25,22 @@ async function fsGet(collection, docId) {
   return r.json();
 }
 async function fsSet(collection, docId, fields) {
-  // Build Firestore field map
+  // Build Firestore field map (strings only — avoids integerValue format issues)
   const fieldMap = {};
   for (const [k, v] of Object.entries(fields)) {
-    if (typeof v === 'string') fieldMap[k] = { stringValue: v };
-    else if (typeof v === 'number') fieldMap[k] = { integerValue: String(v) };
-    else if (typeof v === 'boolean') fieldMap[k] = { booleanValue: v };
+    fieldMap[k] = { stringValue: String(v) };
   }
   const r = await fetch(`${FIRESTORE}/${collection}/${docId}?key=${FB_API_KEY}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: fieldMap }),
   });
-  return r.json();
+  const json = await r.json();
+  if (!r.ok) {
+    console.error('Firestore error:', JSON.stringify(json));
+    throw new Error(json?.error?.message || `Firestore ${r.status}`);
+  }
+  return json;
 }
 async function fsDelete(collection, docId) {
   await fetch(`${FIRESTORE}/${collection}/${docId}?key=${FB_API_KEY}`, { method: 'DELETE' });
@@ -213,22 +216,30 @@ app.patch('/api/live-streams/:id', async (req, res) => {
 
 // ── Thumbnail upload — stores image in Firestore, serves via this server ──────
 // POST /api/thumbnails/upload  (multipart: field "image", query: assetId)
-app.post('/api/thumbnails/upload', upload.single('image'), async (req, res) => {
+app.post('/api/thumbnails/upload', (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
-    const assetId = req.query.assetId || req.body.assetId;
+    const assetId = req.query.assetId;
     if (!assetId) return res.status(400).json({ error: 'assetId required' });
-    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    if (!req.file) return res.status(400).json({ error: 'No image file received. Make sure the field name is "image".' });
+    console.log(`Thumbnail upload: assetId=${assetId} size=${req.file.size} type=${req.file.mimetype}`);
     const base64 = req.file.buffer.toString('base64');
     const contentType = req.file.mimetype || 'image/jpeg';
-    await fsSet('thumbnails', assetId, {
-      data: base64,
-      contentType,
-      assetId,
-      createdAt: Date.now(),
-    });
-    const url = `${req.protocol}://${req.get('host')}/api/thumbnails/${assetId}`;
+    await fsSet('thumbnails', assetId, { data: base64, contentType, assetId });
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    const url = `${proto}://${host}/api/thumbnails/${assetId}`;
+    console.log(`Thumbnail stored, url=${url}`);
     res.json({ url });
   } catch (e) {
+    console.error('Upload handler error:', e);
     res.status(500).json({ error: e.message });
   }
 });
