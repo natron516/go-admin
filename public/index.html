@@ -383,7 +383,7 @@ function openThumbModal(assetId, title, playbackId, currentThumb) {
   const modal = document.getElementById('thumb-modal');
   document.getElementById('thumb-modal-title').textContent = `Thumbnail — ${title || 'Untitled'}`;
   const preview = document.getElementById('thumb-preview');
-  const fallback = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=5` : '';
+  const fallback = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=10` : '';
   const showUrl = currentThumb || fallback;
   if (showUrl) { preview.src = showUrl; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
@@ -494,7 +494,7 @@ async function removeThumbnail() {
       const pid = a.playback_ids?.[0]?.id;
       if (pid) {
         const img = document.querySelector(`#arow-${thumbAssetId} .at-thumb`);
-        if (img) img.src = `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=5`;
+        if (img) img.src = `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=10`;
       }
       const badge = document.querySelector(`#arow-${thumbAssetId} .thumb-custom-badge`);
       if (badge) badge.remove();
@@ -733,12 +733,15 @@ function renderAssets(assets) {
 
 function assetRowHtml(a) {
   const edits       = assetEdits[a.id] || {};
-  const title       = edits.title       ?? (a.meta?.title || '');
-  const passthrough = edits.passthrough ?? (a.passthrough || '').trim();
+  const title       = edits.title ?? (a.meta?.title || '');
   const pid         = a.playback_ids?.[0]?.id;
   const ptData      = parsePassthrough(a.passthrough);
+  // Extract just the category string for the dropdown (not the full JSON passthrough)
+  const rawCat      = ptData.category || (!a.passthrough?.startsWith('{') ? a.passthrough : '') || '';
+  const category    = edits.category ?? rawCat.trim();
   const customThumb = ptData.thumbnail || null;
-  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=5` : '');
+  // Use time=10 to match the iOS app's auto-thumbnail frame
+  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=10` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
   const isDirty     = !!assetEdits[a.id];
@@ -756,7 +759,7 @@ function assetRowHtml(a) {
       </div>
     </td>
     <td><input class="at-input" type="text" value="${escAttr(title)}" placeholder="Untitled" oninput="setEdit('${a.id}','title',this.value)"></td>
-    <td><select class="at-select" onchange="setEdit('${a.id}','passthrough',this.value)">${catOptions(passthrough)}</select></td>
+    <td><select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select></td>
     <td><span class="at-status ${statusCls}">${statusTxt}</span></td>
     <td class="td-meta">${uploaded}</td>
     <td class="td-actions">
@@ -771,7 +774,9 @@ function assetRowHtml(a) {
 function setEdit(id, key, val) {
   if (!assetEdits[id]) {
     const a = allAssets.find(x => x.id === id);
-    assetEdits[id] = { title: a?.meta?.title || '', passthrough: (a?.passthrough || '').trim() };
+    const pt = parsePassthrough(a?.passthrough);
+    const cat = pt.category || (!a?.passthrough?.startsWith('{') ? a?.passthrough : '') || '';
+    assetEdits[id] = { title: a?.meta?.title || '', category: cat.trim() };
   }
   assetEdits[id][key] = val;
   const row = document.getElementById('arow-'+id);
@@ -783,10 +788,17 @@ async function saveAsset(id) {
   const row = document.getElementById('arow-'+id);
   if (row) { row.classList.add('saving'); row.classList.remove('dirty'); }
   try {
-    await fetch(`/api/assets/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(edits) });
+    await fetch(`/api/assets/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: edits.title, passthrough: edits.category || '' }) });
     delete assetEdits[id];
     const a = allAssets.find(x => x.id === id);
-    if (a) { if (!a.meta) a.meta = {}; a.meta.title = edits.title; a.passthrough = edits.passthrough; }
+    if (a) {
+      if (!a.meta) a.meta = {};
+      a.meta.title = edits.title;
+      // Preserve thumbnail and other JSON fields, only update category
+      const pt = parsePassthrough(a.passthrough);
+      pt.category = edits.category || '';
+      a.passthrough = JSON.stringify(pt);
+    }
     if (row) { row.classList.remove('saving'); row.classList.add('saved'); }
     toast('Saved ✓');
     setTimeout(() => { if (row) row.classList.remove('saved'); }, 2000);
@@ -909,7 +921,7 @@ function renderFeatured(el) {
     const isFeat = featSet.has(a.id);
     const pid = a.playback_ids?.[0]?.id;
     const ptData = parsePassthrough(a.passthrough);
-    const thumb = ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=5` : '');
+    const thumb = ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=10` : '');
     const cat = (ptData.category || a.passthrough || '').trim();
     const num = isFeat ? `<span class="feat-order">${++order}</span>` : `<span class="feat-order" style="color:var(--muted)"></span>`;
     return `<div class="feat-row ${isFeat?'is-featured':''}" data-id="${a.id}" draggable="true"
