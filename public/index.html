@@ -247,19 +247,30 @@
     .assets-wrap { overflow-x: unset; border: none; border-radius: 0; }
     .assets-table { min-width: unset; }
     .assets-table thead { display: none; }
-    .assets-table tbody tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-      margin-bottom: 8px; padding: 8px; }
+    /* Card per row */
+    .assets-table tbody tr {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-areas:
+        'thumb title actions'
+        'thumb cat    status';
+      gap: 6px 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 8px; padding: 8px;
+    }
+    .assets-table tbody tr.dirty  { background: rgba(245,158,11,.05); }
+    .assets-table tbody tr.saved  { background: rgba(62,207,142,.05); }
     .assets-table td { display: block; padding: 0; border: none; }
-    .td-thumb { flex-shrink: 0; }
-    .at-thumb { width: 64px; height: 36px; }
-    .td-title { flex: 1; min-width: 0; }
-    .at-input { font-size: 13px; padding: 4px 6px; min-width: 0; width: 100%; }
-    .td-cat { flex-shrink: 0; }
-    .at-select { font-size: 12px; min-width: 90px; }
-    .td-status { flex-shrink: 0; }
+    .td-thumb  { grid-area: thumb; align-self: center; }
+    .td-title  { grid-area: title; align-self: center; min-width: 0; }
+    .td-cat    { grid-area: cat;   align-self: center; }
+    .td-status { grid-area: status; align-self: center; justify-self: start; }
+    .td-actions { grid-area: actions; align-self: center; }
     .td-meta { display: none; }
-    .td-actions { margin-left: auto; flex-shrink: 0; }
+    .at-thumb { width: 72px; height: 40px; }
+    .at-input { font-size: 14px; padding: 4px 6px; width: 100%; min-width: 0;
+      background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; }
+    .at-select { font-size: 12px; min-width: 0; width: 100%; }
     .td-actions-inner { gap: 4px; }
     .assets-toolbar { flex-wrap: wrap; }
     .assets-toolbar input { min-width: 140px; }
