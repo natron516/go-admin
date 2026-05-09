@@ -450,11 +450,17 @@ async function uploadThumbnail() {
       pt.thumbnail = url;
       a.passthrough = JSON.stringify(pt);
       const img = document.querySelector(`#arow-${thumbAssetId} .at-thumb`);
-      if (img) img.src = url + '?' + Date.now(); // bust cache
+      if (img) img.src = url + '?' + Date.now();
       const badge = document.querySelector(`#arow-${thumbAssetId} .thumb-custom-badge`);
       if (!badge) {
         const wrap = document.querySelector(`#arow-${thumbAssetId} .at-thumb-wrap`);
         if (wrap) { const b = document.createElement('span'); b.className='thumb-custom-badge'; b.textContent='CUSTOM'; wrap.appendChild(b); }
+      }
+      // Update the camera button so next open passes the new URL (enables Remove button)
+      const camBtn = document.querySelector(`#arow-${thumbAssetId} .at-cam-btn`);
+      if (camBtn) {
+        const pid = a.playback_ids?.[0]?.id || '';
+        camBtn.setAttribute('onclick', `openThumbModal('${a.id}','${escAttr(a.meta?.title||'')}','${escAttr(pid)}','${escAttr(url)}')`);
       }
       document.getElementById('thumb-remove-btn').style.display = 'inline-flex';
     }
