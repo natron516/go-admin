@@ -62,10 +62,51 @@ async function fsDelete(collection, docId) {
 const requireAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' });
 app.use((req, res, next) => {
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
+  if (req.path === '/webhooks/mux') return next(); // Mux webhooks bypass basic auth
   requireAuth(req, res, next);
 });
 
 app.use(express.json());
+
+// ── Mux Webhook ───────────────────────────────────────────────────────────────
+// Receives events from Mux. Register this URL in the Mux dashboard:
+//   https://go-admin-production-6be4.up.railway.app/webhooks/mux
+app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req, res) => {
+  let event;
+  try {
+    event = JSON.parse(req.body.toString());
+  } catch {
+    return res.status(400).send('Bad JSON');
+  }
+
+  // Only handle the event fired when a live stream recording becomes a ready asset
+  if (event.type === 'video.asset.live_stream_completed') {
+    const asset = event.data;
+    const assetId = asset.id;
+
+    // Build title: "Sermon – May 10, 2026" from passthrough category + asset creation date
+    try {
+      const pt = parsePassthrough(asset.passthrough);
+      const cat = (pt.category || asset.passthrough || 'sermon').trim();
+      const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+      const date = new Date(asset.created_at * 1000);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const title = `${catLabel} \u2013 ${dateStr}`;
+
+      // Patch meta.title AND store title in passthrough JSON so the iOS app picks it up
+      pt.title = title;
+      await mux('PATCH', `/video/v1/assets/${assetId}`, {
+        meta: { title },
+        passthrough: serializePassthrough(pt),
+      });
+      console.log(`[webhook] Auto-titled asset ${assetId}: "${title}"`);
+    } catch (err) {
+      console.error('[webhook] Failed to auto-title asset:', err.message);
+    }
+  }
+
+  res.sendStatus(200);
+});
 app.use(express.static('public'));
 
 // ── Mux helper ────────────────────────────────────────────────────────────────
