@@ -220,12 +220,15 @@ app.post('/api/live-streams', async (req, res) => {
   }
 });
 
-// Update live stream passthrough (category)
+// Update live stream passthrough (category) — preserves title and other JSON keys
 app.patch('/api/live-streams/:id', async (req, res) => {
   try {
     const { category } = req.body;
+    const current = await mux('GET', `/video/v1/live-streams/${req.params.id}`);
+    const existing = parsePassthrough(current.data?.passthrough);
+    existing.category = category || '';
     const data = await mux('PATCH', `/video/v1/live-streams/${req.params.id}`, {
-      passthrough: category || '',
+      passthrough: serializePassthrough(existing),
     });
     res.json(data);
   } catch (e) {
