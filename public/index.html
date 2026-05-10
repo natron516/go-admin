@@ -1271,8 +1271,14 @@ function renderUsers(users) {
     return;
   }
   document.getElementById('users-tbody').innerHTML = users.map(u => {
-    const joined = u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—';
-    const lastIn = u.lastSignIn ? new Date(u.lastSignIn).toLocaleDateString() : '—';
+    const fmtDt = iso => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, {month:'short',day:'numeric',year:'numeric'})
+        + ' ' + d.toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'});
+    };
+    const joined = fmtDt(u.createdAt);
+    const lastIn = fmtDt(u.lastSignIn);
     const providerLabel = { 'google.com':'🔵 Google', 'apple.com':'⚫ Apple', 'password':'✉️ Email', 'phone':'📞 Phone' }[u.provider] || u.provider;
     const avatar = u.photoURL ? `<img class="user-avatar" src="${escHtml(u.photoURL)}" onerror="this.style.display='none'">` : `<div class="user-avatar" style="display:inline-flex;align-items:center;justify-content:center;font-size:14px;">👤</div>`;
     const blockBtn = u.disabled
