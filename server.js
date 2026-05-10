@@ -323,6 +323,60 @@ app.delete('/api/feedback/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Analytics ──────────────────────────────────
+
+// Per-user session stats (app usage time from Firestore)
+app.get('/api/analytics/sessions', async (req, res) => {
+  try {
+    // Get sessions from last 30 days
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const snap = await admin.firestore()
+      .collection('sessions')
+      .where('startedAt', '>=', cutoff)
+      .orderBy('startedAt', 'desc')
+      .limit(500)
+      .get();
+
+    // Aggregate by user
+    const users = {};
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (!d.uid) return;
+      if (!users[d.uid]) {
+        users[d.uid] = { uid: d.uid, totalSeconds: 0, sessionCount: 0, lastActive: null, platform: d.platform || 'Unknown' };
+      }
+      const u = users[d.uid];
+      u.totalSeconds += d.durationSeconds || 0;
+      u.sessionCount += 1;
+      const started = d.startedAt?.toDate?.();
+      if (started && (!u.lastActive || started > u.lastActive)) {
+        u.lastActive = started;
+        u.platform = d.platform || u.platform;
+      }
+    });
+
+    // Convert to array, sort by most active
+    const result = Object.values(users)
+      .map(u => ({ ...u, lastActive: u.lastActive?.toISOString() || null }))
+      .sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    res.json({ users: result });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Per-user video watch stats from Mux Data API
+app.get('/api/analytics/viewing', async (req, res) => {
+  try {
+    const muxRes = await fetch(
+      'https://api.mux.com/data/v1/metrics/viewer_experience_score?group_by=viewer_id&timeframe[]=30:days&order_by=watch_time&order_direction=desc&limit=50',
+      { headers: { Authorization: `Basic ${MUX_AUTH}` } }
+    );
+    const data = await muxRes.json();
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Sermon PIN ─────────────────────────────────────────────────
 
 app.get('/api/config/pin', async (req, res) => {

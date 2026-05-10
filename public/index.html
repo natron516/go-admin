@@ -291,6 +291,7 @@
     <button class="tab" onclick="showTab('featured',this)">⭐ Featured</button>
     <button class="tab" onclick="showTab('users',this)">👥 Users</button>
     <button class="tab" onclick="showTab('feedback',this)" id="tab-btn-feedback">💬 Feedback</button>
+    <button class="tab" onclick="showTab('analytics',this)">📊 Analytics</button>
   </nav>
 </header>
 
@@ -412,6 +413,17 @@
     </div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Check videos to feature them on the home screen. Drag rows to reorder. Changes go live instantly — no app update needed.</p>
     <div id="featured-content"><div class="spinner"></div></div>
+  </section>
+
+  <section id="tab-analytics" class="section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">User Analytics</h2>
+        <p style="font-size:13px;color:var(--muted);">App usage and video watch time per user (last 30 days).</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadAnalytics()">↺ Refresh</button>
+    </div>
+    <div id="analytics-content"><div class="spinner"></div></div>
   </section>
 
   <section id="tab-feedback" class="section">
@@ -654,6 +666,102 @@ function showTab(name, btn) {
   if (name === 'featured') loadFeatured();
   if (name === 'users')    loadUsers();
   if (name === 'feedback') loadFeedback();
+  if (name === 'analytics') loadAnalytics();
+}
+
+// ── Analytics ────────────────────────────────────────────
+async function loadAnalytics() {
+  const container = document.getElementById('analytics-content');
+  container.innerHTML = '<div class="spinner"></div>';
+  try {
+    // Fetch both session data and Mux viewing data
+    const [sessRes, viewRes, usersRes] = await Promise.all([
+      fetch('/api/analytics/sessions').then(r => r.json()),
+      fetch('/api/analytics/viewing').then(r => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/users').then(r => r.json()).catch(() => ({ users: [] }))
+    ]);
+
+    const sessions = sessRes.users || [];
+    const viewing = viewRes.data || [];
+    const authUsers = usersRes.users || [];
+
+    // Build UID → email/name lookup from auth users
+    const uidMap = {};
+    authUsers.forEach(u => { uidMap[u.uid] = u; });
+
+    // Build UID → Mux watch time lookup
+    const muxMap = {};
+    viewing.forEach(v => {
+      if (v.viewer_id) muxMap[v.viewer_id] = v;
+    });
+
+    // Merge: start from session users, enrich with auth + mux
+    const allUids = new Set([...sessions.map(s => s.uid), ...viewing.map(v => v.viewer_id).filter(Boolean)]);
+    const rows = [];
+    allUids.forEach(uid => {
+      const sess = sessions.find(s => s.uid === uid) || {};
+      const mux = muxMap[uid] || {};
+      const auth = uidMap[uid] || {};
+      rows.push({
+        uid,
+        name: auth.displayName || auth.email || uid.slice(0, 10) + '…',
+        email: auth.email || '',
+        platform: sess.platform || 'Unknown',
+        appTime: sess.totalSeconds || 0,
+        sessionCount: sess.sessionCount || 0,
+        lastActive: sess.lastActive || auth.lastSignIn || null,
+        watchTime: mux.total_watch_time || 0,
+        views: mux.views || 0,
+      });
+    });
+
+    rows.sort((a, b) => b.appTime - a.appTime);
+
+    if (!rows.length) {
+      container.innerHTML = '<p style="color:var(--muted);padding:40px 0;text-align:center;">No usage data yet. Data appears after users update to the latest version.</p>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="upload-table-wrap">
+        <table class="upload-table">
+          <thead><tr>
+            <th>User</th>
+            <th>Platform</th>
+            <th>Sessions</th>
+            <th>App Time</th>
+            <th>Watch Time</th>
+            <th>Videos</th>
+            <th>Last Active</th>
+          </tr></thead>
+          <tbody>${rows.map(r => `
+            <tr>
+              <td>
+                <div style="font-weight:600;font-size:13px;">${escHtml(r.name)}</div>
+                ${r.email ? `<div style="font-size:11px;color:var(--muted);">${escHtml(r.email)}</div>` : ''}
+              </td>
+              <td><span style="font-size:12px;">${r.platform}</span></td>
+              <td>${r.sessionCount}</td>
+              <td>${formatTime(r.appTime)}</td>
+              <td>${formatTime(r.watchTime)}</td>
+              <td>${r.views}</td>
+              <td style="font-size:12px;color:var(--muted);">${r.lastActive ? new Date(r.lastActive).toLocaleDateString() : '—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<p style="color:var(--red);padding:20px 0;">Error: ${e.message}</p>`;
+  }
+}
+
+function formatTime(seconds) {
+  if (!seconds || seconds < 1) return '—';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${Math.round(seconds)}s`;
 }
 
 // ── Feedback ──────────────────────────────────────────────
