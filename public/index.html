@@ -217,6 +217,11 @@
   .user-blocked-badge { font-size:11px; font-weight:700; background:rgba(224,82,82,.15); color:var(--red); border-radius:99px; padding:2px 8px; }
   .users-search { background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; padding:7px 12px; outline:none; width:100%; max-width:300px; margin-bottom:12px; }
   .users-search:focus { border-color:var(--accent); }
+  .sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
+  .sort-th:hover { color:var(--text); }
+  .sort-th.active { color:var(--accent); }
+  .sort-arrow { margin-left:4px; font-size:10px; opacity:.6; }
+  .sort-th.active .sort-arrow { opacity:1; }
 
   /* Featured tab */
   .feat-list { display: flex; flex-direction: column; gap: 6px; }
@@ -394,8 +399,8 @@
         <thead><tr>
           <th>User</th>
           <th>Provider</th>
-          <th>Joined</th>
-          <th>Last Sign In</th>
+          <th class="sort-th" id="th-joined" onclick="setUserSort('joined')">Joined <span class="sort-arrow">↕</span></th>
+          <th class="sort-th" id="th-lastSignIn" onclick="setUserSort('lastSignIn')">Last Sign In <span class="sort-arrow">↕</span></th>
           <th>Status</th>
           <th>Actions</th>
         </tr></thead>
@@ -1185,6 +1190,45 @@ loadAssets();
 
 // ── Users tab ─────────────────────────────────────────
 let allUsers = [];
+let userSort = { field: 'joined', dir: 'desc' };
+
+function setUserSort(field) {
+  if (userSort.field === field) {
+    userSort.dir = userSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    userSort.field = field;
+    userSort.dir = 'desc';
+  }
+  updateSortHeaders();
+  const q = document.getElementById('user-search')?.value || '';
+  filterUsers(q);
+}
+
+function updateSortHeaders() {
+  ['joined','lastSignIn'].forEach(f => {
+    const th = document.getElementById('th-' + f);
+    if (!th) return;
+    const arrow = th.querySelector('.sort-arrow');
+    if (userSort.field === f) {
+      th.classList.add('active');
+      arrow.textContent = userSort.dir === 'asc' ? '↑' : '↓';
+    } else {
+      th.classList.remove('active');
+      arrow.textContent = '↕';
+    }
+  });
+}
+
+function sortedUsers(users) {
+  const { field, dir } = userSort;
+  return [...users].sort((a, b) => {
+    const av = field === 'joined' ? (a.createdAt ? new Date(a.createdAt).getTime() : 0)
+                                  : (a.lastSignIn ? new Date(a.lastSignIn).getTime() : 0);
+    const bv = field === 'joined' ? (b.createdAt ? new Date(b.createdAt).getTime() : 0)
+                                  : (b.lastSignIn ? new Date(b.lastSignIn).getTime() : 0);
+    return dir === 'asc' ? av - bv : bv - av;
+  });
+}
 
 async function loadUsers() {
   // Load current PIN
@@ -1206,7 +1250,8 @@ async function loadUsers() {
     if (d.error) throw new Error(d.error);
     allUsers = d.users || [];
     document.getElementById('user-count').textContent = `${allUsers.length} users`;
-    renderUsers(allUsers);
+    updateSortHeaders();
+    renderUsers(sortedUsers(allUsers));
   } catch(e) {
     document.getElementById('users-tbody').innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
   }
@@ -1214,9 +1259,10 @@ async function loadUsers() {
 
 function filterUsers(q) {
   const lq = q.toLowerCase();
-  renderUsers(allUsers.filter(u =>
+  const filtered = allUsers.filter(u =>
     !lq || u.email.toLowerCase().includes(lq) || u.displayName.toLowerCase().includes(lq)
-  ));
+  );
+  renderUsers(sortedUsers(filtered));
 }
 
 function renderUsers(users) {
