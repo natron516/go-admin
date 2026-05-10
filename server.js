@@ -203,10 +203,14 @@ app.get('/api/live-streams', async (req, res) => {
 app.post('/api/live-streams', async (req, res) => {
   try {
     const { title, category } = req.body;
-    const resolvedTitle = title || 'Live Service';
+    const cat = category || 'sermon';
+    // Auto-build title from category + date if not explicitly provided
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+    const resolvedTitle = title || `${catLabel} – ${dateStr}`;
     // Store title in passthrough JSON so it carries over to the VOD asset after the stream ends.
     // Mux copies passthrough to the new asset automatically, but does NOT copy meta.title.
-    const passthrough = JSON.stringify({ category: category || 'sermon', title: resolvedTitle });
+    const passthrough = JSON.stringify({ category: cat, title: resolvedTitle });
     const data = await mux('POST', '/video/v1/live-streams', {
       playback_policy: ['public'],
       new_asset_settings: { playback_policy: ['public'] },
