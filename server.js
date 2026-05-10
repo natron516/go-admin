@@ -84,11 +84,21 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     const asset = event.data;
     const assetId = asset.id;
 
-    // Build title: "Sermon – May 10, 2026" from passthrough category + asset creation date
+    // Map live stream ID → display name
+    const STREAM_NAMES = {
+      'ripZz37iQh24znVPRqkrZR02N8Sl2Zs1021b2lyUwHHVQ': 'Sermon',
+      'Dbckmh4c8WKzhY8ieBQ01jhBdV1LwJuSOTpkaDT3uKH00': 'Recitals',
+      'J48167Z8yh011ZdcB4s6ou1jguYO4obCklJufOORrFVw': 'School Events',
+    };
+
+    // Build title: "Sermon – May 10, 2026" from stream key + asset creation date
     try {
       const pt = parsePassthrough(asset.passthrough);
-      const cat = (pt.category || asset.passthrough || 'sermon').trim();
-      const catLabel = cat.replace(/\b\w/g, c => c.toUpperCase());
+      const streamId = asset.live_stream_id;
+      const catLabel = STREAM_NAMES[streamId] || (() => {
+        const cat = (pt.category || asset.passthrough || 'sermon').trim();
+        return cat.replace(/\b\w/g, c => c.toUpperCase());
+      })();
       const date = new Date(asset.created_at * 1000);
       const dateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const title = `${catLabel} \u2013 ${dateStr}`;
