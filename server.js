@@ -88,7 +88,7 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     try {
       const pt = parsePassthrough(asset.passthrough);
       const cat = (pt.category || asset.passthrough || 'sermon').trim();
-      const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+      const catLabel = cat.replace(/\b\w/g, c => c.toUpperCase());
       const date = new Date(asset.created_at * 1000);
       const dateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const title = `${catLabel} \u2013 ${dateStr}`;
