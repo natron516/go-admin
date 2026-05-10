@@ -63,6 +63,7 @@ const requireAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: 
 app.use((req, res, next) => {
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
   if (req.path === '/webhooks/mux') return next(); // Mux webhooks bypass basic auth
+  if (req.path === '/cast-receiver.html') return next(); // Cast receiver must be publicly accessible
   requireAuth(req, res, next);
 });
 

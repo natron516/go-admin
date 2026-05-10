@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>GO Videos Cast Receiver</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #player { width: 100%; height: 100%; }
+    #overlay {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #000;
+      transition: opacity 0.5s;
+    }
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+    .logo { font-family: -apple-system, sans-serif; font-size: 32px; font-weight: 700;
+      color: #fff; letter-spacing: -0.5px; margin-bottom: 16px; }
+    .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,.2);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #title-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 24px 40px; background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      font-family: -apple-system, sans-serif; color: #fff;
+      opacity: 0; transition: opacity 0.4s;
+    }
+    #title-bar.visible { opacity: 1; }
+    #title-bar .title { font-size: 28px; font-weight: 700; }
+    #title-bar .sub { font-size: 18px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <video id="player" autoplay playsinline></video>
+  <div id="overlay">
+    <div class="logo">GO Videos</div>
+    <div class="spinner"></div>
+  </div>
+  <div id="title-bar">
+    <div class="title" id="title-text"></div>
+    <div class="sub" id="sub-text">GO Videos</div>
+  </div>
+
+  <!-- Google Cast Receiver SDK -->
+  <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <script>
+    const context  = cast.framework.CastReceiverContext.getInstance();
+    const manager  = context.getPlayerManager();
+    const video    = document.getElementById('player');
+    const overlay  = document.getElementById('overlay');
+    const titleBar = document.getElementById('title-bar');
+    const titleEl  = document.getElementById('title-text');
+    const subEl    = document.getElementById('sub-text');
+
+    // Use HLS.js for Mux streams
+    const HLS_CDN = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
+
+    function loadHlsJs(cb) {
+      if (window.Hls) return cb();
+      const s = document.createElement('script');
+      s.src = HLS_CDN;
+      s.onload = cb;
+      document.head.appendChild(s);
+    }
+
+    function playUrl(url, startTime) {
+      loadHlsJs(() => {
+        if (Hls.isSupported()) {
+          const hls = new Hls({ startPosition: startTime || -1 });
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play();
+            overlay.classList.add('hidden');
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS (shouldn't happen on Chromecast but just in case)
+          video.src = url;
+          if (startTime > 0) video.currentTime = startTime;
+          video.play();
+          overlay.classList.add('hidden');
+        }
+      });
+    }
+
+    // Intercept media load so we can use our own HLS player
+    manager.setMessageInterceptor(
+      cast.framework.messages.MessageType.LOAD,
+      request => {
+        const media    = request.media;
+        const url      = media.contentUrl || media.contentId;
+        const start    = request.currentTime || 0;
+        const title    = media.metadata?.title || '';
+        const subtitle = media.metadata?.subtitle || 'GO Videos';
+
+        titleEl.textContent = title;
+        subEl.textContent   = subtitle;
+        if (title) {
+          titleBar.classList.add('visible');
+          setTimeout(() => titleBar.classList.remove('visible'), 5000);
+        }
+
+        playUrl(url, start);
+
+        // Return null to stop the default CAF player handling (we drive video directly)
+        return null;
+      }
+    );
+
+    context.start({ touchScreenOptimizedApp: false });
+  </script>
+</body>
+</html>
