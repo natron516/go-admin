@@ -203,11 +203,14 @@ app.get('/api/live-streams', async (req, res) => {
 app.post('/api/live-streams', async (req, res) => {
   try {
     const { title, category } = req.body;
-    const passthrough = category || 'sermon';
+    const resolvedTitle = title || 'Live Service';
+    // Store title in passthrough JSON so it carries over to the VOD asset after the stream ends.
+    // Mux copies passthrough to the new asset automatically, but does NOT copy meta.title.
+    const passthrough = JSON.stringify({ category: category || 'sermon', title: resolvedTitle });
     const data = await mux('POST', '/video/v1/live-streams', {
       playback_policy: ['public'],
       new_asset_settings: { playback_policy: ['public'] },
-      meta: { title: title || 'Live Service' },
+      meta: { title: resolvedTitle },
       passthrough,
       latency_mode: 'standard',
     });
