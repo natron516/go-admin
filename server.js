@@ -365,14 +365,41 @@ app.get('/api/analytics/sessions', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Per-user video watch stats from Mux Data API
-app.get('/api/analytics/viewing', async (req, res) => {
+// Video stats from Mux Data — works with current app builds (no update needed)
+app.get('/api/analytics/videos', async (req, res) => {
   try {
-    const muxRes = await fetch(
-      'https://api.mux.com/data/v1/metrics/viewer_experience_score?group_by=viewer_id&timeframe[]=30:days&order_by=watch_time&order_direction=desc&limit=50',
+    const days = req.query.days || 90;
+    const vidRes = await fetch(
+      `https://api.mux.com/data/v1/metrics/views/breakdown?group_by=video_title&timeframe[]=${days}:days&limit=50`,
       { headers: { Authorization: `Basic ${MUX_AUTH}` } }
     );
-    const data = await muxRes.json();
+    const data = await vidRes.json();
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Platform breakdown from Mux Data
+app.get('/api/analytics/platforms', async (req, res) => {
+  try {
+    const days = req.query.days || 90;
+    const platRes = await fetch(
+      `https://api.mux.com/data/v1/metrics/views/breakdown?group_by=operating_system&timeframe[]=${days}:days`,
+      { headers: { Authorization: `Basic ${MUX_AUTH}` } }
+    );
+    const data = await platRes.json();
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Overall view count over time
+app.get('/api/analytics/overview', async (req, res) => {
+  try {
+    const days = req.query.days || 90;
+    const overRes = await fetch(
+      `https://api.mux.com/data/v1/metrics/views/timeseries?timeframe[]=${days}:days`,
+      { headers: { Authorization: `Basic ${MUX_AUTH}` } }
+    );
+    const data = await overRes.json();
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

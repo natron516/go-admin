@@ -674,82 +674,95 @@ async function loadAnalytics() {
   const container = document.getElementById('analytics-content');
   container.innerHTML = '<div class="spinner"></div>';
   try {
-    // Fetch both session data and Mux viewing data
-    const [sessRes, viewRes, usersRes] = await Promise.all([
-      fetch('/api/analytics/sessions').then(r => r.json()),
-      fetch('/api/analytics/viewing').then(r => r.json()).catch(() => ({ data: [] })),
-      fetch('/api/users').then(r => r.json()).catch(() => ({ users: [] }))
+    const [vidRes, platRes, sessRes] = await Promise.all([
+      fetch('/api/analytics/videos').then(r => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/analytics/platforms').then(r => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/analytics/sessions').then(r => r.json()).catch(() => ({ users: [] }))
     ]);
 
+    const videos = vidRes.data || [];
+    const platforms = platRes.data || [];
     const sessions = sessRes.users || [];
-    const viewing = viewRes.data || [];
-    const authUsers = usersRes.users || [];
 
-    // Build UID → email/name lookup from auth users
-    const uidMap = {};
-    authUsers.forEach(u => { uidMap[u.uid] = u; });
+    // Summary cards
+    const totalViews = platforms.reduce((s, p) => s + (p.views || 0), 0);
+    const totalWatchMs = platforms.reduce((s, p) => s + (p.total_watch_time || 0), 0);
+    const totalSessionUsers = sessions.length;
 
-    // Build UID → Mux watch time lookup
-    const muxMap = {};
-    viewing.forEach(v => {
-      if (v.viewer_id) muxMap[v.viewer_id] = v;
-    });
+    let html = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:var(--accent);">${totalViews}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Total Views (90d)</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:var(--green);">${formatTime(totalWatchMs / 1000)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Total Watch Time (90d)</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:var(--accent2);">${videos.length}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Unique Videos Watched</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:var(--orange);">${totalSessionUsers}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">App Users (30d)*</div>
+        </div>
+      </div>`;
 
-    // Merge: start from session users, enrich with auth + mux
-    const allUids = new Set([...sessions.map(s => s.uid), ...viewing.map(v => v.viewer_id).filter(Boolean)]);
-    const rows = [];
-    allUids.forEach(uid => {
-      const sess = sessions.find(s => s.uid === uid) || {};
-      const mux = muxMap[uid] || {};
-      const auth = uidMap[uid] || {};
-      rows.push({
-        uid,
-        name: auth.displayName || auth.email || uid.slice(0, 10) + '…',
-        email: auth.email || '',
-        platform: sess.platform || 'Unknown',
-        appTime: sess.totalSeconds || 0,
-        sessionCount: sess.sessionCount || 0,
-        lastActive: sess.lastActive || auth.lastSignIn || null,
-        watchTime: mux.total_watch_time || 0,
-        views: mux.views || 0,
-      });
-    });
-
-    rows.sort((a, b) => b.appTime - a.appTime);
-
-    if (!rows.length) {
-      container.innerHTML = '<p style="color:var(--muted);padding:40px 0;text-align:center;">No usage data yet. Data appears after users update to the latest version.</p>';
-      return;
+    // Platform breakdown
+    if (platforms.length) {
+      html += `<h3 style="font-size:15px;font-weight:700;margin-bottom:10px;">Views by Platform</h3>
+        <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
+          ${platforms.map(p => {
+            const color = p.field === 'tvOS' ? '#bf5af2' : p.field === 'iOS' ? '#5ac8fa' : '#30d158';
+            return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;min-width:140px;">
+              <span style="color:${color};font-weight:700;font-size:20px;">${p.views}</span>
+              <span style="color:var(--muted);font-size:13px;margin-left:6px;">${escHtml(p.field)} views</span>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">${formatTime((p.total_watch_time||0)/1000)} watch time</div>
+            </div>`;
+          }).join('')}
+        </div>`;
     }
 
-    container.innerHTML = `
-      <div class="upload-table-wrap">
-        <table class="upload-table">
-          <thead><tr>
-            <th>User</th>
-            <th>Platform</th>
-            <th>Sessions</th>
-            <th>App Time</th>
-            <th>Watch Time</th>
-            <th>Videos</th>
-            <th>Last Active</th>
-          </tr></thead>
-          <tbody>${rows.map(r => `
-            <tr>
-              <td>
-                <div style="font-weight:600;font-size:13px;">${escHtml(r.name)}</div>
-                ${r.email ? `<div style="font-size:11px;color:var(--muted);">${escHtml(r.email)}</div>` : ''}
-              </td>
-              <td><span style="font-size:12px;">${r.platform}</span></td>
-              <td>${r.sessionCount}</td>
-              <td>${formatTime(r.appTime)}</td>
-              <td>${formatTime(r.watchTime)}</td>
-              <td>${r.views}</td>
-              <td style="font-size:12px;color:var(--muted);">${r.lastActive ? new Date(r.lastActive).toLocaleDateString() : '—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
+    // Top videos table
+    if (videos.length) {
+      html += `<h3 style="font-size:15px;font-weight:700;margin-bottom:10px;">Most Watched Videos</h3>
+        <div class="upload-table-wrap">
+          <table class="upload-table">
+            <thead><tr><th>Video</th><th>Views</th><th>Watch Time</th></tr></thead>
+            <tbody>${videos.map(v => `
+              <tr>
+                <td style="font-size:13px;font-weight:500;">${escHtml(v.field || 'Untitled')}</td>
+                <td>${v.views}</td>
+                <td>${formatTime((v.total_watch_time||0)/1000)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    // Per-user app sessions (requires app update)
+    if (sessions.length) {
+      html += `<h3 style="font-size:15px;font-weight:700;margin:24px 0 10px;">App Sessions by User (30d)</h3>
+        <div class="upload-table-wrap">
+          <table class="upload-table">
+            <thead><tr><th>User</th><th>Platform</th><th>Sessions</th><th>App Time</th><th>Last Active</th></tr></thead>
+            <tbody>${sessions.map(s => `
+              <tr>
+                <td style="font-size:13px;">${escHtml(s.uid.slice(0,12))}…</td>
+                <td>${s.platform}</td>
+                <td>${s.sessionCount}</td>
+                <td>${formatTime(s.totalSeconds)}</td>
+                <td style="font-size:12px;color:var(--muted);">${s.lastActive ? new Date(s.lastActive).toLocaleDateString() : '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } else {
+      html += `<p style="color:var(--muted);font-size:13px;margin-top:20px;">* Per-user app session data requires the next app update.</p>`;
+    }
+
+    container.innerHTML = html;
   } catch(e) {
     container.innerHTML = `<p style="color:var(--red);padding:20px 0;">Error: ${e.message}</p>`;
   }
