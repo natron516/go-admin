@@ -399,12 +399,14 @@
         <thead><tr>
           <th>User</th>
           <th>Provider</th>
+          <th>Platform</th>
+          <th class="sort-th" id="th-minutes" onclick="setUserSort('minutes')">Minutes <span class="sort-arrow">↕</span></th>
           <th class="sort-th" id="th-joined" onclick="setUserSort('joined')">Joined <span class="sort-arrow">↕</span></th>
           <th class="sort-th" id="th-lastSignIn" onclick="setUserSort('lastSignIn')">Last Sign In <span class="sort-arrow">↕</span></th>
           <th>Status</th>
           <th>Actions</th>
         </tr></thead>
-        <tbody id="users-tbody"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr></tbody>
+        <tbody id="users-tbody"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -675,6 +677,21 @@ function showTab(name, btn) {
 }
 
 // ── Analytics ────────────────────────────────────────────
+let _analyticsVideos = [];
+let _analyticsSessions = [];
+
+window.sortAnalyticsTable = function(type, key) {
+  if (type === 'video') {
+    _analyticsVideos.sort((a, b) => key === 'views' ? (b.views||0) - (a.views||0) : (b.total_watch_time||0) - (a.total_watch_time||0));
+    const tbody = document.getElementById('analytics-video-tbody');
+    if (tbody) tbody.innerHTML = _analyticsVideos.map(v => `<tr><td style="font-size:13px;font-weight:500;">${escHtml(v.field||'Untitled')}</td><td>${v.views}</td><td>${formatTime((v.total_watch_time||0)/1000)}</td></tr>`).join('');
+  } else {
+    _analyticsSessions.sort((a, b) => key === 'count' ? (b.sessionCount||0) - (a.sessionCount||0) : (b.totalSeconds||0) - (a.totalSeconds||0));
+    const tbody = document.getElementById('analytics-session-tbody');
+    if (tbody) tbody.innerHTML = _analyticsSessions.map(s => `<tr><td style="font-size:13px;">${escHtml(s.uid.slice(0,12))}…</td><td>${s.platform}</td><td>${s.sessionCount}</td><td>${formatTime(s.totalSeconds)}</td><td style="font-size:12px;color:var(--muted);">${s.lastActive ? new Date(s.lastActive).toLocaleDateString() : '—'}</td></tr>`).join('');
+  }
+}
+
 async function loadAnalytics() {
   const container = document.getElementById('analytics-content');
   container.innerHTML = '<div class="spinner"></div>';
@@ -686,8 +703,10 @@ async function loadAnalytics() {
     ]);
 
     const videos = vidRes.data || [];
+    _analyticsVideos = videos;
     const platforms = platRes.data || [];
     const sessions = sessRes.users || [];
+    _analyticsSessions = sessions;
 
     // Summary cards
     const totalViews = platforms.reduce((s, p) => s + (p.views || 0), 0);
@@ -734,8 +753,8 @@ async function loadAnalytics() {
       html += `<h3 style="font-size:15px;font-weight:700;margin-bottom:10px;">Most Watched Videos</h3>
         <div class="upload-table-wrap">
           <table class="upload-table">
-            <thead><tr><th>Video</th><th>Views</th><th>Watch Time</th></tr></thead>
-            <tbody>${videos.map(v => `
+            <thead><tr><th>Video</th><th style="cursor:pointer" onclick="sortAnalyticsTable('video','views')">Views ↕</th><th style="cursor:pointer" onclick="sortAnalyticsTable('video','time')">Watch Time ↕</th></tr></thead>
+            <tbody id="analytics-video-tbody">${videos.map(v => `
               <tr>
                 <td style="font-size:13px;font-weight:500;">${escHtml(v.field || 'Untitled')}</td>
                 <td>${v.views}</td>
@@ -743,6 +762,10 @@ async function loadAnalytics() {
               </tr>`).join('')}
             </tbody>
           </table>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="sortAnalyticsTable('video','views')">Sort by Views</button>
+            <button class="btn btn-ghost btn-sm" onclick="sortAnalyticsTable('video','time')">Sort by Watch Time</button>
+          </div>
         </div>`;
     }
 
@@ -751,8 +774,8 @@ async function loadAnalytics() {
       html += `<h3 style="font-size:15px;font-weight:700;margin:24px 0 10px;">App Sessions by User (30d)</h3>
         <div class="upload-table-wrap">
           <table class="upload-table">
-            <thead><tr><th>User</th><th>Platform</th><th>Sessions</th><th>App Time</th><th>Last Active</th></tr></thead>
-            <tbody>${sessions.map(s => `
+            <thead><tr><th>User</th><th>Platform</th><th style="cursor:pointer" onclick="sortAnalyticsTable('session','count')">Sessions ↕</th><th style="cursor:pointer" onclick="sortAnalyticsTable('session','time')">App Time ↕</th><th>Last Active</th></tr></thead>
+            <tbody id="analytics-session-tbody">${sessions.map(s => `
               <tr>
                 <td style="font-size:13px;">${escHtml(s.uid.slice(0,12))}…</td>
                 <td>${s.platform}</td>
@@ -1205,7 +1228,7 @@ function setUserSort(field) {
 }
 
 function updateSortHeaders() {
-  ['joined','lastSignIn'].forEach(f => {
+  ['minutes','joined','lastSignIn'].forEach(f => {
     const th = document.getElementById('th-' + f);
     if (!th) return;
     const arrow = th.querySelector('.sort-arrow');
@@ -1222,10 +1245,17 @@ function updateSortHeaders() {
 function sortedUsers(users) {
   const { field, dir } = userSort;
   return [...users].sort((a, b) => {
-    const av = field === 'joined' ? (a.createdAt ? new Date(a.createdAt).getTime() : 0)
-                                  : (a.lastSignIn ? new Date(a.lastSignIn).getTime() : 0);
-    const bv = field === 'joined' ? (b.createdAt ? new Date(b.createdAt).getTime() : 0)
-                                  : (b.lastSignIn ? new Date(b.lastSignIn).getTime() : 0);
+    let av, bv;
+    if (field === 'joined') {
+      av = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      bv = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    } else if (field === 'minutes') {
+      av = a.minutesWatched || 0;
+      bv = b.minutesWatched || 0;
+    } else {
+      av = a.lastSignIn ? new Date(a.lastSignIn).getTime() : 0;
+      bv = b.lastSignIn ? new Date(b.lastSignIn).getTime() : 0;
+    }
     return dir === 'asc' ? av - bv : bv - av;
   });
 }
@@ -1243,7 +1273,7 @@ async function loadUsers() {
 
   // Then load users
 
-  document.getElementById('users-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
+  document.getElementById('users-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
   try {
     const r = await fetch('/api/users');
     const d = await r.json();
@@ -1253,7 +1283,7 @@ async function loadUsers() {
     updateSortHeaders();
     renderUsers(sortedUsers(allUsers));
   } catch(e) {
-    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="8" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -1267,7 +1297,7 @@ function filterUsers(q) {
 
 function renderUsers(users) {
   if (!users.length) {
-    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
+    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
     return;
   }
   document.getElementById('users-tbody').innerHTML = users.map(u => {
@@ -1284,13 +1314,18 @@ function renderUsers(users) {
     const blockBtn = u.disabled
       ? `<button class="btn btn-ghost btn-sm" onclick="setUserBlocked('${u.uid}',false)">✅ Unblock</button>`
       : `<button class="btn btn-danger btn-sm" onclick="setUserBlocked('${u.uid}',true)">🚫 Block</button>`;
+    const privateBtn = u.privateAccess
+      ? `<button class="btn btn-ghost btn-sm" onclick="setUserPrivateAccess('${u.uid}',false)" title="Revoke private content access">🔓 Revoke Private</button>`
+      : `<button class="btn btn-primary btn-sm" onclick="setUserPrivateAccess('${u.uid}',true)" title="Grant private content access">🔒 Grant Private</button>`;
     return `<tr class="${u.disabled?'blocked':''}">
       <td><div style="display:flex;align-items:center;gap:8px">${avatar}<div><div class="user-name">${escHtml(u.displayName||'(no name)')}</div><div class="user-email">${escHtml(u.email||'no email')}</div></div></div></td>
       <td><span class="user-provider">${providerLabel}</span></td>
+      <td>${(() => { const p = u.platform; if (!p) return '<span style="font-size:12px;color:var(--muted)">—</span>'; const c = p === 'tvOS' ? '#bf5af2' : p === 'iPadOS' ? '#30d158' : '#5ac8fa'; return `<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,.08);border-radius:4px;padding:2px 8px;color:${c}">${p}</span>`; })()}</td>
+      <td style="font-size:13px;color:var(--text)">${u.minutesWatched ? u.minutesWatched + ' min' : '—'}</td>
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
-      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>'}</td>
-      <td>${blockBtn}</td>
+      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>'} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">${blockBtn}${privateBtn}</td>
     </tr>`;
   }).join('');
 }
@@ -1332,6 +1367,25 @@ async function setUserBlocked(uid, blocked) {
     const q = document.getElementById('user-search')?.value || '';
     filterUsers(q);
     toast(blocked ? '🚫 User blocked' : '✅ User unblocked');
+  } catch(e) {
+    toast('Failed: ' + e.message);
+  }
+}
+
+async function setUserPrivateAccess(uid, access) {
+  try {
+    const r = await fetch(`/api/users/${uid}/private-access`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const u = allUsers.find(x => x.uid === uid);
+    if (u) u.privateAccess = access;
+    const q = document.getElementById('user-search')?.value || '';
+    filterUsers(q);
+    toast(access ? '🔒 Private access granted' : '🔓 Private access revoked');
   } catch(e) {
     toast('Failed: ' + e.message);
   }

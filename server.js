@@ -506,12 +506,86 @@ app.get('/api/users', async (req, res) => {
       }));
       pageToken = result.pageToken;
     } while (pageToken);
+    // Look up last platform from sessions collection
+    const platformMap = {};
+    try {
+      const sessSnap = await admin.firestore().collection('sessions')
+        .limit(5000).get();
+      sessSnap.forEach(doc => {
+        const d = doc.data();
+        if (d.uid && d.platform) platformMap[d.uid] = d.platform;
+      });
+    } catch (e) {
+      console.warn('Sessions lookup failed:', e.message);
+    }
+
+    // Get actual video watch time per viewer from Mux Data API
+    const watchMap = {};
+    try {
+      const muxRes = await fetch(
+        'https://api.mux.com/data/v1/metrics/views/breakdown?group_by=viewer_user_id&timeframe[]=90:days&limit=250',
+        { headers: { Authorization: `Basic ${MUX_AUTH}` } }
+      );
+      const muxData = await muxRes.json();
+      (muxData.data || []).forEach(v => {
+        if (v.field) watchMap[v.field] = Math.round((v.total_watch_time || 0) / 60000);
+      });
+    } catch (e) {
+      console.warn('Mux watch time lookup failed:', e.message);
+    }
+
+    // Look up privateAccess from Firestore users collection
+    const privateMap = {};
+    try {
+      const privateSnap = await admin.firestore().collection('users').get();
+      privateSnap.forEach(doc => {
+        const d = doc.data();
+        if (d.privateAccess) privateMap[doc.id] = true;
+      });
+    } catch (e) {
+      console.warn('Private access lookup failed:', e.message);
+    }
+
+    users.forEach(u => {
+      u.platform = platformMap[u.uid] || null;
+      u.minutesWatched = watchMap[u.uid] || 0;
+      u.privateAccess = !!privateMap[u.uid];
+    });
+
     // Sort newest first
     users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json({ users });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// New signup notifications (polled by OpenClaw cron)
+app.get('/api/notifications/new-signups', async (req, res) => {
+  try {
+    const snap = await admin.firestore().collection('newSignups')
+      .where('notified', '==', false).limit(50).get();
+    const signups = [];
+    snap.forEach(d => signups.push({ id: d.id, ...d.data() }));
+    res.json({ signups });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/notifications/new-signups/:uid/ack', async (req, res) => {
+  try {
+    await admin.firestore().collection('newSignups').doc(req.params.uid).update({ notified: true });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Debug: check sessions collection
+app.get('/api/debug/sessions', async (req, res) => {
+  try {
+    const snap = await admin.firestore().collection('sessions').limit(10).get();
+    const docs = [];
+    snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
+    res.json({ count: snap.size, docs });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Block (disable) or unblock (enable) a user
@@ -526,6 +600,21 @@ app.patch('/api/users/:uid/block', async (req, res) => {
       { merge: true }
     );
     res.json({ ok: true, uid: req.params.uid, disabled: !!blocked });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Grant or revoke private content access
+app.patch('/api/users/:uid/private-access', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { access } = req.body; // true = grant, false = revoke
+    await admin.firestore().collection('users').doc(req.params.uid).set(
+      { privateAccess: !!access },
+      { merge: true }
+    );
+    res.json({ ok: true, uid: req.params.uid, privateAccess: !!access });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
