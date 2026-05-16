@@ -698,4 +698,47 @@ app.delete('/api/users/:uid', async (req, res) => {
   }
 });
 
+// ── Live Scripture Detection ───────────────────────────────────
+const DEEPGRAM_KEY = process.env.DEEPGRAM_API_KEY || '';
+let scriptureService = null;
+
+if (DEEPGRAM_KEY && sa) {
+  const LiveScriptureService = require('./services/live-scripture-service');
+  scriptureService = new LiveScriptureService({
+    deepgramApiKey: DEEPGRAM_KEY,
+    firestore: admin.firestore(),
+  });
+  console.log('Live Scripture Detection service initialized');
+} else {
+  console.warn('DEEPGRAM_API_KEY not set — scripture detection disabled');
+}
+
+// Start scripture detection for a live stream
+app.post('/api/scripture/start', async (req, res) => {
+  if (!scriptureService) return res.status(503).json({ error: 'Scripture detection not configured (missing DEEPGRAM_API_KEY)' });
+  const { streamId, playbackId } = req.body;
+  if (!streamId || !playbackId) return res.status(400).json({ error: 'streamId and playbackId required' });
+  try {
+    await scriptureService.start(streamId, playbackId);
+    res.json({ ok: true, streamId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Stop scripture detection for a live stream
+app.post('/api/scripture/stop', async (req, res) => {
+  if (!scriptureService) return res.status(503).json({ error: 'Scripture detection not configured' });
+  const { streamId } = req.body;
+  if (!streamId) return res.status(400).json({ error: 'streamId required' });
+  try {
+    await scriptureService.stop(streamId);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get status of active scripture detection
+app.get('/api/scripture/status', (req, res) => {
+  if (!scriptureService) return res.json({ enabled: false, active: [] });
+  res.json({ enabled: true, active: scriptureService.getActiveStreams() });
+});
+
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));
