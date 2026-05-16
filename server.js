@@ -466,6 +466,44 @@ app.get('/api/analytics/overview', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Mux cost estimate from delivery usage API
+app.get('/api/analytics/mux-cost', async (req, res) => {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const end = Math.floor((now / 3600) - 12) * 3600;
+    const start = end - 2592000; // 30 days
+    const muxRes = await fetch(
+      `https://api.mux.com/video/v1/delivery-usage?timeframe[]=${start}&timeframe[]=${end}&limit=200`,
+      { headers: { Authorization: `Basic ${MUX_AUTH}` } }
+    );
+    const muxData = await muxRes.json();
+    let total720 = 0, total1080 = 0, total2160 = 0, totalSeconds = 0, storageHours = 0;
+    (muxData.data || []).forEach(a => {
+      totalSeconds += a.delivered_seconds || 0;
+      const res = a.delivered_seconds_by_resolution || {};
+      total720 += res.tier_720p || 0;
+      total1080 += res.tier_1080p || 0;
+      total2160 += res.tier_2160p || 0;
+      storageHours += (a.asset_duration || 0) / 3600;
+    });
+    // Mux pay-as-you-go pricing estimates
+    const deliveryCost = (total720/60 * 0.00067) + (total1080/60 * 0.0013) + (total2160/60 * 0.004);
+    const storageCost = storageHours * 0.007;
+    const totalCost = deliveryCost + storageCost;
+    res.json({
+      totalDeliveredMinutes: Math.round(totalSeconds / 60),
+      delivery: { min720: Math.round(total720/60), min1080: Math.round(total1080/60), min2160: Math.round(total2160/60) },
+      storageHours: Math.round(storageHours * 10) / 10,
+      costs: {
+        delivery: Math.round(deliveryCost * 100) / 100,
+        storage: Math.round(storageCost * 100) / 100,
+        total: Math.round(totalCost * 100) / 100
+      },
+      assetCount: (muxData.data || []).length
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Per-asset watch metrics from Mux Data (views + watch time per asset)
 app.get('/api/analytics/asset-metrics', async (req, res) => {
   try {

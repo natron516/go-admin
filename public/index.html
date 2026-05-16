@@ -425,6 +425,17 @@
     <div id="featured-content"><div class="spinner"></div></div>
   </section>
 
+    <section id="tab-mux-cost" class="section" style="margin-bottom:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">💰 Mux Cost Estimate</h2>
+        <p style="font-size:13px;color:var(--muted);">Estimated costs based on delivery, storage, and encoding usage (last 30 days).</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadMuxCost()">↺ Refresh</button>
+    </div>
+    <div id="mux-cost-content"><div class="spinner"></div></div>
+  </section>
+
   <section id="tab-analytics" class="section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div>
@@ -676,7 +687,7 @@ function showTab(name, btn) {
   if (name === 'featured') loadFeatured();
   if (name === 'users')    loadUsers();
   if (name === 'feedback') loadFeedback();
-  if (name === 'analytics') loadAnalytics();
+  if (name === 'analytics') { loadMuxCost(); loadAnalytics(); }
 }
 
 // ── Analytics ────────────────────────────────────────────
@@ -692,6 +703,41 @@ window.sortAnalyticsTable = function(type, key) {
     _analyticsSessions.sort((a, b) => key === 'count' ? (b.sessionCount||0) - (a.sessionCount||0) : (b.totalSeconds||0) - (a.totalSeconds||0));
     const tbody = document.getElementById('analytics-session-tbody');
     if (tbody) tbody.innerHTML = _analyticsSessions.map(s => `<tr><td style="font-size:13px;">${escHtml(s.uid.slice(0,12))}…</td><td>${s.platform}</td><td>${s.sessionCount}</td><td>${formatTime(s.totalSeconds)}</td><td style="font-size:12px;color:var(--muted);">${s.lastActive ? new Date(s.lastActive).toLocaleDateString() : '—'}</td></tr>`).join('');
+  }
+}
+
+async function loadMuxCost() {
+  const el = document.getElementById('mux-cost-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/analytics/mux-cost');
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const c = d.costs;
+    el.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px;background:rgba(255,255,255,.05);border-radius:12px;padding:20px;">
+          <div style="font-size:32px;font-weight:800;color:#5ac8fa">$${c.total.toFixed(2)}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px">Estimated Total (30 days)</div>
+        </div>
+        <div style="flex:1;min-width:180px;background:rgba(255,255,255,.05);border-radius:12px;padding:20px;">
+          <div style="font-size:24px;font-weight:700;color:var(--text)">$${c.delivery.toFixed(2)}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px">Delivery</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px">
+            ${d.totalDeliveredMinutes.toLocaleString()} min streamed<br>
+            720p: ${d.delivery.min720.toLocaleString()} min &nbsp; 1080p: ${d.delivery.min1080.toLocaleString()} min &nbsp; 4K: ${d.delivery.min2160.toLocaleString()} min
+          </div>
+        </div>
+        <div style="flex:1;min-width:180px;background:rgba(255,255,255,.05);border-radius:12px;padding:20px;">
+          <div style="font-size:24px;font-weight:700;color:var(--text)">$${c.storage.toFixed(2)}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px">Storage</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px">${d.storageHours} hrs of video &nbsp; ${d.assetCount} assets</div>
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:12px;">* Estimates based on Mux pay-as-you-go rates. Actual invoice may differ (encoding, live streaming, Data add-ons).</p>
+    `;
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--red)">Failed: ${e.message}</p>`;
   }
 }
 
