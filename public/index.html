@@ -1037,6 +1037,43 @@ function toggleKey(id, key) {
 
 // ── Assets ────────────────────────────────────────────────
 let allAssets = [], assetEdits = {};
+let assetSort = { field: 'uploaded', dir: 'desc' };
+
+function setAssetSort(field) {
+  if (assetSort.field === field) {
+    assetSort.dir = assetSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    assetSort.field = field;
+    assetSort.dir = 'desc';
+  }
+  filterAssets();
+}
+
+function sortAssets(assets) {
+  const { field, dir } = assetSort;
+  return [...assets].sort((a, b) => {
+    let av, bv;
+    if (field === 'title') {
+      av = (a.meta?.title || '').toLowerCase();
+      bv = (b.meta?.title || '').toLowerCase();
+      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    } else if (field === 'category') {
+      const getCat = x => { try { return JSON.parse(x.passthrough)?.category || ''; } catch { return x.passthrough || ''; } };
+      av = getCat(a).toLowerCase(); bv = getCat(b).toLowerCase();
+      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    } else if (field === 'views') {
+      av = a._views || 0; bv = b._views || 0;
+    } else if (field === 'watchMin') {
+      av = a._watchMin || 0; bv = b._watchMin || 0;
+    } else if (field === 'status') {
+      av = a.status || ''; bv = b.status || '';
+      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    } else { // uploaded
+      av = +(a.created_at || 0); bv = +(b.created_at || 0);
+    }
+    return dir === 'asc' ? av - bv : bv - av;
+  });
+}
 
 async function loadAssets() {
   document.getElementById('assets-content').innerHTML = '<div class="spinner"></div>';
@@ -1078,7 +1115,7 @@ function filterAssets() {
   });
   const countEl = document.getElementById('asset-count');
   if (countEl) countEl.textContent = cat && filtered.length === 0 ? `0 — no assets tagged "${cat}" yet` : `${filtered.length} of ${allAssets.length}`;
-  renderAssets(filtered);
+  renderAssets(sortAssets(filtered));
 }
 
 function renderAssets(assets) {
@@ -1089,12 +1126,12 @@ function renderAssets(assets) {
   <table class="assets-table">
     <thead><tr>
       <th class="td-thumb"></th>
-      <th>Title</th>
-      <th>Passthrough</th>
-      <th>Views</th>
-      <th>Watch Time</th>
-      <th>Status</th>
-      <th>Uploaded</th>
+      <th class="sort-th" onclick="setAssetSort('title')">Title <span class="sort-arrow">↕</span></th>
+      <th class="sort-th" onclick="setAssetSort('category')">Passthrough <span class="sort-arrow">↕</span></th>
+      <th class="sort-th" onclick="setAssetSort('views')">Views <span class="sort-arrow">↕</span></th>
+      <th class="sort-th" onclick="setAssetSort('watchMin')">Watch Time <span class="sort-arrow">↕</span></th>
+      <th class="sort-th" onclick="setAssetSort('status')">Status <span class="sort-arrow">↕</span></th>
+      <th class="sort-th" onclick="setAssetSort('uploaded')">Uploaded <span class="sort-arrow">↕</span></th>
       <th>Actions</th>
     </tr></thead>
     <tbody>${assets.map(a => assetRowHtml(a)).join('')}</tbody>
