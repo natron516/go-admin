@@ -35,6 +35,7 @@ class LiveScriptureService {
     this.db = firestore;
     this.activeStreams = new Map(); // streamId -> { ffmpeg, ws, docRef }
     this.recentRefs = new Map();   // streamId -> Set of recent references (dedup window)
+    this.streamStarts = new Map();  // streamId -> Date when monitoring started
   }
 
   /**
@@ -59,6 +60,7 @@ class LiveScriptureService {
     });
 
     this.recentRefs.set(streamId, new Set());
+    this.streamStarts.set(streamId, Date.now());
 
     // Connect to Deepgram real-time WebSocket
     const dgUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
@@ -108,10 +110,12 @@ class LiveScriptureService {
           // Fetch KJV verse text
           const verseText = await fetchVerseText(ref.reference);
 
+          const streamStart = this.streamStarts.get(streamId) || Date.now();
           const entry = {
             ...ref,
             verseText: verseText || null,
             detectedAt: new Date().toISOString(),
+            offsetSeconds: Math.round((Date.now() - streamStart) / 1000),
           };
 
           console.log(`[Scripture] Detected: ${ref.reference}${verseText ? ' ✓ text' : ''}`);
@@ -203,6 +207,7 @@ class LiveScriptureService {
 
     this.activeStreams.delete(streamId);
     this.recentRefs.delete(streamId);
+    this.streamStarts.delete(streamId);
   }
 
   stopAll() {
