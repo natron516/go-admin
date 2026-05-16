@@ -479,7 +479,7 @@ app.patch('/api/config/pin', async (req, res) => {
   try {
     const { pin } = req.body;
     if (!pin || !/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
-    await admin.firestore().collection('config').doc('app').set({ sermon_pin: pin }, { merge: true });
+    await admin.firestore().collection('config').doc('app').set({ sermon_pin: pin, pin_changed_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     res.json({ ok: true, pin });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
