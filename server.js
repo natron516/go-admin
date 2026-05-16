@@ -477,7 +477,7 @@ app.get('/api/analytics/asset-metrics', async (req, res) => {
     const muxData = await muxRes.json();
     const results = (muxData.data || []).map(v => ({
       assetId: v.field,
-      views: v.total_row_count || 0,
+      views: v.views || v.value || 0,
       watchMinutes: Math.round((v.total_watch_time || 0) / 60000),
     }));
     res.json({ data: results });
