@@ -735,6 +735,23 @@ app.post('/api/scripture/stop', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Write test scripture data for a stream (for testing the overlay)
+app.post('/api/scripture/test-data', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase not configured' });
+  const { streamId, history } = req.body;
+  if (!streamId || !history) return res.status(400).json({ error: 'streamId and history required' });
+  try {
+    const db = admin.firestore();
+    await db.collection('live_scripture').doc(streamId).set({
+      active: false,
+      current: history[0] || null,
+      history: history,
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    res.json({ ok: true, count: history.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Get status of active scripture detection
 app.get('/api/scripture/status', (req, res) => {
   if (!scriptureService) return res.json({ enabled: false, active: [] });
