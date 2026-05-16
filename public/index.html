@@ -425,18 +425,18 @@
     <div id="featured-content"><div class="spinner"></div></div>
   </section>
 
-    <section id="tab-mux-cost" class="section" style="margin-bottom:24px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <div>
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">💰 Mux Cost Estimate</h2>
-        <p style="font-size:13px;color:var(--muted);">Estimated costs based on delivery, storage, and encoding usage (last 30 days).</p>
+    <section id="tab-analytics" class="section">
+    <div style="margin-bottom:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div>
+          <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">💰 Mux Cost Estimate</h2>
+          <p style="font-size:13px;color:var(--muted);">Estimated costs based on delivery, storage, and encoding usage (last 30 days).</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadMuxCost()">↺ Refresh</button>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="loadMuxCost()">↺ Refresh</button>
+      <div id="mux-cost-content"><div class="spinner"></div></div>
     </div>
-    <div id="mux-cost-content"><div class="spinner"></div></div>
-  </section>
-
-  <section id="tab-analytics" class="section">
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin-bottom:24px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div>
         <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">User Analytics</h2>
