@@ -1054,7 +1054,9 @@ async function loadAssets() {
       const metricsMap = {};
       (metrics.data || []).forEach(m => { if (m.assetId) metricsMap[m.assetId] = m; });
       allAssets.forEach(a => {
-        const m = metricsMap[a.id];
+        // Match by playback ID (Mux Data returns playback IDs as video_id)
+        const pid = a.playback_ids?.[0]?.id;
+        const m = metricsMap[a.id] || (pid && metricsMap[pid]);
         if (m) { a._views = m.views || 0; a._watchMin = m.watchMinutes || 0; }
       });
     }
