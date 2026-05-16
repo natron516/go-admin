@@ -1041,10 +1041,23 @@ let allAssets = [], assetEdits = {};
 async function loadAssets() {
   document.getElementById('assets-content').innerHTML = '<div class="spinner"></div>';
   try {
-    const res = await fetch('/api/assets');
-    const json = await res.json();
+    const [assetsRes, metricsRes] = await Promise.all([
+      fetch('/api/assets'),
+      fetch('/api/analytics/asset-metrics').catch(() => null)
+    ]);
+    const json = await assetsRes.json();
     allAssets = json.data || [];
     assetEdits = {};
+    // Merge watch metrics into assets
+    if (metricsRes && metricsRes.ok) {
+      const metrics = await metricsRes.json();
+      const metricsMap = {};
+      (metrics.data || []).forEach(m => { if (m.assetId) metricsMap[m.assetId] = m; });
+      allAssets.forEach(a => {
+        const m = metricsMap[a.id];
+        if (m) { a._views = m.views || 0; a._watchMin = m.watchMinutes || 0; }
+      });
+    }
     filterAssets();
   } catch { document.getElementById('assets-content').innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>'; }
 }
@@ -1076,6 +1089,8 @@ function renderAssets(assets) {
       <th class="td-thumb"></th>
       <th>Title</th>
       <th>Passthrough</th>
+      <th>Views</th>
+      <th>Watch Time</th>
       <th>Status</th>
       <th>Uploaded</th>
       <th>Actions</th>
@@ -1114,6 +1129,8 @@ function assetRowHtml(a) {
     </td>
     <td class="td-title"><input class="at-input" type="text" value="${escAttr(title)}" placeholder="Untitled" oninput="setEdit('${a.id}','title',this.value)"></td>
     <td class="td-cat"><select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select></td>
+    <td style="font-size:13px;color:var(--text);text-align:center">${a._views ? a._views.toLocaleString() : '<span style="color:var(--muted)">—</span>'}</td>
+    <td style="font-size:13px;color:var(--text);text-align:center">${a._watchMin ? (a._watchMin >= 60 ? Math.floor(a._watchMin/60) + 'h ' + (a._watchMin%60) + 'm' : a._watchMin + ' min') : '<span style="color:var(--muted)">—</span>'}</td>
     <td class="td-status"><span class="at-status ${statusCls}">${statusTxt}</span></td>
     <td class="td-meta">${uploaded}</td>
     <td class="td-actions">

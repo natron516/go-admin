@@ -466,6 +466,24 @@ app.get('/api/analytics/overview', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Per-asset watch metrics from Mux Data (views + watch time per asset)
+app.get('/api/analytics/asset-metrics', async (req, res) => {
+  try {
+    const days = req.query.days || 90;
+    const muxRes = await fetch(
+      `https://api.mux.com/data/v1/metrics/views/breakdown?group_by=video_id&timeframe[]=${days}:days&limit=500`,
+      { headers: { Authorization: `Basic ${MUX_AUTH}` } }
+    );
+    const muxData = await muxRes.json();
+    const results = (muxData.data || []).map(v => ({
+      assetId: v.field,
+      views: v.total_row_count || 0,
+      watchMinutes: Math.round((v.total_watch_time || 0) / 60000),
+    }));
+    res.json({ data: results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Sermon PIN ─────────────────────────────────────────────────
 
 app.get('/api/config/pin', async (req, res) => {
