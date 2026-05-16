@@ -401,13 +401,15 @@
           <th>User</th>
           <th>Provider</th>
           <th>Platform</th>
-          <th class="sort-th" id="th-minutes" onclick="setUserSort('minutes')">Minutes <span class="sort-arrow">↕</span></th>
+          <th>Version</th>
+          <th class="sort-th" id="th-minutes" onclick="setUserSort('minutes')">Video Min <span class="sort-arrow">↕</span></th>
+          <th class="sort-th" id="th-appMinutes" onclick="setUserSort('appMinutes')">App Time <span class="sort-arrow">↕</span></th>
           <th class="sort-th" id="th-joined" onclick="setUserSort('joined')">Joined <span class="sort-arrow">↕</span></th>
           <th class="sort-th" id="th-lastSignIn" onclick="setUserSort('lastSignIn')">Last Sign In <span class="sort-arrow">↕</span></th>
           <th>Status</th>
           <th>Actions</th>
         </tr></thead>
-        <tbody id="users-tbody"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr></tbody>
+        <tbody id="users-tbody"><tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -1253,6 +1255,9 @@ function sortedUsers(users) {
     } else if (field === 'minutes') {
       av = a.minutesWatched || 0;
       bv = b.minutesWatched || 0;
+    } else if (field === 'appMinutes') {
+      av = a.appMinutes || 0;
+      bv = b.appMinutes || 0;
     } else {
       av = a.lastSignIn ? new Date(a.lastSignIn).getTime() : 0;
       bv = b.lastSignIn ? new Date(b.lastSignIn).getTime() : 0;
@@ -1274,7 +1279,7 @@ async function loadUsers() {
 
   // Then load users
 
-  document.getElementById('users-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
+  document.getElementById('users-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
   try {
     const r = await fetch('/api/users');
     const d = await r.json();
@@ -1284,7 +1289,7 @@ async function loadUsers() {
     updateSortHeaders();
     renderUsers(sortedUsers(allUsers));
   } catch(e) {
-    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="8" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="10" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -1298,7 +1303,7 @@ function filterUsers(q) {
 
 function renderUsers(users) {
   if (!users.length) {
-    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
+    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
     return;
   }
   document.getElementById('users-tbody').innerHTML = users.map(u => {
@@ -1322,7 +1327,9 @@ function renderUsers(users) {
       <td><div style="display:flex;align-items:center;gap:8px">${avatar}<div><div class="user-name">${escHtml(u.displayName||'(no name)')}</div><div class="user-email">${escHtml(u.email||'no email')}</div></div></div></td>
       <td><span class="user-provider">${providerLabel}</span></td>
       <td>${(() => { const p = u.platform; if (!p) return '<span style="font-size:12px;color:var(--muted)">—</span>'; const c = p === 'tvOS' ? '#bf5af2' : p === 'iPadOS' ? '#30d158' : '#5ac8fa'; return `<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,.08);border-radius:4px;padding:2px 8px;color:${c}">${p}</span>`; })()}</td>
+      <td style="font-size:12px;color:var(--muted)">${u.appVersion || '—'}</td>
       <td style="font-size:13px;color:var(--text)">${u.minutesWatched ? u.minutesWatched + ' min' : '—'}</td>
+      <td style="font-size:13px;color:var(--text)">${u.appMinutes ? (u.appMinutes >= 60 ? Math.floor(u.appMinutes/60) + 'h ' + (u.appMinutes%60) + 'm' : u.appMinutes + ' min') + ' <span style="font-size:11px;color:var(--muted)">(' + u.sessionCount + ' sessions)</span>' : '—'}</td>
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
       <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>'} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}</td>

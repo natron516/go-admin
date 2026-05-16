@@ -506,14 +506,21 @@ app.get('/api/users', async (req, res) => {
       }));
       pageToken = result.pageToken;
     } while (pageToken);
-    // Look up last platform from sessions collection
+    // Look up platform, app version, and total session time from sessions collection
     const platformMap = {};
+    const appVersionMap = {};
+    const sessionTimeMap = {};
+    const sessionCountMap = {};
     try {
       const sessSnap = await admin.firestore().collection('sessions')
         .limit(5000).get();
       sessSnap.forEach(doc => {
         const d = doc.data();
-        if (d.uid && d.platform) platformMap[d.uid] = d.platform;
+        if (!d.uid) return;
+        if (d.platform) platformMap[d.uid] = d.platform;
+        if (d.appVersion) appVersionMap[d.uid] = d.appVersion;
+        sessionTimeMap[d.uid] = (sessionTimeMap[d.uid] || 0) + (d.durationSeconds || 0);
+        sessionCountMap[d.uid] = (sessionCountMap[d.uid] || 0) + 1;
       });
     } catch (e) {
       console.warn('Sessions lookup failed:', e.message);
@@ -550,6 +557,9 @@ app.get('/api/users', async (req, res) => {
       u.platform = platformMap[u.uid] || null;
       u.minutesWatched = watchMap[u.uid] || 0;
       u.privateAccess = !!privateMap[u.uid];
+      u.appVersion = appVersionMap[u.uid] || null;
+      u.appMinutes = Math.round((sessionTimeMap[u.uid] || 0) / 60);
+      u.sessionCount = sessionCountMap[u.uid] || 0;
     });
 
     // Sort newest first
