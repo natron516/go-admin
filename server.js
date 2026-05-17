@@ -791,49 +791,47 @@ app.post('/api/scripture/generate-vod', async (req, res) => {
     } catch { return null; }
   }
 
-  const dgUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
-    model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
-    interim_results: 'false', endpointing: '500',
-    encoding: 's16le', sample_rate: '16000', channels: '1',
-  }).toString();
-  console.log(`[Scripture VOD] Deepgram key length: ${DEEPGRAM_KEY?.length || 0}`);
-
-  const ws = new WebSocket(dgUrl, { headers: { Authorization: `Token ${DEEPGRAM_KEY}` } });
-
-  ws.on('open', () => {
-    console.log(`[Scripture VOD] Deepgram connected`);
-    const ffmpeg = spawn('ffmpeg', [
-      '-i', hlsUrl, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-f', 's16le', 'pipe:1',
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
-
-    ffmpeg.stdout.on('data', (chunk) => { if (ws.readyState === 1) ws.send(chunk); });
-    ffmpeg.on('close', () => {
-      console.log(`[Scripture VOD] ffmpeg done, closing Deepgram`);
-      try { ws.send(JSON.stringify({ type: 'CloseStream' })); } catch {}
-      setTimeout(() => ws.close(), 3000);
+  // Use Deepgram pre-recorded API with the HLS URL directly
+  console.log(`[Scripture VOD] Sending to Deepgram pre-recorded API...`);
+  try {
+    const dgRes = await fetch('https://api.deepgram.com/v1/listen?' + new URLSearchParams({
+      model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
+      utterances: 'true', utt_split: '1.0',
+    }).toString(), {
+      method: 'POST',
+      headers: {
+        Authorization: `Token ${DEEPGRAM_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: hlsUrl }),
     });
-  });
 
-  ws.on('message', async (data) => {
-    try {
-      const msg = JSON.parse(data);
-      if (msg.type !== 'Results' || !msg.channel?.alternatives?.[0]) return;
-      const transcript = msg.channel.alternatives[0].transcript;
-      if (!transcript || transcript.trim().length < 3) return;
-      const dgStart = msg.start || 0;
-      const refs = detectScriptures(transcript);
+    if (!dgRes.ok) {
+      const errText = await dgRes.text();
+      console.error(`[Scripture VOD] Deepgram error ${dgRes.status}: ${errText}`);
+      return;
+    }
+
+    const dgData = await dgRes.json();
+    const utterances = dgData.results?.utterances || [];
+    const words = dgData.results?.channels?.[0]?.alternatives?.[0]?.words || [];
+    const fullTranscript = dgData.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+
+    console.log(`[Scripture VOD] Got ${utterances.length} utterances, ${words.length} words`);
+
+    // Process each utterance for scripture references
+    for (const utt of utterances) {
+      const refs = detectScriptures(utt.transcript);
       for (const ref of refs) {
         if (seen.has(ref.reference)) continue;
         seen.add(ref.reference);
-        setTimeout(() => seen.delete(ref.reference), 120000);
         const verseText = await fetchVerseText(ref.reference);
-        history.push({ ...ref, verseText: verseText || null, detectedAt: new Date().toISOString(), offsetSeconds: Math.round(dgStart) });
-        console.log(`[Scripture VOD] ${ref.reference} @ ${Math.round(dgStart)}s`);
+        const offsetSeconds = Math.round(utt.start);
+        history.push({ ...ref, verseText: verseText || null, detectedAt: new Date().toISOString(), offsetSeconds });
+        console.log(`[Scripture VOD] ${ref.reference} @ ${offsetSeconds}s`);
       }
-    } catch {}
-  });
+    }
 
-  ws.on('close', async () => {
     console.log(`[Scripture VOD] Done. ${history.length} refs found.`);
     if (history.length > 0) {
       await admin.firestore().collection('live_scripture_vod').doc(assetId).set({
@@ -841,9 +839,9 @@ app.post('/api/scripture/generate-vod', async (req, res) => {
       });
       console.log(`[Scripture VOD] Wrote to live_scripture_vod/${assetId}`);
     }
-  });
-
-  ws.on('error', (err) => console.error(`[Scripture VOD] Error: ${err.message}`));
+  } catch (e) {
+    console.error(`[Scripture VOD] Error: ${e.message}`);
+  }
 });
 
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));
