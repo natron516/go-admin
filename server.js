@@ -563,7 +563,7 @@ app.get('/api/users', async (req, res) => {
       pageToken = result.pageToken;
     } while (pageToken);
     // Look up platform, app version, and total session time from sessions collection
-    const platformMap = {};
+    const platformsMap = {};
     const appVersionMap = {};
     const sessionTimeMap = {};
     const sessionCountMap = {};
@@ -573,7 +573,10 @@ app.get('/api/users', async (req, res) => {
       sessSnap.forEach(doc => {
         const d = doc.data();
         if (!d.uid) return;
-        if (d.platform) platformMap[d.uid] = d.platform;
+        if (d.platform) {
+          if (!platformsMap[d.uid]) platformsMap[d.uid] = new Set();
+          platformsMap[d.uid].add(d.platform);
+        }
         if (d.appVersion) appVersionMap[d.uid] = d.appVersion;
         sessionTimeMap[d.uid] = (sessionTimeMap[d.uid] || 0) + (d.durationSeconds || 0);
         sessionCountMap[d.uid] = (sessionCountMap[d.uid] || 0) + 1;
@@ -610,7 +613,7 @@ app.get('/api/users', async (req, res) => {
     }
 
     users.forEach(u => {
-      u.platform = platformMap[u.uid] || null;
+      u.platforms = platformsMap[u.uid] ? [...platformsMap[u.uid]] : [];
       u.minutesWatched = watchMap[u.uid] || 0;
       u.privateAccess = !!privateMap[u.uid];
       u.appVersion = appVersionMap[u.uid] || null;
