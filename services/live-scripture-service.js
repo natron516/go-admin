@@ -229,13 +229,43 @@ class LiveScriptureService {
       try { entry.ws.close(); } catch {}
     }
 
-    // Mark inactive in Firestore
+    // Mark inactive in Firestore and copy history to per-asset doc
     try {
+      const doc = await entry.docRef.get();
+      const data = doc.data() || {};
+
       await entry.docRef.update({
         active: false,
         current: null,
         endedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // Copy scripture history to per-asset doc for VOD playback
+      // Fetch the active asset ID from Mux
+      if (data.history && data.history.length > 0) {
+        try {
+          const MUX_TOKEN_ID = process.env.MUX_TOKEN_ID || '25cd1f0d-e6d4-445b-a106-e9ccc7a9f103';
+          const MUX_SECRET = process.env.MUX_SECRET || '';
+          const auth = Buffer.from(`${MUX_TOKEN_ID}:${MUX_SECRET}`).toString('base64');
+          const res = await fetch(`https://api.mux.com/video/v1/live-streams/${streamId}`, {
+            headers: { Authorization: `Basic ${auth}` },
+          });
+          const muxData = await res.json();
+          // recent_asset_ids[0] is the most recent recording
+          const assetIds = muxData.data?.recent_asset_ids || [];
+          if (assetIds.length > 0) {
+            const assetId = assetIds[0];
+            await this.db.collection('live_scripture_vod').doc(assetId).set({
+              history: data.history,
+              streamId,
+              copiedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            console.log(`[Scripture] Copied ${data.history.length} refs to live_scripture_vod/${assetId}`);
+          }
+        } catch (e) {
+          console.warn(`[Scripture] Failed to copy history to per-asset doc: ${e.message}`);
+        }
+      }
     } catch {}
 
     this.activeStreams.delete(streamId);
