@@ -761,4 +761,88 @@ app.get('/api/scripture/status', (req, res) => {
   res.json({ enabled: true, active: scriptureService.getActiveStreams() });
 });
 
+// Generate scripture references from a finished VOD asset
+app.post('/api/scripture/generate-vod', async (req, res) => {
+  if (!scriptureService) return res.status(503).json({ error: 'Scripture detection not configured' });
+  if (!sa) return res.status(503).json({ error: 'Firebase not configured' });
+  const { assetId, playbackId, streamId } = req.body;
+  if (!assetId || !playbackId) return res.status(400).json({ error: 'assetId and playbackId required' });
+
+  const { detectScriptures } = require('./services/scripture-detector');
+  const { spawn } = require('child_process');
+  const WebSocket = require('ws');
+  const DEEPGRAM_KEY = process.env.DEEPGRAM_API_KEY;
+  if (!DEEPGRAM_KEY) return res.status(503).json({ error: 'DEEPGRAM_API_KEY not set' });
+
+  // Respond immediately — processing happens in background
+  res.json({ ok: true, message: `Processing VOD ${assetId}...` });
+
+  const hlsUrl = `https://stream.mux.com/${playbackId}.m3u8`;
+  const history = [];
+  const seen = new Set();
+  console.log(`[Scripture VOD] Processing asset ${assetId} from ${hlsUrl}`);
+
+  async function fetchVerseText(ref) {
+    try {
+      const r = await fetch(`https://bible-api.com/${encodeURIComponent(ref)}?translation=kjv`);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d.text?.trim() || null;
+    } catch { return null; }
+  }
+
+  const dgUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
+    model: 'nova-3', language: 'en', smart_format: 'true', punctuate: 'true',
+    interim_results: 'false', endpointing: '500',
+    encoding: 's16le', sample_rate: '16000', channels: '1',
+  }).toString();
+
+  const ws = new WebSocket(dgUrl, { headers: { Authorization: `Token ${DEEPGRAM_KEY}` } });
+
+  ws.on('open', () => {
+    console.log(`[Scripture VOD] Deepgram connected`);
+    const ffmpeg = spawn('ffmpeg', [
+      '-i', hlsUrl, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-f', 's16le', 'pipe:1',
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    ffmpeg.stdout.on('data', (chunk) => { if (ws.readyState === 1) ws.send(chunk); });
+    ffmpeg.on('close', () => {
+      console.log(`[Scripture VOD] ffmpeg done, closing Deepgram`);
+      try { ws.send(JSON.stringify({ type: 'CloseStream' })); } catch {}
+      setTimeout(() => ws.close(), 3000);
+    });
+  });
+
+  ws.on('message', async (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type !== 'Results' || !msg.channel?.alternatives?.[0]) return;
+      const transcript = msg.channel.alternatives[0].transcript;
+      if (!transcript || transcript.trim().length < 3) return;
+      const dgStart = msg.start || 0;
+      const refs = detectScriptures(transcript);
+      for (const ref of refs) {
+        if (seen.has(ref.reference)) continue;
+        seen.add(ref.reference);
+        setTimeout(() => seen.delete(ref.reference), 120000);
+        const verseText = await fetchVerseText(ref.reference);
+        history.push({ ...ref, verseText: verseText || null, detectedAt: new Date().toISOString(), offsetSeconds: Math.round(dgStart) });
+        console.log(`[Scripture VOD] ${ref.reference} @ ${Math.round(dgStart)}s`);
+      }
+    } catch {}
+  });
+
+  ws.on('close', async () => {
+    console.log(`[Scripture VOD] Done. ${history.length} refs found.`);
+    if (history.length > 0) {
+      await admin.firestore().collection('live_scripture_vod').doc(assetId).set({
+        history, streamId: streamId || '', generatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`[Scripture VOD] Wrote to live_scripture_vod/${assetId}`);
+    }
+  });
+
+  ws.on('error', (err) => console.error(`[Scripture VOD] Error: ${err.message}`));
+});
+
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));
