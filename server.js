@@ -792,10 +792,11 @@ app.post('/api/scripture/generate-vod', async (req, res) => {
   }
 
   const dgUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
-    model: 'nova-3', language: 'en', smart_format: 'true', punctuate: 'true',
+    model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
     interim_results: 'false', endpointing: '500',
     encoding: 's16le', sample_rate: '16000', channels: '1',
   }).toString();
+  console.log(`[Scripture VOD] Deepgram key length: ${DEEPGRAM_KEY?.length || 0}`);
 
   const ws = new WebSocket(dgUrl, { headers: { Authorization: `Token ${DEEPGRAM_KEY}` } });
 
