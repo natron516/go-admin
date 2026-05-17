@@ -35,7 +35,8 @@ class LiveScriptureService {
     this.db = firestore;
     this.activeStreams = new Map(); // streamId -> { ffmpeg, ws, docRef }
     this.recentRefs = new Map();   // streamId -> Set of recent references (dedup window)
-    this.streamStarts = new Map();  // streamId -> Date when monitoring started
+    this.streamStarts = new Map();  // streamId -> Mux stream created_at epoch (ms)
+    this.audioOffsets = new Map();  // streamId -> ffmpeg audio start offset (seconds from stream start)
   }
 
   /**
@@ -60,7 +61,30 @@ class LiveScriptureService {
     });
 
     this.recentRefs.set(streamId, new Set());
-    this.streamStarts.set(streamId, Date.now());
+    this.audioOffsets.set(streamId, 0);  // Will be updated by ffmpeg progress
+
+    // Get actual stream start time from Mux API
+    let streamStartMs = Date.now();
+    try {
+      const MUX_TOKEN_ID = process.env.MUX_TOKEN_ID || '25cd1f0d-e6d4-445b-a106-e9ccc7a9f103';
+      const MUX_SECRET = process.env.MUX_SECRET || '';
+      const auth = Buffer.from(`${MUX_TOKEN_ID}:${MUX_SECRET}`).toString('base64');
+      const res = await fetch(`https://api.mux.com/video/v1/live-streams/${streamId}`, {
+        headers: { Authorization: `Basic ${auth}` },
+      });
+      const data = await res.json();
+      // Mux returns created_at as unix epoch (seconds)
+      if (data.data?.active_asset_start_time) {
+        streamStartMs = data.data.active_asset_start_time * 1000;
+        console.log(`[Scripture] Using Mux asset start time: ${new Date(streamStartMs).toISOString()}`);
+      } else if (data.data?.created_at) {
+        streamStartMs = data.data.created_at * 1000;
+        console.log(`[Scripture] Using Mux stream created_at: ${new Date(streamStartMs).toISOString()}`);
+      }
+    } catch (e) {
+      console.warn(`[Scripture] Could not fetch Mux stream start time: ${e.message}`);
+    }
+    this.streamStarts.set(streamId, streamStartMs);
 
     // Connect to Deepgram real-time WebSocket
     const dgUrl = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
@@ -89,10 +113,15 @@ class LiveScriptureService {
         const msg = JSON.parse(data);
         if (msg.type !== 'Results' || !msg.channel?.alternatives?.[0]) return;
         
-        const transcript = msg.channel.alternatives[0].transcript;
+        const alt = msg.channel.alternatives[0];
+        const transcript = alt.transcript;
         if (!transcript || transcript.trim().length < 3) return;
 
-        console.log(`[Scripture] Transcript: "${transcript}"`);
+        // Deepgram returns `start` = seconds from beginning of the audio stream
+        // This maps directly to the HLS/VOD timeline position
+        const dgStartSec = msg.start || 0;
+
+        console.log(`[Scripture] [${Math.round(dgStartSec)}s] Transcript: "${transcript}"`);
 
         const refs = detectScriptures(transcript);
         if (refs.length === 0) return;
@@ -110,15 +139,19 @@ class LiveScriptureService {
           // Fetch KJV verse text
           const verseText = await fetchVerseText(ref.reference);
 
-          const streamStart = this.streamStarts.get(streamId) || Date.now();
+          // Use Deepgram's audio position (seconds from stream start)
+          // This aligns with the VOD asset timeline since both start from
+          // the beginning of the Mux recording
+          const offsetSeconds = Math.round(dgStartSec);
+
           const entry = {
             ...ref,
             verseText: verseText || null,
             detectedAt: new Date().toISOString(),
-            offsetSeconds: Math.round((Date.now() - streamStart) / 1000),
+            offsetSeconds,
           };
 
-          console.log(`[Scripture] Detected: ${ref.reference}${verseText ? ' ✓ text' : ''}`);
+          console.log(`[Scripture] Detected: ${ref.reference} @ ${offsetSeconds}s${verseText ? ' ✓ text' : ''}`);
 
           // Update Firestore
           await docRef.update({
@@ -208,6 +241,7 @@ class LiveScriptureService {
     this.activeStreams.delete(streamId);
     this.recentRefs.delete(streamId);
     this.streamStarts.delete(streamId);
+    this.audioOffsets.delete(streamId);
   }
 
   stopAll() {
