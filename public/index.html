@@ -191,6 +191,7 @@
   .empty p { font-size: 14px; }
   .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 40px auto; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse-green { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(62,207,142,.4)} 50%{opacity:.7;box-shadow:0 0 0 6px rgba(62,207,142,0)} }
 
   /* Toast */
   #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #2a3050; border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; white-space: nowrap; box-shadow: var(--shadow); transition: transform .25s ease; z-index: 300; pointer-events: none; }
@@ -297,6 +298,7 @@
     <button class="tab" onclick="showTab('users',this)">👥 Users</button>
     <button class="tab" onclick="showTab('feedback',this)" id="tab-btn-feedback">💬 Feedback</button>
     <button class="tab" onclick="showTab('analytics',this)">📊 Analytics</button>
+    <button class="tab" onclick="showTab('sessions',this)">📱 Sessions</button>
   </nav>
 </header>
 
@@ -445,6 +447,25 @@
       <button class="btn btn-ghost btn-sm" onclick="loadAnalytics()">↺ Refresh</button>
     </div>
     <div id="analytics-content"><div class="spinner"></div></div>
+  </section>
+
+  <section id="tab-sessions" class="section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">📱 App Sessions</h2>
+        <p style="font-size:13px;color:var(--muted);">Real-time app usage — who's online and what they're watching.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadSessions()">↺ Refresh</button>
+    </div>
+    <div style="margin-bottom:32px;">
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse-green 2s infinite;"></span> Currently Active</h3>
+      <div id="sessions-active"><div class="spinner"></div></div>
+    </div>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin-bottom:24px;">
+    <div>
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;">Recent Sessions</h3>
+      <div id="sessions-recent"><div class="spinner"></div></div>
+    </div>
   </section>
 
   <section id="tab-feedback" class="section">
@@ -688,6 +709,126 @@ function showTab(name, btn) {
   if (name === 'users')    loadUsers();
   if (name === 'feedback') loadFeedback();
   if (name === 'analytics') { loadMuxCost(); loadAnalytics(); }
+  if (name === 'sessions') loadSessions();
+}
+
+// ── Sessions ─────────────────────────────────────────────
+let _sessionsRefreshTimer = null;
+
+async function loadSessions() {
+  // Clear previous auto-refresh
+  if (_sessionsRefreshTimer) { clearInterval(_sessionsRefreshTimer); _sessionsRefreshTimer = null; }
+
+  const activeEl = document.getElementById('sessions-active');
+  const recentEl = document.getElementById('sessions-recent');
+  activeEl.innerHTML = '<div class="spinner"></div>';
+  recentEl.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const [activeRes, recentRes] = await Promise.all([
+      fetch('/api/sessions/active').then(r => r.json()),
+      fetch('/api/sessions/recent').then(r => r.json()),
+    ]);
+
+    // Active sessions
+    const active = activeRes.sessions || [];
+    if (active.length === 0) {
+      activeEl.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No active sessions right now.</div>';
+    } else {
+      activeEl.innerHTML = active.map(s => {
+        const name = s.userDisplayName || s.userEmail || s.uid?.slice(0,8) || 'Unknown';
+        const device = s.deviceName || s.platform || '';
+        const started = s.startedAt ? new Date(s.startedAt) : null;
+        const dur = started ? formatDuration((Date.now() - started.getTime()) / 1000) : '';
+        const watching = s.watching ? `<span style="color:var(--accent);font-weight:500;">▶ ${escHtml(s.watching)}</span>` : '<span style="color:var(--muted);">Browsing</span>';
+        const watchDur = s.watchingSince ? ` <span style="color:var(--muted);font-size:12px;">(${formatDuration((Date.now() - new Date(s.watchingSince).getTime()) / 1000)})</span>` : '';
+        return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse-green 2s infinite;"></span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:14px;">${escHtml(name)} <span style="color:var(--muted);font-weight:400;font-size:12px;">${escHtml(device)}</span></div>
+            <div style="font-size:13px;margin-top:2px;">${watching}${watchDur}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:13px;color:var(--muted);">${dur}</div>
+            <div style="font-size:11px;color:var(--muted);">${escHtml(s.platform || '')}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Recent sessions
+    const recent = (recentRes.sessions || []).filter(s => s.endedAt);
+    if (recent.length === 0) {
+      recentEl.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No recent sessions.</div>';
+    } else {
+      recentEl.innerHTML = `<div style="overflow-x:auto;"><table class="tbl" style="width:100%;">
+        <thead><tr><th>User</th><th>Device</th><th>Platform</th><th>Duration</th><th>Started</th></tr></thead>
+        <tbody>${recent.map(s => {
+          const name = s.userDisplayName || s.userEmail || s.uid?.slice(0,8) || 'Unknown';
+          const device = s.deviceName || '—';
+          const dur = s.durationSeconds ? formatDuration(s.durationSeconds) : '—';
+          const started = s.startedAt ? new Date(s.startedAt).toLocaleString() : '—';
+          return `<tr><td>${escHtml(name)}</td><td>${escHtml(device)}</td><td>${escHtml(s.platform || '')}</td><td>${dur}</td><td>${started}</td></tr>`;
+        }).join('')}</tbody></table></div>`;
+    }
+  } catch (e) {
+    activeEl.innerHTML = `<div style="color:var(--red);">Error loading sessions: ${escHtml(e.message)}</div>`;
+    recentEl.innerHTML = '';
+  }
+
+  // Auto-refresh every 15 seconds while tab is visible
+  _sessionsRefreshTimer = setInterval(() => {
+    const tab = document.getElementById('tab-sessions');
+    if (tab && tab.classList.contains('active')) loadSessionsQuiet();
+    else { clearInterval(_sessionsRefreshTimer); _sessionsRefreshTimer = null; }
+  }, 15000);
+}
+
+async function loadSessionsQuiet() {
+  try {
+    const activeRes = await fetch('/api/sessions/active').then(r => r.json());
+    const activeEl = document.getElementById('sessions-active');
+    const active = activeRes.sessions || [];
+    if (active.length === 0) {
+      activeEl.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No active sessions right now.</div>';
+    } else {
+      activeEl.innerHTML = active.map(s => {
+        const name = s.userDisplayName || s.userEmail || s.uid?.slice(0,8) || 'Unknown';
+        const device = s.deviceName || s.platform || '';
+        const started = s.startedAt ? new Date(s.startedAt) : null;
+        const dur = started ? formatDuration((Date.now() - started.getTime()) / 1000) : '';
+        const watching = s.watching ? `<span style="color:var(--accent);font-weight:500;">▶ ${escHtml(s.watching)}</span>` : '<span style="color:var(--muted);">Browsing</span>';
+        const watchDur = s.watchingSince ? ` <span style="color:var(--muted);font-size:12px;">(${formatDuration((Date.now() - new Date(s.watchingSince).getTime()) / 1000)})</span>` : '';
+        return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse-green 2s infinite;"></span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:14px;">${escHtml(name)} <span style="color:var(--muted);font-weight:400;font-size:12px;">${escHtml(device)}</span></div>
+            <div style="font-size:13px;margin-top:2px;">${watching}${watchDur}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:13px;color:var(--muted);">${dur}</div>
+            <div style="font-size:11px;color:var(--muted);">${escHtml(s.platform || '')}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch (e) { /* silent refresh failure */ }
+}
+
+function formatDuration(sec) {
+  sec = Math.round(sec);
+  if (sec < 0) sec = 0;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── Analytics ────────────────────────────────────────────

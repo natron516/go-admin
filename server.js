@@ -844,4 +844,94 @@ app.post('/api/scripture/generate-vod', async (req, res) => {
   }
 });
 
+// ── App Sessions ──────────────────────────────────────────────────────────────
+
+// Active sessions (endedAt is null)
+app.get('/api/sessions/active', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('sessions')
+      .where('endedAt', '==', null)
+      .get();
+    const sessions = [];
+    const uidSet = new Set();
+    snap.forEach(doc => {
+      const d = doc.data();
+      sessions.push({ id: doc.id, ...d });
+      if (d.uid) uidSet.add(d.uid);
+    });
+
+    // Enrich with Firebase Auth display names
+    const userMap = {};
+    const uids = [...uidSet];
+    if (uids.length > 0) {
+      // Batch lookup (max 100 at a time)
+      for (let i = 0; i < uids.length; i += 100) {
+        const batch = uids.slice(i, i + 100);
+        const result = await admin.auth().getUsers(batch.map(uid => ({ uid })));
+        result.users.forEach(u => {
+          userMap[u.uid] = { displayName: u.displayName || '', email: u.email || '' };
+        });
+      }
+    }
+
+    const enriched = sessions.map(s => ({
+      ...s,
+      userDisplayName: s.displayName || userMap[s.uid]?.displayName || '',
+      userEmail: userMap[s.uid]?.email || '',
+      startedAt: s.startedAt?._seconds ? new Date(s.startedAt._seconds * 1000).toISOString() : s.startedAt,
+      watchingSince: s.watchingSince?._seconds ? new Date(s.watchingSince._seconds * 1000).toISOString() : s.watchingSince,
+    }));
+
+    res.json({ sessions: enriched });
+  } catch (e) {
+    console.error('[Sessions Active] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Recent completed sessions (last 50)
+app.get('/api/sessions/recent', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('sessions')
+      .orderBy('startedAt', 'desc')
+      .limit(50)
+      .get();
+    const sessions = [];
+    const uidSet = new Set();
+    snap.forEach(doc => {
+      const d = doc.data();
+      sessions.push({ id: doc.id, ...d });
+      if (d.uid) uidSet.add(d.uid);
+    });
+
+    // Enrich with Firebase Auth display names
+    const userMap = {};
+    const uids = [...uidSet];
+    if (uids.length > 0) {
+      for (let i = 0; i < uids.length; i += 100) {
+        const batch = uids.slice(i, i + 100);
+        const result = await admin.auth().getUsers(batch.map(uid => ({ uid })));
+        result.users.forEach(u => {
+          userMap[u.uid] = { displayName: u.displayName || '', email: u.email || '' };
+        });
+      }
+    }
+
+    const enriched = sessions.map(s => ({
+      ...s,
+      userDisplayName: s.displayName || userMap[s.uid]?.displayName || '',
+      userEmail: userMap[s.uid]?.email || '',
+      startedAt: s.startedAt?._seconds ? new Date(s.startedAt._seconds * 1000).toISOString() : s.startedAt,
+      endedAt: s.endedAt?._seconds ? new Date(s.endedAt._seconds * 1000).toISOString() : s.endedAt,
+    }));
+
+    res.json({ sessions: enriched });
+  } catch (e) {
+    console.error('[Sessions Recent] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));
