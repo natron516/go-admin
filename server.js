@@ -701,149 +701,6 @@ app.delete('/api/users/:uid', async (req, res) => {
   }
 });
 
-// ── Live Scripture Detection ───────────────────────────────────
-const DEEPGRAM_KEY = process.env.DEEPGRAM_API_KEY || '';
-let scriptureService = null;
-
-if (DEEPGRAM_KEY && sa) {
-  const LiveScriptureService = require('./services/live-scripture-service');
-  scriptureService = new LiveScriptureService({
-    deepgramApiKey: DEEPGRAM_KEY,
-    firestore: admin.firestore(),
-  });
-  console.log('Live Scripture Detection service initialized');
-} else {
-  console.warn('DEEPGRAM_API_KEY not set — scripture detection disabled');
-}
-
-// Start scripture detection for a live stream
-app.post('/api/scripture/start', async (req, res) => {
-  if (!scriptureService) return res.status(503).json({ error: 'Scripture detection not configured (missing DEEPGRAM_API_KEY)' });
-  const { streamId, playbackId } = req.body;
-  if (!streamId || !playbackId) return res.status(400).json({ error: 'streamId and playbackId required' });
-  try {
-    await scriptureService.start(streamId, playbackId);
-    res.json({ ok: true, streamId });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Stop scripture detection for a live stream
-app.post('/api/scripture/stop', async (req, res) => {
-  if (!scriptureService) return res.status(503).json({ error: 'Scripture detection not configured' });
-  const { streamId } = req.body;
-  if (!streamId) return res.status(400).json({ error: 'streamId required' });
-  try {
-    await scriptureService.stop(streamId);
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Write test scripture data for a stream (for testing the overlay)
-app.post('/api/scripture/test-data', async (req, res) => {
-  if (!sa) return res.status(503).json({ error: 'Firebase not configured' });
-  const { streamId, history } = req.body;
-  if (!streamId || !history) return res.status(400).json({ error: 'streamId and history required' });
-  try {
-    const db = admin.firestore();
-    await db.collection('live_scripture').doc(streamId).set({
-      active: false,
-      current: history[0] || null,
-      history: history,
-      startedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    res.json({ ok: true, count: history.length });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Get status of active scripture detection
-app.get('/api/scripture/status', (req, res) => {
-  if (!scriptureService) return res.json({ enabled: false, active: [] });
-  res.json({ enabled: true, active: scriptureService.getActiveStreams() });
-});
-
-// Generate scripture references from a finished VOD asset
-app.post('/api/scripture/generate-vod', async (req, res) => {
-  if (!scriptureService) return res.status(503).json({ error: 'Scripture detection not configured' });
-  if (!sa) return res.status(503).json({ error: 'Firebase not configured' });
-  const { assetId, playbackId, streamId } = req.body;
-  if (!assetId || !playbackId) return res.status(400).json({ error: 'assetId and playbackId required' });
-
-  const { detectScriptures } = require('./services/scripture-detector');
-  const { spawn } = require('child_process');
-  const WebSocket = require('ws');
-  const DEEPGRAM_KEY = process.env.DEEPGRAM_API_KEY;
-  if (!DEEPGRAM_KEY) return res.status(503).json({ error: 'DEEPGRAM_API_KEY not set' });
-
-  // Respond immediately — processing happens in background
-  res.json({ ok: true, message: `Processing VOD ${assetId}...` });
-
-  const hlsUrl = `https://stream.mux.com/${playbackId}.m3u8`;
-  const history = [];
-  const seen = new Set();
-  console.log(`[Scripture VOD] Processing asset ${assetId} from ${hlsUrl}`);
-
-  async function fetchVerseText(ref) {
-    try {
-      const r = await fetch(`https://bible-api.com/${encodeURIComponent(ref)}?translation=kjv`);
-      if (!r.ok) return null;
-      const d = await r.json();
-      return d.text?.trim() || null;
-    } catch { return null; }
-  }
-
-  // Use Deepgram pre-recorded API with the HLS URL directly
-  console.log(`[Scripture VOD] Sending to Deepgram pre-recorded API...`);
-  try {
-    const dgRes = await fetch('https://api.deepgram.com/v1/listen?' + new URLSearchParams({
-      model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
-      utterances: 'true', utt_split: '1.0',
-    }).toString(), {
-      method: 'POST',
-      headers: {
-        Authorization: `Token ${DEEPGRAM_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url: hlsUrl }),
-    });
-
-    if (!dgRes.ok) {
-      const errText = await dgRes.text();
-      console.error(`[Scripture VOD] Deepgram error ${dgRes.status}: ${errText}`);
-      return;
-    }
-
-    const dgData = await dgRes.json();
-    const utterances = dgData.results?.utterances || [];
-    const words = dgData.results?.channels?.[0]?.alternatives?.[0]?.words || [];
-    const fullTranscript = dgData.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
-
-    console.log(`[Scripture VOD] Got ${utterances.length} utterances, ${words.length} words`);
-
-    // Process each utterance for scripture references
-    for (const utt of utterances) {
-      const refs = detectScriptures(utt.transcript);
-      for (const ref of refs) {
-        if (seen.has(ref.reference)) continue;
-        seen.add(ref.reference);
-        const verseText = await fetchVerseText(ref.reference);
-        const offsetSeconds = Math.round(utt.start);
-        history.push({ ...ref, verseText: verseText || null, detectedAt: new Date().toISOString(), offsetSeconds });
-        console.log(`[Scripture VOD] ${ref.reference} @ ${offsetSeconds}s`);
-      }
-    }
-
-    console.log(`[Scripture VOD] Done. ${history.length} refs found.`);
-    if (history.length > 0) {
-      await admin.firestore().collection('live_scripture_vod').doc(assetId).set({
-        history, streamId: streamId || '', generatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log(`[Scripture VOD] Wrote to live_scripture_vod/${assetId}`);
-    }
-  } catch (e) {
-    console.error(`[Scripture VOD] Error: ${e.message}`);
-  }
-});
-
 // ── App Sessions ──────────────────────────────────────────────────────────────
 
 // Active sessions (endedAt is null)
@@ -932,6 +789,53 @@ app.get('/api/sessions/recent', async (req, res) => {
     console.error('[Sessions Recent] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Force Update Config ──────────────────────────────────────────────────────
+
+app.get('/api/config/force-update', async (req, res) => {
+  try {
+    const doc = await admin.firestore().collection('config').doc('app').get();
+    const data = doc.data() || {};
+    res.json({
+      minimumVersion: data.minimumVersion || '',
+      recommendedVersion: data.recommendedVersion || '',
+      updateMessage: data.updateMessage || '',
+      forceUpdateEnabled: data.forceUpdateEnabled !== false, // default true
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/config/force-update', async (req, res) => {
+  try {
+    const { minimumVersion, recommendedVersion, updateMessage, forceUpdateEnabled } = req.body;
+    const update = {};
+    if (minimumVersion !== undefined) update.minimumVersion = minimumVersion;
+    if (recommendedVersion !== undefined) update.recommendedVersion = recommendedVersion;
+    if (updateMessage !== undefined) update.updateMessage = updateMessage;
+    if (forceUpdateEnabled !== undefined) update.forceUpdateEnabled = !!forceUpdateEnabled;
+    await admin.firestore().collection('config').doc('app').set(update, { merge: true });
+    res.json({ ok: true, ...update });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Version Distribution (from sessions) ─────────────────────────────────────
+
+app.get('/api/analytics/version-distribution', async (req, res) => {
+  try {
+    const snap = await admin.firestore().collection('sessions').limit(5000).get();
+    const versions = {};
+    snap.forEach(doc => {
+      const d = doc.data();
+      const v = d.appVersion || 'Unknown';
+      versions[v] = (versions[v] || 0) + 1;
+    });
+    // Sort by count desc
+    const sorted = Object.entries(versions)
+      .map(([version, count]) => ({ version, count }))
+      .sort((a, b) => b.count - a.count);
+    res.json({ versions: sorted });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));
