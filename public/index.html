@@ -1412,6 +1412,7 @@ function assetRowHtml(a) {
     <td class="td-actions">
       <div class="td-actions-inner">
         <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾 Save</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadMp4('${a.id}','${escAttr(title)}')" title="Download MP4" id="dl-${a.id}">⬇️</button>
         <div id="del-${a.id}"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></div>
       </div>
     </td>
@@ -1489,6 +1490,80 @@ async function createStream() {
 }
 
 // ── Clipboard ─────────────────────────────────────────────
+// ── MP4 Download ──────────────────────────────────────────
+async function downloadMp4(assetId, title) {
+  const btn = document.getElementById('dl-' + assetId);
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const r = await fetch(`/api/assets/${assetId}/mp4`, { method: 'POST' });
+    const data = await r.json();
+    if (data.status === 'preparing') {
+      toast('⏳ MP4 is being generated — try again in a minute');
+    } else if (data.status === 'errored') {
+      toast('❌ MP4 generation failed for this asset');
+    } else if (data.status === 'ready' && data.downloadUrl) {
+      // Open quality picker if multiple files
+      if (data.files && data.files.length > 1) {
+        openDownloadPicker(data.files, title);
+      } else {
+        triggerDownload(data.downloadUrl, title);
+      }
+    } else {
+      toast('No MP4 available');
+    }
+  } catch (e) {
+    toast('Download failed: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '⬇️'; btn.disabled = false; }
+  }
+}
+
+function openDownloadPicker(files, title) {
+  // Sort by resolution descending
+  files.sort((a, b) => (b.height || 0) - (a.height || 0));
+  const labels = { 'high.mp4': 'High', 'medium.mp4': 'Medium', 'low.mp4': 'Low' };
+  let html = `<h3>⬇️ Download: ${title || 'Video'}</h3>`;
+  html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+  for (const f of files) {
+    const label = labels[f.name] || f.name;
+    const res = f.width && f.height ? `${f.width}×${f.height}` : '';
+    const br = f.bitrate ? `${Math.round(f.bitrate / 1000)}kbps` : '';
+    html += `<button class="btn btn-primary" onclick="triggerDownload('${f.url}','${escAttr(title)}');closeModal('download-modal')">
+      ${label} ${res ? '(' + res + ')' : ''} ${br ? '· ' + br : ''}
+    </button>`;
+  }
+  html += '</div>';
+  html += '<div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal(\'download-modal\')">Cancel</button></div>';
+  // Reuse or create modal
+  let modal = document.getElementById('download-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'download-modal';
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = '<div class="modal" id="download-modal-inner"></div>';
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal('download-modal'); });
+    document.body.appendChild(modal);
+  }
+  document.getElementById('download-modal-inner').innerHTML = html;
+  modal.classList.add('open');
+}
+
+function triggerDownload(url, title) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (title || 'video') + '.mp4';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast('Download started');
+}
+
+function closeModal(id) {
+  const m = document.getElementById(id);
+  if (m) m.classList.remove('open');
+}
+
 function copyText(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
     const orig = btn.textContent; btn.textContent = '✅'; btn.classList.add('copied');

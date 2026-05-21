@@ -228,6 +228,51 @@ app.get('/api/debug/passthrough', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Get or enable MP4 download for an asset
+app.post('/api/assets/:id/mp4', async (req, res) => {
+  try {
+    // Fetch asset to check current mp4_support / static_renditions status
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const asset = current.data;
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+
+    const pid = asset.playback_ids?.[0]?.id;
+    if (!pid) return res.status(400).json({ error: 'No playback ID' });
+
+    // If mp4_support is not yet enabled, enable it
+    if (asset.mp4_support !== 'standard') {
+      await mux('PATCH', `/video/v1/assets/${req.params.id}`, { mp4_support: 'standard' });
+      return res.json({ status: 'preparing', message: 'MP4 renditions are being generated. Try again in a minute.' });
+    }
+
+    // Check static renditions status
+    const sr = asset.static_renditions;
+    if (!sr || sr.status === 'preparing') {
+      return res.json({ status: 'preparing', message: 'MP4 renditions are still processing. Try again shortly.' });
+    }
+    if (sr.status === 'errored') {
+      return res.json({ status: 'errored', message: 'MP4 generation failed for this asset.' });
+    }
+
+    // Ready — build download URLs from available files
+    const files = (sr.files || []).map(f => ({
+      name: f.name,
+      ext: f.ext,
+      width: f.width,
+      height: f.height,
+      bitrate: f.bitrate,
+      url: `https://stream.mux.com/${pid}/${f.name}`,
+    }));
+
+    // Pick the highest quality file as the primary download
+    const best = files.reduce((a, b) => ((b.height || 0) > (a.height || 0) ? b : a), files[0]);
+
+    res.json({ status: 'ready', files, downloadUrl: best?.url || null, playbackId: pid });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Delete an asset
 app.delete('/api/assets/:id', async (req, res) => {
   try {
