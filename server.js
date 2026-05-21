@@ -276,6 +276,36 @@ app.post('/api/assets/:id/mp4', async (req, res) => {
   }
 });
 
+// Proxy MP4 download (browsers block cross-origin download attribute)
+app.get('/api/assets/:id/mp4/download', async (req, res) => {
+  try {
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const asset = current.data;
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+    const pid = asset.playback_ids?.[0]?.id;
+    if (!pid) return res.status(400).json({ error: 'No playback ID' });
+    const sr = asset.static_renditions;
+    if (!sr || sr.status !== 'ready' || !sr.files?.length) {
+      return res.status(404).json({ error: 'No MP4 renditions available' });
+    }
+    const quality = req.query.quality || 'high';
+    const file = sr.files.find(f => f.name === `${quality}.mp4`) || sr.files[0];
+    const muxUrl = `https://stream.mux.com/${pid}/${file.name}`;
+    const title = (asset.passthrough || req.query.title || 'video').replace(/[^a-zA-Z0-9 _-]/g, '');
+    res.setHeader('Content-Disposition', `attachment; filename="${title}.mp4"`);
+    res.setHeader('Content-Type', 'video/mp4');
+    const https = require('https');
+    https.get(muxUrl, (upstream) => {
+      if (upstream.headers['content-length']) res.setHeader('Content-Length', upstream.headers['content-length']);
+      upstream.pipe(res);
+    }).on('error', (e) => {
+      res.status(502).json({ error: 'Failed to fetch from Mux: ' + e.message });
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Clip/trim an asset — creates a new asset from a time range of the original
 app.post('/api/assets/:id/clip', async (req, res) => {
   try {

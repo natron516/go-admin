@@ -1579,12 +1579,12 @@ async function downloadMp4(assetId, title) {
       toast('⏳ MP4 is being generated — try again in a minute');
     } else if (data.status === 'errored') {
       toast('❌ MP4 generation failed for this asset');
-    } else if (data.status === 'ready' && data.downloadUrl) {
+    } else if (data.status === 'ready' && data.files?.length) {
       // Open quality picker if multiple files
-      if (data.files && data.files.length > 1) {
-        openDownloadPicker(data.files, title);
+      if (data.files.length > 1) {
+        openDownloadPicker(data.files, assetId, title);
       } else {
-        triggerDownload(data.downloadUrl, title);
+        triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), title);
       }
     } else {
       toast('No MP4 available');
@@ -1596,7 +1596,7 @@ async function downloadMp4(assetId, title) {
   }
 }
 
-function openDownloadPicker(files, title) {
+function openDownloadPicker(files, assetId, title) {
   // Sort by resolution descending
   files.sort((a, b) => (b.height || 0) - (a.height || 0));
   const labels = { 'high.mp4': 'High', 'medium.mp4': 'Medium', 'low.mp4': 'Low' };
@@ -1604,9 +1604,10 @@ function openDownloadPicker(files, title) {
   html += '<div style="display:flex;flex-direction:column;gap:10px;">';
   for (const f of files) {
     const label = labels[f.name] || f.name;
+    const quality = f.name.replace('.mp4','');
     const res = f.width && f.height ? `${f.width}×${f.height}` : '';
     const br = f.bitrate ? `${Math.round(f.bitrate / 1000)}kbps` : '';
-    html += `<button class="btn btn-primary" onclick="triggerDownload('${f.url}','${escAttr(title)}');closeModal('download-modal')">
+    html += `<button class="btn btn-primary" onclick="triggerProxyDownload('${assetId}','${quality}','${escAttr(title)}');closeModal('download-modal')">
       ${label} ${res ? '(' + res + ')' : ''} ${br ? '· ' + br : ''}
     </button>`;
   }
@@ -1626,15 +1627,20 @@ function openDownloadPicker(files, title) {
   modal.classList.add('open');
 }
 
-function triggerDownload(url, title) {
+function triggerProxyDownload(assetId, quality, title) {
+  const url = `/api/assets/${assetId}/mp4/download?quality=${encodeURIComponent(quality)}&title=${encodeURIComponent(title || 'video')}`;
   const a = document.createElement('a');
   a.href = url;
   a.download = (title || 'video') + '.mp4';
-  a.target = '_blank';
   document.body.appendChild(a);
   a.click();
   a.remove();
   toast('Download started');
+}
+
+// Legacy fallback
+function triggerDownload(url, title) {
+  triggerProxyDownload(url, 'high', title);
 }
 
 function closeModal(id) {
