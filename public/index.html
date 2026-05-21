@@ -846,20 +846,57 @@ async function loadSessions() {
       }).join('');
     }
 
-    // Recent sessions
+    // Recent sessions — grouped by user
     const recent = (recentRes.sessions || []).filter(s => s.endedAt);
     if (recent.length === 0) {
       recentEl.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No recent sessions.</div>';
     } else {
-      recentEl.innerHTML = `<div style="overflow-x:auto;"><table class="tbl" style="width:100%;">
-        <thead><tr><th>User</th><th>Device</th><th>Platform</th><th>Duration</th><th>Started</th></tr></thead>
-        <tbody>${recent.map(s => {
-          const name = s.userDisplayName || s.userEmail || s.uid?.slice(0,8) || 'Unknown';
-          const device = s.deviceName || '—';
-          const dur = s.durationSeconds ? formatDuration(s.durationSeconds) : '—';
-          const started = s.startedAt ? new Date(s.startedAt).toLocaleString() : '—';
-          return `<tr><td>${escHtml(name)}</td><td>${escHtml(device)}</td><td>${escHtml(s.platform || '')}</td><td>${dur}</td><td>${started}</td></tr>`;
-        }).join('')}</tbody></table></div>`;
+      // Group by uid
+      const grouped = {};
+      for (const s of recent) {
+        const key = s.uid || s.userEmail || 'unknown';
+        if (!grouped[key]) grouped[key] = { name: s.userDisplayName || s.userEmail || s.uid?.slice(0,8) || 'Unknown', sessions: [] };
+        // Prefer the most descriptive name
+        if (s.userDisplayName && grouped[key].name !== s.userDisplayName) grouped[key].name = s.userDisplayName;
+        grouped[key].sessions.push(s);
+      }
+      // Sort groups by most recent session first
+      const groups = Object.values(grouped).sort((a, b) => {
+        const aTime = Math.max(...a.sessions.map(s => new Date(s.startedAt || 0).getTime()));
+        const bTime = Math.max(...b.sessions.map(s => new Date(s.startedAt || 0).getTime()));
+        return bTime - aTime;
+      });
+      let html = '';
+      for (const g of groups) {
+        const totalSec = g.sessions.reduce((sum, s) => sum + (s.durationSeconds || 0), 0);
+        const platforms = [...new Set(g.sessions.map(s => s.platform).filter(Boolean))].join(', ');
+        const devices = [...new Set(g.sessions.map(s => s.deviceName).filter(Boolean))].join(', ');
+        const lastSession = g.sessions.reduce((a, b) => new Date(b.startedAt||0) > new Date(a.startedAt||0) ? b : a);
+        const lastTime = lastSession.startedAt ? new Date(lastSession.startedAt).toLocaleString() : '—';
+        html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;" onclick="this.parentElement.querySelector('.sess-detail').style.display=this.parentElement.querySelector('.sess-detail').style.display==='none'?'block':'none'">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-size:14px;">${escHtml(g.name)} <span style="color:var(--muted);font-weight:400;font-size:12px;">${escHtml(devices || '')}</span></div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">${g.sessions.length} session${g.sessions.length!==1?'s':''} · ${formatDuration(totalSec)} total · ${escHtml(platforms)}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <div style="font-size:13px;color:var(--muted);">${lastTime}</div>
+            </div>
+          </div>
+          <div class="sess-detail" style="display:none;border-top:1px solid var(--border);padding:8px 16px;">
+            <table style="width:100%;font-size:12px;border-collapse:collapse;">
+              <thead><tr><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Device</th><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Platform</th><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Duration</th><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Started</th></tr></thead>
+              <tbody>${g.sessions.map(s => {
+                const dev = s.deviceName || '—';
+                const dur = s.durationSeconds ? formatDuration(s.durationSeconds) : '—';
+                const st = s.startedAt ? new Date(s.startedAt).toLocaleString() : '—';
+                return `<tr><td style="padding:4px 8px;">${escHtml(dev)}</td><td style="padding:4px 8px;">${escHtml(s.platform||'')}</td><td style="padding:4px 8px;">${dur}</td><td style="padding:4px 8px;">${st}</td></tr>`;
+              }).join('')}</tbody>
+            </table>
+          </div>
+        </div>`;
+      }
+      recentEl.innerHTML = html;
     }
   } catch (e) {
     activeEl.innerHTML = `<div style="color:var(--red);">Error loading sessions: ${escHtml(e.message)}</div>`;
