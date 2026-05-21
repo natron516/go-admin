@@ -58,13 +58,19 @@ async function fsDelete(collection, docId) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-// Thumbnail serving is public (the app needs to load these without credentials)
-const requireAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' });
+// Two auth modes:
+//   challengeAuth — sends WWW-Authenticate header → browser shows login popup (HTML pages only)
+//   silentAuth   — returns 401 JSON without WWW-Authenticate → no second popup (API routes)
+const challengeAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' });
+const silentAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: false, unauthorizedResponse: () => 'Unauthorized' });
 app.use((req, res, next) => {
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
   if (req.path === '/webhooks/mux') return next(); // Mux webhooks bypass basic auth
   if (req.path === '/cast-receiver.html') return next(); // Cast receiver must be publicly accessible
-  requireAuth(req, res, next);
+  // API routes: silent auth (no browser popup on 401)
+  if (req.path.startsWith('/api/')) return silentAuth(req, res, next);
+  // HTML/static: challenge auth (browser login popup)
+  challengeAuth(req, res, next);
 });
 
 app.use(express.json());
