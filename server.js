@@ -87,8 +87,11 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
 
     // Map live stream ID → display name
     const STREAM_NAMES = {
-      'ripZz37iQh24znVPRqkrZR02N8Sl2Zs1021b2lyUwHHVQ': 'Sermon',
-      'Dbckmh4c8WKzhY8ieBQ01jhBdV1LwJuSOTpkaDT3uKH00': 'Recitals',
+      // New 4K VOD streams (video_quality: plus)
+      'ECgSydhoD601OoMqVmiNvfH6y0100m8uENxk6KKJV4NSZQ': 'Sermon',
+      '9AE9TGtlF4mLcYyoXsUIVnxCtjTwTcdoN3fMOayKPQ00': 'Recitals',
+      'BM009oOkP6xfixT3Qh9GgoHjx007GaOGEvRO02TpAOIfEo': 'School Events',
+      // Old stream (kept until active stream ends)
       'J48167Z8yh011ZdcB4s6ou1jguYO4obCklJufOORrFVw': 'School Events',
     };
 
@@ -344,7 +347,7 @@ app.post('/api/live-streams', async (req, res) => {
     const passthrough = JSON.stringify({ category: cat, title: resolvedTitle });
     const data = await mux('POST', '/video/v1/live-streams', {
       playback_policy: ['public'],
-      new_asset_settings: { playback_policy: ['public'] },
+      new_asset_settings: { playback_policy: ['public'], video_quality: 'plus' },
       meta: { title: resolvedTitle },
       passthrough,
       latency_mode: 'standard',
