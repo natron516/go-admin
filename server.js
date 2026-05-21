@@ -273,6 +273,40 @@ app.post('/api/assets/:id/mp4', async (req, res) => {
   }
 });
 
+// Clip/trim an asset — creates a new asset from a time range of the original
+app.post('/api/assets/:id/clip', async (req, res) => {
+  try {
+    const { startTime, endTime } = req.body;
+    if (startTime == null || endTime == null) return res.status(400).json({ error: 'startTime and endTime required' });
+    if (endTime <= startTime) return res.status(400).json({ error: 'endTime must be greater than startTime' });
+
+    // Fetch original asset for title/category metadata
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const asset = current.data;
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+
+    const origTitle = asset.meta?.title || 'Untitled';
+    const pt = parsePassthrough(asset.passthrough);
+
+    // Create new asset from the clip
+    const clipData = await mux('POST', '/video/v1/assets', {
+      input: [{
+        url: `mux://assets/${req.params.id}`,
+        start_time: parseFloat(startTime),
+        end_time: parseFloat(endTime),
+      }],
+      playback_policy: ['public'],
+      mp4_support: 'standard',
+      meta: { title: `${origTitle} (trimmed)` },
+      passthrough: serializePassthrough(pt),
+    });
+
+    res.json({ ok: true, asset: clipData.data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Delete an asset
 app.delete('/api/assets/:id', async (req, res) => {
   try {

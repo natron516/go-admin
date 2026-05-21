@@ -204,6 +204,20 @@
   .thumb-drop p { font-size: 13px; color: var(--muted); margin-top: 6px; }
   .thumb-progress { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 12px; display: none; }
   .thumb-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+  /* Trim modal */
+  .trim-video { width: 100%; max-height: 260px; border-radius: 8px; background: #000; display: block; margin-bottom: 12px; }
+  .trim-timeline { position: relative; height: 48px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; user-select: none; }
+  .trim-bar { position: absolute; top: 0; bottom: 0; background: rgba(79,142,247,.18); border-left: 3px solid var(--accent); border-right: 3px solid var(--accent); border-radius: 4px; }
+  .trim-handle { position: absolute; top: -2px; bottom: -2px; width: 14px; cursor: ew-resize; z-index: 5; border-radius: 4px; }
+  .trim-handle::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 4px; height: 18px; border-radius: 2px; background: var(--accent); }
+  .trim-handle-left { left: -7px; }
+  .trim-handle-right { right: -7px; }
+  .trim-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); z-index: 4; pointer-events: none; }
+  .trim-times { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .trim-times label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .trim-times input { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; font-family: monospace; padding: 4px 8px; width: 90px; text-align: center; outline: none; }
+  .trim-times input:focus { border-color: var(--accent); }
+  .trim-duration { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: auto; }
   /* Users tab */
   .users-table { width:100%; border-collapse:collapse; min-width:500px; }
   .users-table thead th { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:9px 12px; text-align:left; border-bottom:1px solid var(--border); background:rgba(0,0,0,.2); white-space:nowrap; }
@@ -567,6 +581,32 @@
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="document.getElementById('new-stream-modal').classList.remove('open')">Cancel</button>
       <button class="btn btn-primary" onclick="createStream()">Create Stream</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRIM MODAL -->
+<div class="modal-backdrop" id="trim-modal" onclick="if(event.target===this)closeTrimModal()">
+  <div class="modal" style="max-width:640px;">
+    <h3 id="trim-modal-title">✂️ Trim Video</h3>
+    <video id="trim-video" class="trim-video" controls preload="metadata"></video>
+    <div class="trim-timeline" id="trim-timeline">
+      <div class="trim-bar" id="trim-bar">
+        <div class="trim-handle trim-handle-left" id="trim-handle-left"></div>
+        <div class="trim-handle trim-handle-right" id="trim-handle-right"></div>
+      </div>
+      <div class="trim-playhead" id="trim-playhead"></div>
+    </div>
+    <div class="trim-times">
+      <label>Start</label>
+      <input type="text" id="trim-start" value="0:00" onchange="parseTrimInput('start')">
+      <label>End</label>
+      <input type="text" id="trim-end" value="0:00" onchange="parseTrimInput('end')">
+      <span class="trim-duration" id="trim-dur"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeTrimModal()">Cancel</button>
+      <button class="btn btn-primary" id="trim-go-btn" onclick="executeTrim()">✂️ Create Trimmed Copy</button>
     </div>
   </div>
 </div>
@@ -1413,6 +1453,7 @@ function assetRowHtml(a) {
       <div class="td-actions-inner">
         <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾 Save</button>
         <button class="btn btn-ghost btn-sm" onclick="downloadMp4('${a.id}','${escAttr(title)}')" title="Download MP4" id="dl-${a.id}">⬇️</button>
+        ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim video">✂️</button>` : ''}
         <div id="del-${a.id}"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></div>
       </div>
     </td>
@@ -1562,6 +1603,159 @@ function triggerDownload(url, title) {
 function closeModal(id) {
   const m = document.getElementById(id);
   if (m) m.classList.remove('open');
+}
+
+// ── Trim/Clip ───────────────────────────────────────────
+let trimState = { assetId: null, playbackId: null, duration: 0, startTime: 0, endTime: 0 };
+
+function openTrimModal(assetId, playbackId, title, duration) {
+  trimState = { assetId, playbackId, duration, startTime: 0, endTime: duration };
+  document.getElementById('trim-modal-title').textContent = `✂️ Trim: ${title || 'Video'}`;
+  const video = document.getElementById('trim-video');
+  video.src = `https://stream.mux.com/${playbackId}.m3u8`;
+  video.currentTime = 0;
+  document.getElementById('trim-start').value = fmtTime(0);
+  document.getElementById('trim-end').value = fmtTime(duration);
+  updateTrimDuration();
+  updateTrimBar();
+  document.getElementById('trim-modal').classList.add('open');
+
+  // Playhead tracking
+  video.ontimeupdate = () => {
+    const pct = duration > 0 ? (video.currentTime / duration) * 100 : 0;
+    document.getElementById('trim-playhead').style.left = pct + '%';
+  };
+}
+
+function closeTrimModal() {
+  document.getElementById('trim-modal').classList.remove('open');
+  const video = document.getElementById('trim-video');
+  video.pause(); video.src = ''; video.ontimeupdate = null;
+}
+
+function fmtTime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function parseTime(str) {
+  const parts = str.split(':').map(Number);
+  if (parts.some(isNaN)) return null;
+  if (parts.length === 3) return parts[0]*3600 + parts[1]*60 + parts[2];
+  if (parts.length === 2) return parts[0]*60 + parts[1];
+  return parts[0];
+}
+
+function parseTrimInput(which) {
+  const el = document.getElementById(which === 'start' ? 'trim-start' : 'trim-end');
+  const t = parseTime(el.value);
+  if (t == null) return;
+  if (which === 'start') {
+    trimState.startTime = Math.max(0, Math.min(t, trimState.endTime - 1));
+    el.value = fmtTime(trimState.startTime);
+    document.getElementById('trim-video').currentTime = trimState.startTime;
+  } else {
+    trimState.endTime = Math.max(trimState.startTime + 1, Math.min(t, trimState.duration));
+    el.value = fmtTime(trimState.endTime);
+  }
+  updateTrimBar();
+  updateTrimDuration();
+}
+
+function updateTrimBar() {
+  const d = trimState.duration || 1;
+  const leftPct = (trimState.startTime / d) * 100;
+  const rightPct = ((d - trimState.endTime) / d) * 100;
+  const bar = document.getElementById('trim-bar');
+  bar.style.left = leftPct + '%';
+  bar.style.right = rightPct + '%';
+}
+
+function updateTrimDuration() {
+  const dur = trimState.endTime - trimState.startTime;
+  document.getElementById('trim-dur').textContent = `Duration: ${fmtTime(dur)}`;
+}
+
+// Drag handles on timeline
+(function initTrimDrag() {
+  let dragging = null; // 'left' or 'right'
+  function onDown(e, which) {
+    e.preventDefault(); dragging = which;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  }
+  function onMove(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    const timeline = document.getElementById('trim-timeline');
+    const rect = timeline.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const t = pct * trimState.duration;
+    if (dragging === 'left') {
+      trimState.startTime = Math.max(0, Math.min(t, trimState.endTime - 1));
+      document.getElementById('trim-start').value = fmtTime(trimState.startTime);
+      document.getElementById('trim-video').currentTime = trimState.startTime;
+    } else {
+      trimState.endTime = Math.max(trimState.startTime + 1, Math.min(t, trimState.duration));
+      document.getElementById('trim-end').value = fmtTime(trimState.endTime);
+    }
+    updateTrimBar();
+    updateTrimDuration();
+  }
+  function onUp() {
+    dragging = null;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+  }
+  // Attach after DOM ready
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('trim-handle-left')?.addEventListener('mousedown', e => onDown(e, 'left'));
+    document.getElementById('trim-handle-right')?.addEventListener('mousedown', e => onDown(e, 'right'));
+    document.getElementById('trim-handle-left')?.addEventListener('touchstart', e => onDown(e, 'left'), { passive: false });
+    document.getElementById('trim-handle-right')?.addEventListener('touchstart', e => onDown(e, 'right'), { passive: false });
+    // Click on timeline to jump video
+    document.getElementById('trim-timeline')?.addEventListener('click', e => {
+      if (e.target.classList.contains('trim-handle') || e.target.closest('.trim-handle')) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = (e.clientX - rect.left) / rect.width;
+      const t = pct * trimState.duration;
+      document.getElementById('trim-video').currentTime = t;
+    });
+  });
+})();
+
+async function executeTrim() {
+  const btn = document.getElementById('trim-go-btn');
+  btn.textContent = '⏳ Creating...';
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/assets/${trimState.assetId}/clip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startTime: trimState.startTime, endTime: trimState.endTime }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast('✂️ Trimmed copy created! It will appear in the asset list shortly.');
+      closeTrimModal();
+      setTimeout(() => loadAssets(), 3000);
+    } else {
+      toast('Trim failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    toast('Trim failed: ' + e.message);
+  } finally {
+    btn.textContent = '✂️ Create Trimmed Copy';
+    btn.disabled = false;
+  }
 }
 
 function copyText(text, btn) {
