@@ -958,16 +958,45 @@ app.get('/api/analytics/version-distribution', async (req, res) => {
 });
 
 // ── FCM Token Debug ─────────────────────────────────────────────────────────
-let fcmTokens = [];
+let fcmTokens = {}; // device → full token
 app.post('/api/fcm-token', (req, res) => {
   const { token, device } = req.body;
-  if (token) {
-    fcmTokens.push({ token: token.slice(0, 20) + '...', device, time: new Date().toISOString() });
+  if (token && !token.startsWith('TOKEN_FETCH_FAIL') && !token.startsWith('APNS_')) {
+    fcmTokens[device || 'unknown'] = { token, time: new Date().toISOString() };
     console.log(`[FCM] Token registered: ${token.slice(0, 30)}... device=${device || 'unknown'}`);
+  } else if (token) {
+    console.log(`[FCM] Debug report: ${token.slice(0, 60)} device=${device || 'unknown'}`);
   }
-  res.json({ ok: true, count: fcmTokens.length });
+  res.json({ ok: true, count: Object.keys(fcmTokens).length });
 });
 app.get('/api/fcm-tokens', (req, res) => res.json({ tokens: fcmTokens }));
+
+// Send notification directly to a specific device token
+app.post('/api/notify-direct', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { title, body } = req.body;
+    // Send to all registered device tokens
+    const tokens = Object.values(fcmTokens).map(t => t.token);
+    if (!tokens.length) return res.status(400).json({ error: 'No device tokens registered' });
+    const results = [];
+    for (const token of tokens) {
+      try {
+        const r = await admin.messaging().send({
+          token,
+          notification: { title: title || 'GO Media', body: body || 'New video!' },
+          apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+        });
+        results.push({ ok: true, messageId: r });
+      } catch (e) {
+        results.push({ ok: false, error: e.message });
+      }
+    }
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ── Push Notifications ────────────────────────────────────────────────────────
 
