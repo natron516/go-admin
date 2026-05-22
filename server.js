@@ -956,6 +956,18 @@ app.get('/api/analytics/version-distribution', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── FCM Token Debug ─────────────────────────────────────────────────────────
+let fcmTokens = [];
+app.post('/api/fcm-token', (req, res) => {
+  const { token, device } = req.body;
+  if (token) {
+    fcmTokens.push({ token: token.slice(0, 20) + '...', device, time: new Date().toISOString() });
+    console.log(`[FCM] Token registered: ${token.slice(0, 30)}... device=${device || 'unknown'}`);
+  }
+  res.json({ ok: true, count: fcmTokens.length });
+});
+app.get('/api/fcm-tokens', (req, res) => res.json({ tokens: fcmTokens }));
+
 // ── Push Notifications ────────────────────────────────────────────────────────
 
 // Send a push notification to all users subscribed to the "new_video" topic
