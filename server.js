@@ -958,11 +958,12 @@ app.get('/api/analytics/version-distribution', async (req, res) => {
 });
 
 // ── FCM Token Debug ─────────────────────────────────────────────────────────
-let fcmTokens = {}; // device → full token
+let fcmTokens = {}; // device → { token, time, badge }
 app.post('/api/fcm-token', (req, res) => {
   const { token, device } = req.body;
   if (token && !token.startsWith('TOKEN_FETCH_FAIL') && !token.startsWith('APNS_')) {
-    fcmTokens[device || 'unknown'] = { token, time: new Date().toISOString() };
+    const existing = fcmTokens[device || 'unknown'];
+    fcmTokens[device || 'unknown'] = { token, time: new Date().toISOString(), badge: existing?.badge || 0 };
     console.log(`[FCM] Token registered: ${token.slice(0, 30)}... device=${device || 'unknown'}`);
   } else if (token) {
     console.log(`[FCM] Debug report: ${token.slice(0, 60)} device=${device || 'unknown'}`);
@@ -970,6 +971,17 @@ app.post('/api/fcm-token', (req, res) => {
   res.json({ ok: true, count: Object.keys(fcmTokens).length });
 });
 app.get('/api/fcm-tokens', (req, res) => res.json({ tokens: fcmTokens }));
+
+// Reset badge count for a device (called when app opens)
+app.post('/api/badge-reset', (req, res) => {
+  const { device } = req.body;
+  const key = device || 'unknown';
+  if (fcmTokens[key]) {
+    fcmTokens[key].badge = 0;
+    console.log(`[FCM] Badge reset for device=${key}`);
+  }
+  res.json({ ok: true });
+});
 
 // Send notification directly to a specific device token
 app.post('/api/notify-direct', async (req, res) => {
@@ -980,16 +992,17 @@ app.post('/api/notify-direct', async (req, res) => {
     const tokens = Object.values(fcmTokens).map(t => t.token);
     if (!tokens.length) return res.status(400).json({ error: 'No device tokens registered' });
     const results = [];
-    for (const token of tokens) {
+    for (const [deviceName, entry] of Object.entries(fcmTokens)) {
       try {
+        entry.badge = (entry.badge || 0) + 1;
         const r = await admin.messaging().send({
-          token,
+          token: entry.token,
           notification: { title: title || 'GO Media', body: body || 'New video!' },
-          apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+          apns: { payload: { aps: { sound: 'default', badge: entry.badge } } },
         });
-        results.push({ ok: true, messageId: r });
+        results.push({ ok: true, messageId: r, device: deviceName, badge: entry.badge });
       } catch (e) {
-        results.push({ ok: false, error: e.message });
+        results.push({ ok: false, error: e.message, device: deviceName });
       }
     }
     res.json({ results });
@@ -1022,7 +1035,6 @@ app.post('/api/notify', async (req, res) => {
         payload: {
           aps: {
             sound: 'default',
-            badge: 1,
           },
         },
         fcm_options: {
@@ -1030,6 +1042,11 @@ app.post('/api/notify', async (req, res) => {
         },
       },
     };
+
+    // Increment badge for all registered devices
+    for (const entry of Object.values(fcmTokens)) {
+      entry.badge = (entry.badge || 0) + 1;
+    }
 
     const result = await admin.messaging().send(message);
     console.log(`[notify] Sent to new_video topic: ${result}`);
