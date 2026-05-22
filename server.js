@@ -66,6 +66,7 @@ const silentAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: f
 app.use((req, res, next) => {
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
   if (req.path === '/webhooks/mux') return next(); // Mux webhooks bypass basic auth
+  if (req.path === '/api/fcm-token' && req.method === 'POST') return next(); // App reports FCM token without auth
   if (req.path === '/cast-receiver.html') return next(); // Cast receiver must be publicly accessible
   // API routes: silent auth (no browser popup on 401)
   if (req.path.startsWith('/api/')) return silentAuth(req, res, next);
