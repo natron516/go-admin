@@ -956,4 +956,46 @@ app.get('/api/analytics/version-distribution', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Push Notifications ────────────────────────────────────────────────────────
+
+// Send a push notification to all users subscribed to the "new_video" topic
+app.post('/api/notify', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { title, body, assetId, playbackId, thumbnailUrl } = req.body;
+    if (!title || !body) return res.status(400).json({ error: 'title and body required' });
+
+    const message = {
+      topic: 'new_video',
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        type: 'new_video',
+        assetId: assetId || '',
+        playbackId: playbackId || '',
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+        fcm_options: {
+          image: thumbnailUrl || '',
+        },
+      },
+    };
+
+    const result = await admin.messaging().send(message);
+    console.log(`[notify] Sent to new_video topic: ${result}`);
+    res.json({ ok: true, messageId: result });
+  } catch (e) {
+    console.error('[notify] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));

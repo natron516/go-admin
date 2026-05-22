@@ -1490,6 +1490,7 @@ function assetRowHtml(a) {
       <div class="td-actions-inner">
         <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾 Save</button>
         <button class="btn btn-ghost btn-sm" onclick="downloadMp4('${a.id}','${escAttr(title)}')" title="Download MP4" id="dl-${a.id}">⬇️</button>
+        ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Send push notification" id="notify-${a.id}">🔔</button>` : ''}
         ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim video">✂️</button>` : ''}
         <div id="del-${a.id}"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></div>
       </div>
@@ -1641,6 +1642,37 @@ function triggerProxyDownload(assetId, quality, title) {
 // Legacy fallback
 function triggerDownload(url, title) {
   triggerProxyDownload(url, 'high', title);
+}
+
+// ── Push Notifications ───────────────────────────────────────────
+async function notifyUsers(assetId, title, playbackId) {
+  if (!confirm(`Send push notification to ALL users?\n\n"🎥 ${title}"\n\nThis cannot be undone.`)) return;
+  const btn = document.getElementById('notify-' + assetId);
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const thumbUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=400&time=10` : '';
+    const r = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '🎥 New Video Available',
+        body: title || 'A new video has been posted!',
+        assetId,
+        playbackId,
+        thumbnailUrl: thumbUrl,
+      }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      toast('✅ Push notification sent to all users');
+    } else {
+      toast('❌ Notification failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    toast('❌ Notification failed: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '🔔'; btn.disabled = false; }
+  }
 }
 
 function closeModal(id) {
