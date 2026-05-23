@@ -3,317 +3,1026 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>GO Videos Admin</title>
+<title>GO Admin</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg:      #0d0f14;
-    --surface: #181c25;
-    --border:  #2a2f3f;
-    --accent:  #4f8ef7;
-    --accent2: #7c5cf7;
-    --red:     #e05252;
-    --green:   #3ecf8e;
-    --orange:  #f59e0b;
-    --text:    #e8eaf0;
-    --muted:   #7a8099;
-    --radius:  12px;
-    --shadow:  0 4px 24px rgba(0,0,0,.45);
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0a0f;
+  --surface:   #13131a;
+  --surface2:  #1a1a24;
+  --border:    #1e1e2e;
+  --border2:   #2a2a3e;
+  --accent:    #6366f1;
+  --accent2:   #818cf8;
+  --accent-dim: rgba(99,102,241,.14);
+  --red:       #ef4444;
+  --green:     #22c55e;
+  --orange:    #f59e0b;
+  --purple:    #a855f7;
+  --text:      #e2e2e9;
+  --muted:     #6b6b80;
+  --radius:    12px;
+  --radius-sm: 8px;
+  --shadow:    0 4px 32px rgba(0,0,0,.5);
+  --shadow-sm: 0 2px 12px rgba(0,0,0,.35);
+  --sidebar-w: 240px;
+  --sidebar-c: 64px;
+  --topbar-h:  56px;
+  --transition: 200ms ease;
+}
+
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── App Layout ─────────────────────────────────────── */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width var(--transition);
+  overflow: hidden;
+  z-index: 50;
+}
+.sidebar.collapsed { width: var(--sidebar-c); }
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.logo-icon { font-size: 20px; flex-shrink: 0; }
+.logo-text {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -.3px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  flex: 1;
+  transition: opacity var(--transition), width var(--transition);
+}
+.sidebar.collapsed .logo-text { opacity: 0; width: 0; }
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: color var(--transition), background var(--transition);
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.sidebar.collapsed .sidebar-toggle { transform: rotate(180deg); }
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Nav items inherit .tab class for JS compatibility */
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+}
+.tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
+.tab.active { color: var(--accent2); background: var(--accent-dim); }
+.tab.active .nav-icon svg { color: var(--accent); }
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.nav-icon svg { width: 16px; height: 16px; color: currentColor; }
+.nav-label {
+  flex: 1;
+  transition: opacity var(--transition);
+}
+.sidebar.collapsed .nav-label { opacity: 0; }
+
+.nav-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+  flex-shrink: 0;
+  transition: opacity var(--transition);
+}
+.sidebar.collapsed .nav-badge { opacity: 0; }
+
+/* Tooltip for collapsed sidebar */
+.sidebar.collapsed .tab {
+  position: relative;
+}
+.sidebar.collapsed .tab::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(var(--sidebar-c) + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 999;
+  box-shadow: var(--shadow-sm);
+}
+.sidebar.collapsed .tab:hover::after { opacity: 1; }
+
+.sidebar-footer {
+  padding: 12px 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Main Content ────────────────────────────────────── */
+.main-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.topbar {
+  height: var(--topbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+  flex-shrink: 0;
+}
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+.topbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.topbar-spacer { flex: 1; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 28px 28px 60px;
+}
+
+/* ── Sections ─────────────────────────────────────────── */
+.section { display: none; }
+.section.active { display: block; }
+
+/* ── Page headers ────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.page-header-text { flex: 1; }
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+  letter-spacing: -.3px;
+}
+.page-subtitle { font-size: 13px; color: var(--muted); }
+.page-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── Stat cards ──────────────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.stat-card:hover { border-color: var(--border2); background: var(--surface2); }
+.stat-value {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  color: var(--text);
+  margin-bottom: 4px;
+  line-height: 1;
+}
+.stat-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.stat-card.accent .stat-value { color: var(--accent2); }
+.stat-card.green .stat-value { color: var(--green); }
+.stat-card.purple .stat-value { color: var(--purple); }
+.stat-card.orange .stat-value { color: var(--orange); }
+
+/* ── Cards ───────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.card + .card { margin-top: 16px; }
+.card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-title svg { width: 16px; height: 16px; color: var(--accent); }
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition), background var(--transition), transform .1s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.btn:active { transform: scale(.97); }
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: #5254cc; }
+.btn-ghost {
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  border: 1px solid var(--border2);
+}
+.btn-ghost:hover { background: rgba(255,255,255,.1); }
+.btn-danger {
+  background: rgba(239,68,68,.12);
+  color: var(--red);
+  border: 1px solid rgba(239,68,68,.2);
+}
+.btn-danger:hover { background: rgba(239,68,68,.22); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+/* ── Form fields ─────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.field input,
+.field select,
+.field textarea {
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color var(--transition), background var(--transition);
+  width: 100%;
+  font-family: inherit;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--accent);
+  background: rgba(99,102,241,.07);
+}
+.field select {
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-color: rgba(255,255,255,.05);
+  padding-right: 32px;
+  cursor: pointer;
+}
+.field select option { background: #1a1a24; }
+.field-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
+
+/* ── Drop zone ───────────────────────────────────────── */
+#drop-zone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius);
+  padding: 60px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  margin-bottom: 24px;
+  background: rgba(255,255,255,.01);
+}
+#drop-zone:hover, #drop-zone.dragging {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+#drop-zone svg {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  display: block;
+  margin-inline: auto;
+}
+#drop-zone .dz-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+#drop-zone .dz-sub { font-size: 13px; color: var(--muted); }
+#file-input { display: none; }
+
+/* ── Upload queue table ──────────────────────────────── */
+.upload-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.upload-table { width: 100%; border-collapse: collapse; min-width: 520px; }
+.upload-table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,.2);
+  white-space: nowrap;
+}
+.upload-table tbody tr { border-bottom: 1px solid var(--border); }
+.upload-table tbody tr:last-child { border-bottom: none; }
+.upload-table tbody tr.uploading { background: rgba(99,102,241,.05); }
+.upload-table tbody tr.done { background: rgba(34,197,94,.05); }
+.upload-table tbody tr.error { background: rgba(239,68,68,.05); }
+.upload-table td { padding: 8px 12px; vertical-align: middle; }
+.ut-name { font-size: 13px; font-weight: 500; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ut-size { font-size: 11px; color: var(--muted); }
+.ut-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px 7px;
+  outline: none;
+  width: 100%;
+  min-width: 120px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.ut-input:hover { border-color: var(--border); }
+.ut-input:focus { border-color: var(--accent); background: rgba(99,102,241,.07); }
+.ut-select {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px 22px 4px 7px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  min-width: 110px;
+  transition: border-color var(--transition), background-color var(--transition);
+}
+.ut-select:hover { border-color: var(--border); }
+.ut-select:focus { border-color: var(--accent); background-color: rgba(99,102,241,.07); }
+.ut-select option { background: #1a1a24; }
+.ut-progress { height: 3px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 3px; }
+.ut-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+.ut-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.ut-badge.pending   { background: rgba(107,107,128,.15); color: var(--muted); }
+.ut-badge.uploading { background: rgba(99,102,241,.15);  color: var(--accent2); }
+.ut-badge.done      { background: rgba(34,197,94,.15);   color: var(--green); }
+.ut-badge.error     { background: rgba(239,68,68,.15);   color: var(--red); }
+.ut-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.ut-dot.pulse { animation: pulse 1.2s infinite; }
+
+/* ── Live streams ────────────────────────────────────── */
+.streams-grid { display: grid; gap: 16px; }
+@media (min-width: 700px) { .streams-grid { grid-template-columns: 1fr 1fr; } }
+.stream-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color var(--transition);
+}
+.stream-card.live { border-color: rgba(239,68,68,.5); }
+.stream-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.stream-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+  margin-bottom: 16px;
+}
+.status-active   { background: rgba(239,68,68,.15); color: var(--red); }
+.status-idle     { background: rgba(107,107,128,.15); color: var(--muted); }
+.status-disabled { background: rgba(107,107,128,.1); color: var(--muted); }
+.key-row { margin-bottom: 12px; }
+.key-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+.key-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,.3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+.key-value { flex: 1; font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; word-break: break-all; color: var(--text); user-select: all; }
+.key-value.masked { letter-spacing: 2px; color: var(--muted); }
+.copy-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 2px; transition: color var(--transition); flex-shrink: 0; }
+.copy-btn:hover { color: var(--accent); }
+.copy-btn.copied { color: var(--green); }
+
+/* ── Assets toolbar ──────────────────────────────────── */
+.assets-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.assets-toolbar input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+  flex: 1;
+  min-width: 160px;
+  transition: border-color var(--transition);
+}
+.assets-toolbar input:focus { border-color: var(--accent); }
+.assets-toolbar select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px 28px 8px 12px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.assets-toolbar select option { background: #1a1a24; }
+.asset-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* ── Assets table ─────────────────────────────────────── */
+.assets-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.assets-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+.assets-table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: rgba(0,0,0,.2);
+}
+.assets-table tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+.assets-table tbody tr:last-child { border-bottom: none; }
+.assets-table tbody tr:hover { background: rgba(255,255,255,.025); }
+.assets-table tbody tr.dirty  { background: rgba(245,158,11,.05); }
+.assets-table tbody tr.saving { opacity: .6; }
+.assets-table tbody tr.saved  { background: rgba(34,197,94,.05); }
+.assets-table td { padding: 8px 12px; vertical-align: middle; }
+.td-thumb { width: 90px; }
+.at-thumb-wrap { position: relative; display: inline-block; }
+.at-thumb { width: 80px; height: 46px; object-fit: cover; border-radius: 6px; display: block; background: var(--border); }
+.at-placeholder { width: 80px; height: 46px; background: var(--surface2); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted); border: 1px solid var(--border); }
+.at-dur { position: absolute; bottom: 3px; right: 3px; background: rgba(0,0,0,.85); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 4px; border-radius: 3px; }
+.at-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 5px 7px;
+  outline: none;
+  width: 100%;
+  min-width: 120px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.at-input:hover { border-color: var(--border); }
+.at-input:focus { border-color: var(--accent); background: rgba(99,102,241,.07); }
+.at-select {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 5px 22px 5px 7px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  background-color: transparent;
+  transition: border-color var(--transition), background-color var(--transition);
+  min-width: 110px;
+}
+.at-select:hover { border-color: var(--border); }
+.at-select:focus { border-color: var(--accent); background-color: rgba(99,102,241,.07); }
+.at-select option { background: #1a1a24; }
+.at-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.at-status.ready     { background: rgba(34,197,94,.15); color: var(--green); }
+.at-status.preparing { background: rgba(99,102,241,.15); color: var(--accent2); }
+.at-status.errored   { background: rgba(239,68,68,.15); color: var(--red); }
+.td-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.td-actions { white-space: nowrap; }
+.td-actions-inner { display: flex; gap: 5px; align-items: center; }
+.at-save { display: none !important; }
+tr.dirty .at-save { display: inline-flex !important; }
+
+/* ── Users table ─────────────────────────────────────── */
+.users-table { width: 100%; border-collapse: collapse; min-width: 500px; }
+.users-table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,.2);
+  white-space: nowrap;
+}
+.users-table tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+.users-table tbody tr:last-child { border-bottom: none; }
+.users-table tbody tr:hover { background: rgba(255,255,255,.025); }
+.users-table tbody tr.blocked { background: rgba(239,68,68,.05); }
+.users-table td { padding: 9px 12px; vertical-align: middle; font-size: 13px; }
+.user-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--border); }
+.user-name { font-weight: 600; font-size: 13px; }
+.user-email { font-size: 12px; color: var(--muted); }
+.user-provider { font-size: 11px; background: rgba(255,255,255,.07); border-radius: 4px; padding: 2px 6px; color: var(--muted); }
+.user-blocked-badge { font-size: 11px; font-weight: 700; background: rgba(239,68,68,.15); color: var(--red); border-radius: 99px; padding: 2px 8px; }
+.users-search {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 14px;
+}
+.users-search:focus { border-color: var(--accent); }
+.sort-th { cursor: pointer; user-select: none; white-space: nowrap; }
+.sort-th:hover { color: var(--text); }
+.sort-th.active { color: var(--accent2); }
+.sort-arrow { margin-left: 4px; font-size: 10px; opacity: .6; }
+.sort-th.active .sort-arrow { opacity: 1; }
+
+/* ── Featured ─────────────────────────────────────────── */
+.feat-list { display: flex; flex-direction: column; gap: 6px; }
+.feat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: default;
+  transition: background var(--transition), border-color var(--transition);
+}
+.feat-row.is-featured { border-color: rgba(99,102,241,.4); background: rgba(99,102,241,.06); }
+.feat-row.dragging { opacity: .45; }
+.feat-row.drag-over { border-color: var(--accent); background: rgba(99,102,241,.12); }
+.feat-handle { cursor: grab; color: var(--muted); font-size: 18px; flex-shrink: 0; user-select: none; }
+.feat-thumb { width: 72px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; background: var(--surface2); }
+.feat-title { flex: 1; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feat-cat { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.feat-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+.feat-order { font-size: 12px; font-weight: 700; color: var(--accent2); width: 20px; text-align: center; flex-shrink: 0; }
+
+/* ── Thumbnail camera button ─────────────────────────── */
+.at-cam-btn {
+  position: absolute;
+  bottom: 3px;
+  left: 3px;
+  background: rgba(0,0,0,.75);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.at-thumb-wrap:hover .at-cam-btn { opacity: 1; }
+.thumb-custom-badge {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: .3px;
+}
+
+/* ── PIN editor ──────────────────────────────────────── */
+.pin-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* ── Modals ──────────────────────────────────────────── */
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.75);
+  backdrop-filter: blur(6px);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow);
+  animation: modal-in .18s ease;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+
+/* ── Thumbnail modal ─────────────────────────────────── */
+.thumb-modal-img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; background: #0a0a0a; display: block; margin-bottom: 16px; }
+.thumb-drop {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  margin-bottom: 12px;
+}
+.thumb-drop:hover, .thumb-drop.drag { border-color: var(--accent); background: var(--accent-dim); }
+.thumb-drop p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.thumb-progress { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 12px; display: none; }
+.thumb-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+
+/* ── Trim modal ──────────────────────────────────────── */
+.trim-video { width: 100%; max-height: 260px; border-radius: 8px; background: #000; display: block; margin-bottom: 12px; }
+.trim-timeline {
+  position: relative;
+  height: 48px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  user-select: none;
+}
+.trim-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(99,102,241,.18);
+  border-left: 3px solid var(--accent);
+  border-right: 3px solid var(--accent);
+  border-radius: 4px;
+}
+.trim-handle { position: absolute; top: -2px; bottom: -2px; width: 14px; cursor: ew-resize; z-index: 5; border-radius: 4px; }
+.trim-handle::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 4px; height: 18px; border-radius: 2px; background: var(--accent); }
+.trim-handle-left { left: -7px; }
+.trim-handle-right { right: -7px; }
+.trim-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); z-index: 4; pointer-events: none; }
+.trim-times { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.trim-times label { font-size: 12px; color: var(--muted); font-weight: 600; }
+.trim-times input { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; font-family: monospace; padding: 4px 8px; width: 90px; text-align: center; outline: none; }
+.trim-times input:focus { border-color: var(--accent); }
+.trim-duration { font-size: 13px; color: var(--accent2); font-weight: 600; margin-left: auto; }
+
+/* ── Login overlay ───────────────────────────────────── */
+#login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#login-overlay.hidden { display: none; }
+.login-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 44px 40px;
+  width: 360px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.login-logo { font-size: 40px; margin-bottom: 12px; }
+.login-box h2 {
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.login-box p { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+.login-box input {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 12px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+.login-box input:focus { border-color: var(--accent); background: rgba(99,102,241,.07); }
+.login-box .btn { width: 100%; justify-content: center; margin-top: 8px; padding: 12px; font-size: 14px; }
+.login-box .login-error { color: var(--red); font-size: 13px; margin-top: 12px; display: none; }
+
+/* ── Post-upload dialog ──────────────────────────────── */
+.modal-backdrop.hidden { display: none !important; }
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 28px 32px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: var(--shadow);
+  animation: modal-in .18s ease;
+}
+.modal-box h3 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.modal-box label { display: flex; align-items: center; gap: 10px; padding: 10px 0; font-size: 14px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.modal-box label:last-of-type { border-bottom: none; }
+.modal-box label input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+.modal-box .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* ── Empty & loading ─────────────────────────────────── */
+.empty { text-align: center; padding: 56px 24px; color: var(--muted); }
+.empty .icon { font-size: 44px; margin-bottom: 14px; }
+.empty p { font-size: 14px; }
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 48px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes pulse-green { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.4)} 50%{opacity:.7;box-shadow:0 0 0 6px rgba(34,197,94,0)} }
+
+/* ── Toast ───────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 10px 22px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  transition: transform .25s ease;
+  z-index: 999;
+  pointer-events: none;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ── Sidebar overlay (mobile) ────────────────────────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 40;
+}
+.sidebar-overlay.show { display: block; }
+
+/* ── Mobile ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform var(--transition), width var(--transition);
+    width: var(--sidebar-w) !important;
   }
-  html { height: 100%; }
-  body { min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; }
-
-  /* Header */
-  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 16px; height: 56px; flex-wrap: wrap; }
-  .logo { font-weight: 700; font-size: 17px; letter-spacing: -.3px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; flex-shrink: 0; }
-  nav { display: flex; gap: 4px; flex: 1; min-width: 0; }
-  .tab { background: none; border: none; color: var(--muted); font-size: 14px; font-weight: 500; padding: 6px 10px; border-radius: 8px; cursor: pointer; transition: color .15s, background .15s; }
-  .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
-  .tab.active { color: var(--accent); background: rgba(79,142,247,.12); }
-
-  /* Layout */
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
-  .section { display: none; }
-  .section.active { display: block; }
-
-  /* Buttons */
-  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s, transform .1s; white-space: nowrap; }
-  .btn:active { transform: scale(.97); }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { opacity: .88; }
-  .btn-ghost { background: rgba(255,255,255,.07); color: var(--text); }
-  .btn-ghost:hover { background: rgba(255,255,255,.13); }
-  .btn-danger { background: rgba(224,82,82,.15); color: var(--red); }
-  .btn-danger:hover { background: rgba(224,82,82,.25); }
-  .btn-sm { padding: 5px 10px; font-size: 12px; }
-  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
-
-  /* Form fields (upload) */
-  .field-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
-  .field { display: flex; flex-direction: column; gap: 5px; }
-  .field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-  .field input, .field select { background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 9px 12px; outline: none; transition: border-color .15s; width: 100%; -webkit-appearance: none; }
-  .field input:focus, .field select:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
-  .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-color: rgba(255,255,255,.05); padding-right: 32px; cursor: pointer; }
-  .field select option { background: #1e2333; }
-
-  /* Drop zone */
-  #drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 48px 24px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; margin-bottom: 24px; }
-  #drop-zone:hover, #drop-zone.dragging { border-color: var(--accent); background: rgba(79,142,247,.05); }
-  #drop-zone svg { width: 40px; height: 40px; margin-bottom: 12px; color: var(--muted); display: block; margin-inline: auto; }
-  #drop-zone .dz-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-  #drop-zone .dz-sub { font-size: 13px; color: var(--muted); }
-  #file-input { display: none; }
-
-  /* File cards */
-  /* upload queue table */
-  .upload-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
-  .upload-table { width: 100%; border-collapse: collapse; min-width: 520px; }
-  .upload-table thead th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); background: rgba(0,0,0,.2); white-space: nowrap; }
-  .upload-table tbody tr { border-bottom: 1px solid var(--border); }
-  .upload-table tbody tr:last-child { border-bottom: none; }
-  .upload-table tbody tr.uploading { background: rgba(79,142,247,.05); }
-  .upload-table tbody tr.done  { background: rgba(62,207,142,.05); }
-  .upload-table tbody tr.error { background: rgba(224,82,82,.05); }
-  .upload-table td { padding: 7px 12px; vertical-align: middle; }
-  .ut-name { font-size: 13px; font-weight: 500; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ut-size { font-size: 11px; color: var(--muted); }
-  .ut-input { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 4px 7px; outline: none; width: 100%; min-width: 120px; transition: border-color .15s, background .15s; }
-  .ut-input:hover { border-color: var(--border); }
-  .ut-input:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
-  .ut-select { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 4px 22px 4px 7px; outline: none; cursor: pointer; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; min-width: 110px; transition: border-color .15s, background-color .15s; }
-  .ut-select:hover { border-color: var(--border); }
-  .ut-select:focus { border-color: var(--accent); background-color: rgba(79,142,247,.07); }
-  .ut-select option { background: #1e2333; }
-  .ut-progress { height: 3px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 3px; }
-  .ut-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
-  .ut-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
-  .ut-badge.pending   { background: rgba(122,128,153,.15); color: var(--muted); }
-  .ut-badge.uploading { background: rgba(79,142,247,.15);  color: var(--accent); }
-  .ut-badge.done      { background: rgba(62,207,142,.15);  color: var(--green); }
-  .ut-badge.error     { background: rgba(224,82,82,.15);   color: var(--red); }
-  .ut-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-  .ut-dot.pulse { animation: pulse 1.2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-  .progress-wrap { margin-top: 12px; }
-  .progress-bar { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .3s; }
-  .progress-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; margin-top: 8px; }
-  .badge-pending   { background: rgba(122,128,153,.15); color: var(--muted); }
-  .badge-uploading { background: rgba(79,142,247,.15);  color: var(--accent); }
-  .badge-done      { background: rgba(62,207,142,.15);  color: var(--green); }
-  .badge-error     { background: rgba(224,82,82,.15);   color: var(--red); }
-  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .badge-dot.pulse { animation: pulse 1.2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-
-  /* Upload toolbar */
-  .upload-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-  .upload-toolbar h2 { font-size: 18px; font-weight: 700; flex: 1; }
-
-  /* Live streams */
-  .streams-grid { display: grid; gap: 16px; }
-  @media (min-width: 700px) { .streams-grid { grid-template-columns: 1fr 1fr; } }
-  .stream-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
-  .stream-card.live { border-color: var(--red); }
-  .stream-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-  .stream-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; margin-bottom: 16px; }
-  .status-active   { background: rgba(224,82,82,.15); color: var(--red); }
-  .status-idle     { background: rgba(122,128,153,.15); color: var(--muted); }
-  .status-disabled { background: rgba(122,128,153,.1); color: var(--muted); }
-  .key-row { margin-bottom: 12px; }
-  .key-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
-  .key-box { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
-  .key-value { flex: 1; font-family: 'SF Mono','Fira Code',monospace; font-size: 13px; word-break: break-all; color: var(--text); user-select: all; }
-  .key-value.masked { letter-spacing: 2px; color: var(--muted); }
-  .copy-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 18px; padding: 2px; transition: color .15s; flex-shrink: 0; }
-  .copy-btn:hover { color: var(--accent); }
-  .copy-btn.copied { color: var(--green); }
-
-  /* ── Assets table ───────────────────────────────────── */
-  .assets-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .assets-toolbar input { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 7px 12px; outline: none; flex: 1; min-width: 160px; transition: border-color .15s; }
-  .assets-toolbar input:focus { border-color: var(--accent); }
-  .assets-toolbar select { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 7px 28px 7px 12px; outline: none; cursor: pointer; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
-  .assets-toolbar select option { background: #1e2333; }
-  .asset-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
-
-  .assets-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
-  .assets-table { width: 100%; border-collapse: collapse; min-width: 600px; }
-  .assets-table thead th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: rgba(0,0,0,.2); }
-  .assets-table tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
-  .assets-table tbody tr:last-child { border-bottom: none; }
-  .assets-table tbody tr:hover { background: rgba(255,255,255,.03); }
-  .assets-table tbody tr.dirty  { background: rgba(245,158,11,.05); }
-  .assets-table tbody tr.saving { opacity: .6; }
-  .assets-table tbody tr.saved  { background: rgba(62,207,142,.05); }
-  .assets-table td { padding: 8px 12px; vertical-align: middle; }
-
-  /* thumb cell */
-  .td-thumb { width: 90px; }
-  .at-thumb-wrap { position: relative; display: inline-block; }
-  .at-thumb { width: 80px; height: 46px; object-fit: cover; border-radius: 5px; display: block; background: var(--border); }
-  .at-placeholder { width: 80px; height: 46px; background: var(--border); border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted); }
-  .at-dur { position: absolute; bottom: 3px; right: 3px; background: rgba(0,0,0,.8); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 4px; border-radius: 3px; }
-
-  /* inline inputs */
-  .at-input { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 5px 7px; outline: none; width: 100%; min-width: 120px; transition: border-color .15s, background .15s; }
-  .at-input:hover { border-color: var(--border); }
-  .at-input:focus { border-color: var(--accent); background: rgba(79,142,247,.07); }
-  .at-select { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text); font-size: 13px; padding: 5px 22px 5px 7px; outline: none; cursor: pointer; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8099' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; background-color: transparent; transition: border-color .15s, background-color .15s; min-width: 110px; }
-  .at-select:hover { border-color: var(--border); }
-  .at-select:focus { border-color: var(--accent); background-color: rgba(79,142,247,.07); }
-  .at-select option { background: #1e2333; }
-
-  /* status pill */
-  .at-status { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
-  .at-status.ready     { background: rgba(62,207,142,.15); color: var(--green); }
-  .at-status.preparing { background: rgba(79,142,247,.15); color: var(--accent); }
-  .at-status.errored   { background: rgba(224,82,82,.15);  color: var(--red); }
-
-  .td-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
-  .td-actions { white-space: nowrap; }
-  .td-actions-inner { display: flex; gap: 5px; align-items: center; }
-  .at-save { display: none !important; }
-  tr.dirty .at-save { display: inline-flex !important; }
-
-  /* Modal */
-  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
-  .modal-backdrop.open { display: flex; }
-  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 100%; max-width: 480px; box-shadow: var(--shadow); }
-  .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
-  .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
-
-  /* Empty / loading */
-  .empty { text-align: center; padding: 48px 24px; color: var(--muted); }
-  .empty .icon { font-size: 40px; margin-bottom: 12px; }
-  .empty p { font-size: 14px; }
-  .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 40px auto; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes pulse-green { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(62,207,142,.4)} 50%{opacity:.7;box-shadow:0 0 0 6px rgba(62,207,142,0)} }
-
-  /* Toast */
-  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #2a3050; border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; white-space: nowrap; box-shadow: var(--shadow); transition: transform .25s ease; z-index: 300; pointer-events: none; }
-  #toast.show { transform: translateX(-50%) translateY(0); }
-
-  /* Thumbnail modal */
-  .thumb-modal-img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; background: #111; display: block; margin-bottom: 16px; }
-  .thumb-drop { border: 2px dashed var(--border); border-radius: 10px; padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; margin-bottom: 12px; }
-  .thumb-drop:hover, .thumb-drop.drag { border-color: var(--accent); background: rgba(79,142,247,.05); }
-  .thumb-drop p { font-size: 13px; color: var(--muted); margin-top: 6px; }
-  .thumb-progress { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 12px; display: none; }
-  .thumb-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
-  /* Trim modal */
-  .trim-video { width: 100%; max-height: 260px; border-radius: 8px; background: #000; display: block; margin-bottom: 12px; }
-  .trim-timeline { position: relative; height: 48px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; user-select: none; }
-  .trim-bar { position: absolute; top: 0; bottom: 0; background: rgba(79,142,247,.18); border-left: 3px solid var(--accent); border-right: 3px solid var(--accent); border-radius: 4px; }
-  .trim-handle { position: absolute; top: -2px; bottom: -2px; width: 14px; cursor: ew-resize; z-index: 5; border-radius: 4px; }
-  .trim-handle::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 4px; height: 18px; border-radius: 2px; background: var(--accent); }
-  .trim-handle-left { left: -7px; }
-  .trim-handle-right { right: -7px; }
-  .trim-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); z-index: 4; pointer-events: none; }
-  .trim-times { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .trim-times label { font-size: 12px; color: var(--muted); font-weight: 600; }
-  .trim-times input { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; font-family: monospace; padding: 4px 8px; width: 90px; text-align: center; outline: none; }
-  .trim-times input:focus { border-color: var(--accent); }
-  .trim-duration { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: auto; }
-  /* Users tab */
-  .users-table { width:100%; border-collapse:collapse; min-width:500px; }
-  .users-table thead th { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:9px 12px; text-align:left; border-bottom:1px solid var(--border); background:rgba(0,0,0,.2); white-space:nowrap; }
-  .users-table tbody tr { border-bottom:1px solid var(--border); transition:background .12s; }
-  .users-table tbody tr:last-child { border-bottom:none; }
-  .users-table tbody tr.blocked { background:rgba(224,82,82,.06); }
-  .users-table td { padding:9px 12px; vertical-align:middle; font-size:13px; }
-  .user-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; background:var(--border); }
-  .user-name { font-weight:600; }
-  .user-email { font-size:12px; color:var(--muted); }
-  .user-provider { font-size:11px; background:rgba(255,255,255,.07); border-radius:4px; padding:2px 6px; color:var(--muted); }
-  .user-blocked-badge { font-size:11px; font-weight:700; background:rgba(224,82,82,.15); color:var(--red); border-radius:99px; padding:2px 8px; }
-  .users-search { background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; padding:7px 12px; outline:none; width:100%; max-width:300px; margin-bottom:12px; }
-  .users-search:focus { border-color:var(--accent); }
-  .sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
-  .sort-th:hover { color:var(--text); }
-  .sort-th.active { color:var(--accent); }
-  .sort-arrow { margin-left:4px; font-size:10px; opacity:.6; }
-  .sort-th.active .sort-arrow { opacity:1; }
-
-  /* Featured tab */
-  .feat-list { display: flex; flex-direction: column; gap: 6px; }
-  .feat-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; cursor: default; transition: background .15s; }
-  .feat-row.is-featured { border-color: var(--accent); background: rgba(79,142,247,.07); }
-  .feat-row.dragging { opacity: .45; }
-  .feat-row.drag-over { border-color: var(--accent2); background: rgba(124,92,247,.12); }
-  .feat-handle { cursor: grab; color: var(--muted); font-size: 18px; flex-shrink: 0; user-select: none; }
-  .feat-thumb { width: 72px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; background: #111; }
-  .feat-title { flex: 1; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .feat-cat { font-size: 11px; color: var(--muted); flex-shrink: 0; }
-  .feat-check { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
-  .feat-order { font-size: 12px; font-weight: 700; color: var(--accent); width: 20px; text-align: center; flex-shrink: 0; }
-
-  .at-cam-btn { position: absolute; bottom: 3px; left: 3px; background: rgba(0,0,0,.75); border: none; border-radius: 4px; color: #fff; font-size: 13px; padding: 2px 5px; cursor: pointer; opacity: 0; transition: opacity .15s; }
-  .at-thumb-wrap:hover .at-cam-btn { opacity: 1; }
-  .thumb-custom-badge { position: absolute; top: 3px; left: 3px; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; letter-spacing: .3px; }
-
-  @media (max-width: 580px) {
-    header { padding: 8px 12px; height: auto; flex-direction: column; align-items: stretch; gap: 6px; }
-    .logo { text-align: center; }
-    nav { justify-content: stretch; gap: 2px; }
-    .tab { flex: 1; text-align: center; padding: 8px 4px; font-size: 12px; }
-    main { padding: 16px 12px 60px; }
+  .sidebar.mobile-open { transform: translateX(0); }
+  .sidebar.collapsed { width: var(--sidebar-w) !important; }
+  .sidebar.collapsed .nav-label { opacity: 1; }
+  .sidebar.collapsed .logo-text { opacity: 1; width: auto; }
+  .main-wrap { width: 100%; }
+  .hamburger { display: flex !important; }
+  main { padding: 16px 16px 60px; }
+  .assets-wrap { overflow-x: unset; border: none; border-radius: 0; }
+  .assets-table { min-width: unset; }
+  .assets-table thead { display: none; }
+  .assets-table tbody tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'thumb title actions' 'thumb cat status';
+    gap: 6px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    padding: 8px;
   }
-  /* Mobile-responsive assets table — no horizontal scroll */
-  @media (max-width: 700px) {
-    .assets-wrap { overflow-x: unset; border: none; border-radius: 0; }
-    .assets-table { min-width: unset; }
-    .assets-table thead { display: none; }
-    /* Card per row */
-    .assets-table tbody tr {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      grid-template-areas:
-        'thumb title actions'
-        'thumb cat    status';
-      gap: 6px 8px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; margin-bottom: 8px; padding: 8px;
-    }
-    .assets-table tbody tr.dirty  { background: rgba(245,158,11,.05); }
-    .assets-table tbody tr.saved  { background: rgba(62,207,142,.05); }
-    .assets-table td { display: block; padding: 0; border: none; }
-    .td-thumb  { grid-area: thumb; align-self: center; }
-    .td-title  { grid-area: title; align-self: center; min-width: 0; }
-    .td-cat    { grid-area: cat;   align-self: center; }
-    .td-status { grid-area: status; align-self: center; justify-self: start; }
-    .td-actions { grid-area: actions; align-self: center; }
-    .td-meta { display: none; }
-    .at-thumb { width: 72px; height: 40px; }
-    .at-input { font-size: 14px; padding: 4px 6px; width: 100%; min-width: 0;
-      background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; }
-    .at-select { font-size: 12px; min-width: 0; width: 100%; }
-    .td-actions-inner { gap: 4px; }
-    .assets-toolbar { flex-wrap: wrap; }
-    .assets-toolbar input { min-width: 140px; }
-  }
-  /* Login overlay */
-  #login-overlay { position:fixed; inset:0; z-index:9999; background:var(--bg); display:flex; align-items:center; justify-content:center; }
-  #login-overlay.hidden { display:none; }
-  .login-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px 36px; width:340px; text-align:center; box-shadow:var(--shadow); }
-  .login-box h2 { font-size:22px; margin-bottom:6px; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-  .login-box p { color:var(--muted); font-size:13px; margin-bottom:24px; }
-  .login-box input { width:100%; padding:11px 14px; background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; margin-bottom:12px; outline:none; }
-  .login-box input:focus { border-color:var(--accent); }
-  .login-box .btn { width:100%; justify-content:center; margin-top:8px; }
-  .login-box .login-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+  .assets-table tbody tr.dirty { background: rgba(245,158,11,.05); }
+  .assets-table tbody tr.saved { background: rgba(34,197,94,.05); }
+  .assets-table td { display: block; padding: 0; border: none; }
+  .td-thumb  { grid-area: thumb; align-self: center; }
+  .td-title  { grid-area: title; align-self: center; min-width: 0; }
+  .td-cat    { grid-area: cat; align-self: center; }
+  .td-status { grid-area: status; align-self: center; justify-self: start; }
+  .td-actions { grid-area: actions; align-self: center; }
+  .td-meta { display: none; }
+  .at-thumb { width: 72px; height: 40px; }
+  .at-input { font-size: 14px; padding: 4px 6px; width: 100%; min-width: 0; background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; }
+  .at-select { font-size: 12px; min-width: 0; width: 100%; }
+  .td-actions-inner { gap: 4px; }
+  .assets-toolbar { flex-wrap: wrap; }
+  .assets-toolbar input { min-width: 120px; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+}
 
-  /* Post-upload dialog */
-  .modal-backdrop { position:fixed; inset:0; z-index:500; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
-  .modal-backdrop.hidden { display:none; }
-  .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px 32px; width:420px; max-width:90vw; box-shadow:var(--shadow); }
-  .modal-box h3 { font-size:18px; font-weight:700; margin-bottom:16px; }
-  .modal-box label { display:flex; align-items:center; gap:10px; padding:10px 0; font-size:14px; cursor:pointer; }
-  .modal-box label input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
-  .modal-box .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+/* ── Analytics section ───────────────────────────────── */
+.analytics-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+
+/* ── Settings ─────────────────────────────────────────── */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 760px; }
+@media (max-width: 600px) { .settings-grid { grid-template-columns: 1fr; } }
+
+/* ── Section divider ─────────────────────────────────── */
+.section-divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+
+/* ── Inline upload toggle ────────────────────────────── */
+#upload-panel {
+  display: none;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+#drop-zone-inline {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 24px 16px;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+#drop-zone-inline:hover { border-color: var(--accent); background: var(--accent-dim); }
 </style>
 <!-- Firebase (compat — works with onclick handlers) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -322,9 +1031,13 @@
 </head>
 <body>
 
-<!-- Login overlay -->
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- ── Login Overlay ─────────────────────────────────── -->
 <div id="login-overlay">
   <div class="login-box">
+    <div class="login-logo">🎬</div>
     <h2>GO Admin</h2>
     <p>Sign in to manage videos</p>
     <input type="text" id="login-user" placeholder="Username" autocomplete="username">
@@ -334,12 +1047,12 @@
   </div>
 </div>
 
-<!-- Post-upload dialog -->
+<!-- ── Post-Upload Dialog ─────────────────────────────── -->
 <div id="upload-done-modal" class="modal-backdrop hidden">
   <div class="modal-box">
-    <h3>Video Uploaded!</h3>
-    <p style="color:var(--muted);font-size:14px;margin-bottom:16px" id="upload-done-title"></p>
-    <label><input type="checkbox" id="upload-feat-check"> Add to Featured section (top spot)</label>
+    <h3>🎉 Video Uploaded!</h3>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:16px" id="upload-done-title"></p>
+    <label><input type="checkbox" id="upload-feat-check"> Add to Featured (top spot)</label>
     <label><input type="checkbox" id="upload-notify-check" checked> Send push notification to users</label>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeUploadDoneModal()">Skip</button>
@@ -348,248 +1061,478 @@
   </div>
 </div>
 
-<header>
-  <div class="logo">🎬 GO Admin</div>
-  <nav>
-    <button class="tab active" onclick="showTab('assets',this)">Assets</button>
-    <button class="tab" onclick="showTab('live',this)">Live</button>
-    <button class="tab" onclick="showTab('featured',this)">⭐ Featured</button>
-    <button class="tab" onclick="showTab('users',this)">👥 Users</button>
-    <button class="tab" onclick="showTab('feedback',this)" id="tab-btn-feedback">💬 Feedback</button>
-    <button class="tab" onclick="showTab('analytics',this)">📊 Analytics</button>
-    <button class="tab" onclick="showTab('sessions',this)">📱 Sessions</button>
-    <button class="tab" onclick="showTab('settings',this)">⚙️ Settings</button>
-  </nav>
-</header>
+<!-- ── App Layout ─────────────────────────────────────── -->
+<div class="app-layout">
 
-<main>
-
-  <!-- UPLOAD (embedded in Assets, hidden standalone tab) -->
-  <section id="tab-upload" class="section">
-    <div id="drop-zone">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
-      </svg>
-      <div class="dz-title">Drop video files here</div>
-      <div class="dz-sub">or click to browse · MP4, MOV, MKV, M4V supported</div>
-    </div>
-    <input type="file" id="file-input" multiple accept="video/*">
-    <div id="pending-wrap" style="display:none">
-      <div class="upload-toolbar">
-        <h2 id="pending-count"></h2>
-        <button class="btn btn-ghost btn-sm" onclick="clearDone()">Clear Done</button>
-        <button class="btn btn-primary" id="upload-btn" onclick="uploadAll()">⬆️ Upload All</button>
-      </div>
-      <div id="file-list"></div>
-    </div>
-  </section>
-
-  <!-- LIVE STREAMS -->
-  <section id="tab-live" class="section">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
-      <h2 style="font-size:18px;font-weight:700;flex:1;">Live Streams</h2>
-      <button class="btn btn-ghost btn-sm" onclick="loadLive()">↺ Refresh</button>
-      <button class="btn btn-primary btn-sm" onclick="openNewStreamModal()">+ New Stream</button>
-    </div>
-    <div id="live-content"><div class="spinner"></div></div>
-  </section>
-
-  <!-- ASSETS -->
-  <section id="tab-assets" class="section active">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
-      <h2 style="font-size:18px;font-weight:700;flex:1;">Assets</h2>
-      <button class="btn btn-ghost btn-sm" onclick="loadAssets()">↺ Refresh</button>
-      <button class="btn btn-primary btn-sm" onclick="toggleUploadPanel()">⬆️ Upload</button>
-    </div>
-    <!-- Inline upload panel -->
-    <div id="upload-panel" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
-      <div id="drop-zone-inline">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;margin:0 auto 8px;display:block;color:var(--muted)">
-          <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="logo-icon">🎬</span>
+      <span class="logo-text">GO Admin</span>
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
         </svg>
-        <div style="text-align:center;font-size:14px;font-weight:600;">Drop video files here</div>
-        <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:4px;">or click to browse · MP4, MOV, MKV, M4V</div>
-      </div>
-      <input type="file" id="file-input-inline" multiple accept="video/*" style="display:none">
-      <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-          <span id="pending-count-inline" style="font-size:13px;font-weight:600;flex:1;"></span>
-          <button class="btn btn-ghost btn-sm" onclick="clearDone()">Clear Done</button>
-          <button class="btn btn-primary btn-sm" id="upload-btn-inline" onclick="uploadAll()">⬆️ Upload All</button>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="tab active" data-label="Dashboard" onclick="navTo('dashboard', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+        </span>
+        <span class="nav-label">Dashboard</span>
+      </button>
+
+      <button class="tab" data-label="Assets" onclick="navTo('assets', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <path d="M8 21h8m-4-4v4" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Assets</span>
+      </button>
+
+      <button class="tab" data-label="Upload" onclick="navTo('upload', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 15V3m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Upload</span>
+      </button>
+
+      <button class="tab" data-label="Live" onclick="navTo('live', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="2"/>
+            <path d="M8.5 8.5a5 5 0 000 7M15.5 8.5a5 5 0 010 7M5.5 5.5a9 9 0 000 13M18.5 5.5a9 9 0 010 13" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Live</span>
+      </button>
+
+      <button class="tab" data-label="Featured" onclick="navTo('featured', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Featured</span>
+      </button>
+
+      <button class="tab" data-label="Users" onclick="navTo('users', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Users</span>
+      </button>
+
+      <button class="tab" data-label="Feedback" onclick="navTo('feedback', this)" id="tab-btn-feedback">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Feedback</span>
+      </button>
+
+      <button class="tab" data-label="Analytics" onclick="navTo('analytics', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 20V10m-6 10V4M6 20v-6" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Analytics</span>
+      </button>
+
+      <button class="tab" data-label="Sessions" onclick="navTo('sessions', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="5" y="2" width="14" height="20" rx="2"/>
+            <circle cx="12" cy="18" r="1" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="nav-label">Sessions</span>
+      </button>
+
+      <button class="tab" data-label="Settings" onclick="navTo('settings', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+        </span>
+        <span class="nav-label">Settings</span>
+      </button>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <div class="main-wrap">
+    <!-- Topbar -->
+    <div class="topbar">
+      <button class="hamburger" onclick="openSidebar()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12h18M3 6h18M3 18h18" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="topbar-title">Dashboard</span>
+      <span class="topbar-spacer"></span>
+    </div>
+
+    <!-- Sections -->
+    <main>
+
+      <!-- ── DASHBOARD ─────────────────────────────── -->
+      <section id="tab-dashboard" class="section active">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Dashboard</div>
+            <div class="page-subtitle">Overview of your GO Videos platform</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↺ Refresh</button>
+          </div>
         </div>
-        <div id="file-list"></div>
-      </div>
-    </div>
-    <div class="assets-toolbar">
-      <input type="search" id="asset-search" placeholder="🔍 Search title…" oninput="filterAssets()">
-      <select id="asset-filter-cat" onchange="filterAssets()">
-        <option value="">All Categories</option>
-        <option value="sermon">📖 Sermon</option>
-        <option value="children">⭐ Children's</option>
-        <option value="music">🎵 Music</option>
-        <option value="performance">🎭 Performance</option>
-        <option value="funzone">🎉 FunZone</option>
-        <option value="hidden">🚫 Hidden (Private)</option>
-      </select>
-      <span class="asset-count" id="asset-count"></span>
-    </div>
-    <div id="assets-content"><div class="spinner"></div></div>
-  </section>
+        <div class="stat-grid" id="dash-stats">
+          <div class="spinner"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;" id="dash-quick">
+          <div class="card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+              Quick Actions
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button class="btn btn-primary" onclick="navTo('upload', document.querySelector('[data-label=Upload]'))">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 0-4 4m4-4 4 4" stroke-linecap="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/></svg>
+                Upload New Video
+              </button>
+              <button class="btn btn-ghost" onclick="navTo('live', document.querySelector('[data-label=Live]'))">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 000 7M15.5 8.5a5 5 0 010 7" stroke-linecap="round"/></svg>
+                Manage Live Streams
+              </button>
+              <button class="btn btn-ghost" onclick="navTo('featured', document.querySelector('[data-label=Featured]'))">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linecap="round"/></svg>
+                Edit Featured Videos
+              </button>
+            </div>
+          </div>
+          <div class="card" id="dash-recent-card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent Uploads
+            </div>
+            <div id="dash-recent"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </section>
 
-  <!-- USERS -->
-  <section id="tab-users" class="section">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
-      <h2 style="font-size:18px;font-weight:700;flex:1">👥 Users</h2>
-      <span id="user-count" style="font-size:12px;color:var(--muted)"></span>
-      <button class="btn btn-ghost btn-sm" onclick="loadUsers()">&#8634; Refresh</button>
-    </div>
-    <!-- PIN Editor -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <span style="font-size:14px;font-weight:600;">🔒 Sermon PIN</span>
-      <input id="pin-input" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]*"
-        placeholder="4-digit PIN"
-        style="background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:20px;font-weight:700;letter-spacing:6px;padding:6px 12px;width:110px;text-align:center;outline:none;"
-        oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)">
-      <button class="btn btn-primary btn-sm" onclick="savePin()">Save PIN</button>
-      <span id="pin-status" style="font-size:12px;color:var(--muted);"></span>
-    </div>
+      <!-- ── UPLOAD ─────────────────────────────────── -->
+      <section id="tab-upload" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Upload Videos</div>
+            <div class="page-subtitle">Drag and drop or browse to upload video files</div>
+          </div>
+        </div>
 
-    <input class="users-search" type="search" placeholder="🔍 Search name or email…" oninput="filterUsers(this.value)" id="user-search">
-    <div class="assets-wrap">
-      <table class="users-table">
-        <thead><tr>
-          <th>User</th>
-          <th>Provider</th>
-          <th>Platform</th>
-          <th>Version</th>
-          <th class="sort-th" id="th-minutes" onclick="setUserSort('minutes')">Video Min <span class="sort-arrow">↕</span></th>
-          <th class="sort-th" id="th-appMinutes" onclick="setUserSort('appMinutes')">App Time <span class="sort-arrow">↕</span></th>
-          <th class="sort-th" id="th-joined" onclick="setUserSort('joined')">Joined <span class="sort-arrow">↕</span></th>
-          <th class="sort-th" id="th-lastSignIn" onclick="setUserSort('lastSignIn')">Last Sign In <span class="sort-arrow">↕</span></th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr></thead>
-        <tbody id="users-tbody"><tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </section>
+        <div id="drop-zone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
+          </svg>
+          <div class="dz-title">Drop video files here</div>
+          <div class="dz-sub">or click to browse · MP4, MOV, MKV, M4V supported</div>
+        </div>
+        <input type="file" id="file-input" multiple accept="video/*">
 
-  <!-- FEATURED -->
-  <section id="tab-featured" class="section">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap;">
-      <h2 style="font-size:18px;font-weight:700;flex:1">⭐ Featured Videos</h2>
-      <button class="btn btn-ghost btn-sm" onclick="loadFeatured()">&#8634; Refresh</button>
-      <button class="btn btn-primary" onclick="saveFeatured()" id="featured-save-btn">&#128190; Save Order</button>
-    </div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Check videos to feature them on the home screen. Drag rows to reorder. Changes go live instantly — no app update needed.</p>
-    <div id="featured-content"><div class="spinner"></div></div>
-  </section>
+        <div id="pending-wrap" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <h3 style="font-size:16px;font-weight:700;flex:1;" id="pending-count"></h3>
+            <button class="btn btn-ghost btn-sm" onclick="clearDone()">Clear Done</button>
+            <button class="btn btn-primary" id="upload-btn" onclick="uploadAll()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 0-4 4m4-4 4 4" stroke-linecap="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/></svg>
+              Upload All
+            </button>
+          </div>
+          <div id="file-list"></div>
+        </div>
+      </section>
 
-    <section id="tab-analytics" class="section">
-    <div style="margin-bottom:24px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <!-- ── ASSETS ─────────────────────────────────── -->
+      <section id="tab-assets" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Assets</div>
+            <div class="page-subtitle">Manage your video library</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadAssets()">↺ Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="toggleUploadPanel()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 15V3m0 0-4 4m4-4 4 4" stroke-linecap="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/></svg>
+              Upload
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline upload panel -->
+        <div id="upload-panel">
+          <div id="drop-zone-inline" style="text-align:center;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;margin:0 auto 8px;display:block;color:var(--muted)">
+              <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
+            </svg>
+            <div style="font-size:14px;font-weight:600;">Drop video files here</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">or click to browse · MP4, MOV, MKV, M4V</div>
+          </div>
+          <input type="file" id="file-input-inline" multiple accept="video/*" style="display:none">
+          <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+              <span id="pending-count-inline" style="font-size:13px;font-weight:600;flex:1;"></span>
+              <button class="btn btn-ghost btn-sm" onclick="clearDone()">Clear Done</button>
+              <button class="btn btn-primary btn-sm" id="upload-btn-inline" onclick="uploadAll()">⬆️ Upload All</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="assets-toolbar">
+          <input type="search" id="asset-search" placeholder="🔍 Search title…" oninput="filterAssets()">
+          <select id="asset-filter-cat" onchange="filterAssets()">
+            <option value="">All Categories</option>
+            <option value="sermon">📖 Sermon</option>
+            <option value="children">⭐ Children's</option>
+            <option value="music">🎵 Music</option>
+            <option value="performance">🎭 Performance</option>
+            <option value="funzone">🎉 FunZone</option>
+            <option value="hidden">🚫 Hidden (Private)</option>
+          </select>
+          <span class="asset-count" id="asset-count"></span>
+        </div>
+
+        <div id="assets-content"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── LIVE STREAMS ────────────────────────────── -->
+      <section id="tab-live" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Live Streams</div>
+            <div class="page-subtitle">Manage RTMP live stream endpoints</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadLive()">↺ Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openNewStreamModal()">+ New Stream</button>
+          </div>
+        </div>
+        <div id="live-content"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── FEATURED ────────────────────────────────── -->
+      <section id="tab-featured" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Featured Videos</div>
+            <div class="page-subtitle">Check videos to feature on the home screen · Drag to reorder</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadFeatured()">↺ Refresh</button>
+            <button class="btn btn-primary" onclick="saveFeatured()" id="featured-save-btn">💾 Save Order</button>
+          </div>
+        </div>
+        <div id="featured-content"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── USERS ───────────────────────────────────── -->
+      <section id="tab-users" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Users</div>
+            <div class="page-subtitle" id="user-count"></div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadUsers()">↺ Refresh</button>
+          </div>
+        </div>
+
+        <!-- PIN Editor -->
+        <div class="pin-card">
+          <span style="font-size:14px;font-weight:600;">🔒 Sermon PIN</span>
+          <input id="pin-input" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]*"
+            placeholder="4-digit PIN"
+            style="background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:20px;font-weight:700;letter-spacing:6px;padding:6px 12px;width:110px;text-align:center;outline:none;"
+            oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)">
+          <button class="btn btn-primary btn-sm" onclick="savePin()">Save PIN</button>
+          <span id="pin-status" style="font-size:12px;color:var(--muted);"></span>
+        </div>
+
+        <input class="users-search" type="search" placeholder="🔍 Search name or email…" oninput="filterUsers(this.value)" id="user-search">
+        <div class="assets-wrap">
+          <table class="users-table">
+            <thead><tr>
+              <th>User</th>
+              <th>Provider</th>
+              <th>Platform</th>
+              <th>Version</th>
+              <th class="sort-th" id="th-minutes" onclick="setUserSort('minutes')">Video Min <span class="sort-arrow">↕</span></th>
+              <th class="sort-th" id="th-appMinutes" onclick="setUserSort('appMinutes')">App Time <span class="sort-arrow">↕</span></th>
+              <th class="sort-th" id="th-joined" onclick="setUserSort('joined')">Joined <span class="sort-arrow">↕</span></th>
+              <th class="sort-th" id="th-lastSignIn" onclick="setUserSort('lastSignIn')">Last Sign In <span class="sort-arrow">↕</span></th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── FEEDBACK ────────────────────────────────── -->
+      <section id="tab-feedback" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">App Feedback</div>
+            <div class="page-subtitle">Suggestions submitted by users in the app</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadFeedback()">↺ Refresh</button>
+          </div>
+        </div>
+        <div id="feedback-list"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── ANALYTICS ───────────────────────────────── -->
+      <section id="tab-analytics" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Analytics</div>
+            <div class="page-subtitle">Viewing stats, costs, and user engagement</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadMuxCost();loadAnalytics()">↺ Refresh</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="font-size:14px;font-weight:700;">💰 Mux Cost Estimate</div>
+            <span style="font-size:12px;color:var(--muted);">Last 30 days</span>
+          </div>
+          <div id="mux-cost-content"><div class="spinner"></div></div>
+        </div>
+
+        <hr class="section-divider">
+
+        <div style="margin-bottom:12px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:4px;">User Analytics</div>
+          <div style="font-size:13px;color:var(--muted);">App usage and video watch time per user (last 30 days)</div>
+        </div>
+        <div id="analytics-content"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── SESSIONS ────────────────────────────────── -->
+      <section id="tab-sessions" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">App Sessions</div>
+            <div class="page-subtitle">Real-time app usage — who's online and what they're watching</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadSessions()">↺ Refresh</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:32px;">
+          <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse-green 2s infinite;"></span>
+            Currently Active
+          </h3>
+          <div id="sessions-active"><div class="spinner"></div></div>
+        </div>
+
+        <hr class="section-divider">
+
         <div>
-          <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">💰 Mux Cost Estimate</h2>
-          <p style="font-size:13px;color:var(--muted);">Estimated costs based on delivery, storage, and encoding usage (last 30 days).</p>
+          <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">Recent Sessions</h3>
+          <div id="sessions-recent"><div class="spinner"></div></div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="loadMuxCost()">↺ Refresh</button>
-      </div>
-      <div id="mux-cost-content"><div class="spinner"></div></div>
-    </div>
-    <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin-bottom:24px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <div>
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">User Analytics</h2>
-        <p style="font-size:13px;color:var(--muted);">App usage and video watch time per user (last 30 days).</p>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="loadAnalytics()">↺ Refresh</button>
-    </div>
-    <div id="analytics-content"><div class="spinner"></div></div>
-  </section>
+      </section>
 
-  <section id="tab-sessions" class="section">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <div>
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">📱 App Sessions</h2>
-        <p style="font-size:13px;color:var(--muted);">Real-time app usage — who's online and what they're watching.</p>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="loadSessions()">↺ Refresh</button>
-    </div>
-    <div style="margin-bottom:32px;">
-      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse-green 2s infinite;"></span> Currently Active</h3>
-      <div id="sessions-active"><div class="spinner"></div></div>
-    </div>
-    <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin-bottom:24px;">
-    <div>
-      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;">Recent Sessions</h3>
-      <div id="sessions-recent"><div class="spinner"></div></div>
-    </div>
-  </section>
-
-  <section id="tab-feedback" class="section">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <div>
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">App Feedback</h2>
-        <p style="font-size:13px;color:var(--muted);">Suggestions submitted by users in the app.</p>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="loadFeedback()">↺ Refresh</button>
-    </div>
-    <div id="feedback-list"><div class="spinner"></div></div>
-  </section>
-
-  <section id="tab-settings" class="section">
-    <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">⚙️ App Settings</h2>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Manage force update, version gates, and app configuration.</p>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:700px;">
-      <!-- Force Update Card -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;grid-column:1/-1;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <h3 style="font-size:15px;font-weight:700;">🚀 Force Update</h3>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);">
-            <input type="checkbox" id="fu-enabled" style="accent-color:var(--accent);width:16px;height:16px;"> Enabled
-          </label>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="field">
-            <label>Minimum Version (blocking)</label>
-            <input id="fu-min-version" type="text" placeholder="e.g. 1.6.7">
-          </div>
-          <div class="field">
-            <label>Recommended Version (banner)</label>
-            <input id="fu-rec-version" type="text" placeholder="e.g. 1.6.8">
+      <!-- ── SETTINGS ────────────────────────────────── -->
+      <section id="tab-settings" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">App Settings</div>
+            <div class="page-subtitle">Force update gates, version management, and configuration</div>
           </div>
         </div>
 
-        <div class="field" style="margin-top:12px;">
-          <label>Custom Update Message (optional)</label>
-          <textarea id="fu-message" rows="2" placeholder="Leave empty for default message" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
+        <div class="settings-grid">
+          <!-- Force Update Card -->
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              Force Update
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:16px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);">
+                <input type="checkbox" id="fu-enabled" style="accent-color:var(--accent);width:16px;height:16px;"> Enabled
+              </label>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="field">
+                <label>Minimum Version (blocking)</label>
+                <input id="fu-min-version" type="text" placeholder="e.g. 1.6.7">
+              </div>
+              <div class="field">
+                <label>Recommended Version (banner)</label>
+                <input id="fu-rec-version" type="text" placeholder="e.g. 1.6.8">
+              </div>
+            </div>
+
+            <div class="field" style="margin-top:12px;">
+              <label>Custom Update Message (optional)</label>
+              <textarea id="fu-message" rows="2" placeholder="Leave empty for default message" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;margin-top:16px;">
+              <button class="btn btn-primary" id="fu-save-btn" onclick="saveForceUpdateConfig()">Save Changes</button>
+              <span id="fu-status" style="font-size:12px;color:var(--muted);"></span>
+            </div>
+
+            <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:8px;font-size:12px;color:var(--muted);">
+              Current app version: <strong style="color:var(--text);">1.6.7</strong> (build 62) &nbsp;·&nbsp; Changes take effect immediately via real-time listener.
+            </div>
+          </div>
+
+          <!-- Version Distribution -->
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10m-6 10V4M6 20v-6" stroke-linecap="round"/></svg>
+              Version Distribution
+            </div>
+            <div id="version-dist"><div class="spinner"></div></div>
+          </div>
         </div>
+      </section>
 
-        <div style="display:flex;align-items:center;gap:12px;margin-top:16px;">
-          <button class="btn btn-primary" id="fu-save-btn" onclick="saveForceUpdateConfig()">Save Changes</button>
-          <span id="fu-status" style="font-size:12px;color:var(--muted);"></span>
-        </div>
+    </main><!-- /main -->
+  </div><!-- /main-wrap -->
+</div><!-- /app-layout -->
 
-        <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:8px;font-size:12px;color:var(--muted);">
-          Current app version: <strong style="color:var(--text);">1.6.7</strong> (build 62) &nbsp;·&nbsp; Changes take effect immediately via real-time listener.
-        </div>
-      </div>
-
-      <!-- Version Distribution -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;grid-column:1/-1;">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;">📊 Version Distribution</h3>
-        <div id="version-dist"><div class="spinner"></div></div>
-      </div>
-    </div>
-  </section>
-
-</main>
-
-<!-- Thumbnail Modal -->
+<!-- ── Thumbnail Modal ────────────────────────────────── -->
 <div class="modal-backdrop" id="thumb-modal">
   <div class="modal" style="max-width:520px">
     <h3 id="thumb-modal-title">Set Thumbnail</h3>
@@ -599,7 +1542,9 @@
       <p>Click or drop an image here<br><span style="font-size:11px">JPEG or PNG recommended</span></p>
       <input type="file" id="thumb-file-input" accept="image/*" style="display:none">
     </div>
-    <div class="thumb-progress" id="thumb-progress"><div class="thumb-progress-fill" id="thumb-progress-fill" style="width:0%"></div></div>
+    <div class="thumb-progress" id="thumb-progress">
+      <div class="thumb-progress-fill" id="thumb-progress-fill" style="width:0%"></div>
+    </div>
     <p id="thumb-status" style="font-size:12px;color:var(--muted);margin-bottom:12px;"></p>
     <div class="modal-actions">
       <button class="btn btn-danger btn-sm" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove</button>
@@ -609,7 +1554,7 @@
   </div>
 </div>
 
-<!-- New Live Stream Modal -->
+<!-- ── New Live Stream Modal ──────────────────────────── -->
 <div class="modal-backdrop" id="new-stream-modal">
   <div class="modal">
     <h3>New Live Stream</h3>
@@ -618,7 +1563,7 @@
         <label>Stream Name</label>
         <input type="text" id="ns-title" placeholder="e.g. Sunday Morning Service">
       </div>
-      <div class="field">
+      <div class="field" style="margin-top:12px;">
         <label>Category</label>
         <select id="ns-category"></select>
       </div>
@@ -630,7 +1575,7 @@
   </div>
 </div>
 
-<!-- TRIM MODAL -->
+<!-- ── Trim Modal ─────────────────────────────────────── -->
 <div class="modal-backdrop" id="trim-modal" onclick="if(event.target===this)closeTrimModal()">
   <div class="modal" style="max-width:640px;">
     <h3 id="trim-modal-title">✂️ Trim Video</h3>
@@ -657,6 +1602,103 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- ================================================================
+     JAVASCRIPT (all original functions preserved exactly)
+     ================================================================ -->
+<script>
+// ── Sidebar / Nav ─────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  if (window.innerWidth <= 768) {
+    sb.classList.toggle('mobile-open');
+    document.getElementById('sidebar-overlay').classList.toggle('show', sb.classList.contains('mobile-open'));
+  } else {
+    sb.classList.toggle('collapsed');
+  }
+}
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('sidebar-overlay').classList.add('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
+function navTo(name, btn) {
+  showTab(name, btn);
+  // Update topbar title from button's data-label
+  if (btn) {
+    const label = btn.dataset.label || name;
+    const t = document.getElementById('topbar-title');
+    if (t) t.textContent = label;
+  }
+  // Close sidebar on mobile after navigation
+  if (window.innerWidth <= 768) closeSidebar();
+}
+
+// Dashboard loader
+async function loadDashboard() {
+  const statsEl = document.getElementById('dash-stats');
+  const recentEl = document.getElementById('dash-recent');
+  statsEl.innerHTML = '<div class="spinner"></div>';
+  recentEl.innerHTML = '<div class="spinner"></div>';
+  try {
+    const [assetsRes, usersRes] = await Promise.all([
+      fetch('/api/assets').then(r => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/users').then(r => r.json()).catch(() => ({ users: [] })),
+    ]);
+    const assets = assetsRes.data || [];
+    const users = usersRes.users || [];
+    const readyCount = assets.filter(a => a.status === 'ready').length;
+
+    statsEl.innerHTML = `
+      <div class="stat-card accent">
+        <div class="stat-value">${assets.length}</div>
+        <div class="stat-label">Total Videos</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-value">${readyCount}</div>
+        <div class="stat-label">Ready to Stream</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-value">${users.length}</div>
+        <div class="stat-label">Registered Users</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-value">${assets.length - readyCount}</div>
+        <div class="stat-label">Processing</div>
+      </div>`;
+
+    // Recent uploads
+    const recent = [...assets].sort((a, b) => +(b.created_at||0) - +(a.created_at||0)).slice(0, 5);
+    if (!recent.length) {
+      recentEl.innerHTML = '<p style="color:var(--muted);font-size:13px;">No videos yet.</p>';
+    } else {
+      recentEl.innerHTML = recent.map(a => {
+        const pid = a.playback_ids?.[0]?.id;
+        const pt = parsePassthrough(a.passthrough);
+        const thumb = pt.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=10` : '');
+        const title = a.meta?.title || 'Untitled';
+        const date = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
+        const statusColor = a.status === 'ready' ? 'var(--green)' : a.status === 'errored' ? 'var(--red)' : 'var(--accent2)';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          ${thumb ? `<img src="${thumb}" style="width:60px;height:34px;object-fit:cover;border-radius:5px;flex-shrink:0;">` : `<div style="width:60px;height:34px;background:var(--surface2);border-radius:5px;flex-shrink:0;"></div>`}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(title)}</div>
+            <div style="font-size:11px;color:var(--muted);">${date}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${statusColor};">${a.status}</span>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {
+    statsEl.innerHTML = `<p style="color:var(--red);">Error: ${escHtml(e.message)}</p>`;
+    recentEl.innerHTML = '';
+  }
+}
+</script>
 
 <script>
 // ── Login ──────────────────────────────────────────────────────────────
@@ -709,11 +1751,10 @@ async function applyUploadDoneActions() {
   let { title, assetId, playbackId } = lastUploadedAsset;
   closeUploadDoneModal();
 
-  // If we don't have an assetId yet (Mux creates it async), try to find it
   if ((!assetId || !playbackId) && (feat || notify)) {
     toast('Looking up the new asset... (Mux may need a moment)');
     for (let attempt = 0; attempt < 6; attempt++) {
-      await new Promise(r => setTimeout(r, 5000)); // wait 5s between attempts
+      await new Promise(r => setTimeout(r, 5000));
       try {
         const resp = await fetch('/api/assets');
         const data = await resp.json();
@@ -846,7 +1887,6 @@ async function uploadThumbnail() {
       body: JSON.stringify({ thumbnailUrl: url }),
     });
     fill.style.width = '100%';
-    // Update local cache + row UI
     const a = allAssets.find(x => x.id === thumbAssetId);
     if (a) {
       const pt = parsePassthrough(a.passthrough);
@@ -859,7 +1899,6 @@ async function uploadThumbnail() {
         const wrap = document.querySelector(`#arow-${thumbAssetId} .at-thumb-wrap`);
         if (wrap) { const b = document.createElement('span'); b.className='thumb-custom-badge'; b.textContent='CUSTOM'; wrap.appendChild(b); }
       }
-      // Update the camera button so next open passes the new URL (enables Remove button)
       const camBtn = document.querySelector(`#arow-${thumbAssetId} .at-cam-btn`);
       if (camBtn) {
         const pid = a.playback_ids?.[0]?.id || '';
@@ -945,13 +1984,13 @@ function showTab(name, btn) {
   if (name === 'analytics') { loadMuxCost(); loadAnalytics(); }
   if (name === 'sessions') loadSessions();
   if (name === 'settings') loadForceUpdateConfig();
+  if (name === 'dashboard') loadDashboard();
 }
 
 // ── Sessions ─────────────────────────────────────────────
 let _sessionsRefreshTimer = null;
 
 async function loadSessions() {
-  // Clear previous auto-refresh
   if (_sessionsRefreshTimer) { clearInterval(_sessionsRefreshTimer); _sessionsRefreshTimer = null; }
 
   const activeEl = document.getElementById('sessions-active');
@@ -965,7 +2004,6 @@ async function loadSessions() {
       fetch('/api/sessions/recent').then(r => r.json()),
     ]);
 
-    // Active sessions
     const active = activeRes.sessions || [];
     if (active.length === 0) {
       activeEl.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No active sessions right now.</div>';
@@ -975,7 +2013,7 @@ async function loadSessions() {
         const device = s.deviceName || s.platform || '';
         const started = s.startedAt ? new Date(s.startedAt) : null;
         const dur = started ? formatDuration((Date.now() - started.getTime()) / 1000) : '';
-        const watching = s.watching ? `<span style="color:var(--accent);font-weight:500;">▶ ${escHtml(s.watching)}</span>` : '<span style="color:var(--muted);">Browsing</span>';
+        const watching = s.watching ? `<span style="color:var(--accent2);font-weight:500;">▶ ${escHtml(s.watching)}</span>` : '<span style="color:var(--muted);">Browsing</span>';
         const watchDur = s.watchingSince ? ` <span style="color:var(--muted);font-size:12px;">(${formatDuration((Date.now() - new Date(s.watchingSince).getTime()) / 1000)})</span>` : '';
         return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;">
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse-green 2s infinite;"></span>
@@ -991,21 +2029,17 @@ async function loadSessions() {
       }).join('');
     }
 
-    // Recent sessions — grouped by user
     const recent = (recentRes.sessions || []).filter(s => s.endedAt);
     if (recent.length === 0) {
       recentEl.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No recent sessions.</div>';
     } else {
-      // Group by uid
       const grouped = {};
       for (const s of recent) {
         const key = s.uid || s.userEmail || 'unknown';
         if (!grouped[key]) grouped[key] = { name: s.userDisplayName || s.userEmail || s.uid?.slice(0,8) || 'Unknown', sessions: [] };
-        // Prefer the most descriptive name
         if (s.userDisplayName && grouped[key].name !== s.userDisplayName) grouped[key].name = s.userDisplayName;
         grouped[key].sessions.push(s);
       }
-      // Sort groups by most recent session first
       const groups = Object.values(grouped).sort((a, b) => {
         const aTime = Math.max(...a.sessions.map(s => new Date(s.startedAt || 0).getTime()));
         const bTime = Math.max(...b.sessions.map(s => new Date(s.startedAt || 0).getTime()));
@@ -1030,7 +2064,12 @@ async function loadSessions() {
           </div>
           <div class="sess-detail" style="display:none;border-top:1px solid var(--border);padding:8px 16px;">
             <table style="width:100%;font-size:12px;border-collapse:collapse;">
-              <thead><tr><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Device</th><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Platform</th><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Duration</th><th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Started</th></tr></thead>
+              <thead><tr>
+                <th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Device</th>
+                <th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Platform</th>
+                <th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Duration</th>
+                <th style="text-align:left;padding:4px 8px;color:var(--muted);font-weight:600;">Started</th>
+              </tr></thead>
               <tbody>${g.sessions.map(s => {
                 const dev = s.deviceName || '—';
                 const dur = s.durationSeconds ? formatDuration(s.durationSeconds) : '—';
@@ -1048,7 +2087,6 @@ async function loadSessions() {
     recentEl.innerHTML = '';
   }
 
-  // Auto-refresh every 15 seconds while tab is visible
   _sessionsRefreshTimer = setInterval(() => {
     const tab = document.getElementById('tab-sessions');
     if (tab && tab.classList.contains('active')) loadSessionsQuiet();
@@ -1069,7 +2107,7 @@ async function loadSessionsQuiet() {
         const device = s.deviceName || s.platform || '';
         const started = s.startedAt ? new Date(s.startedAt) : null;
         const dur = started ? formatDuration((Date.now() - started.getTime()) / 1000) : '';
-        const watching = s.watching ? `<span style="color:var(--accent);font-weight:500;">▶ ${escHtml(s.watching)}</span>` : '<span style="color:var(--muted);">Browsing</span>';
+        const watching = s.watching ? `<span style="color:var(--accent2);font-weight:500;">▶ ${escHtml(s.watching)}</span>` : '<span style="color:var(--muted);">Browsing</span>';
         const watchDur = s.watchingSince ? ` <span style="color:var(--muted);font-size:12px;">(${formatDuration((Date.now() - new Date(s.watchingSince).getTime()) / 1000)})</span>` : '';
         return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;">
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse-green 2s infinite;"></span>
@@ -1129,25 +2167,25 @@ async function loadMuxCost() {
     const c = d.costs;
     el.innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap">
-        <div style="flex:1;min-width:180px;background:rgba(255,255,255,.05);border-radius:12px;padding:20px;">
-          <div style="font-size:32px;font-weight:800;color:#5ac8fa">$${c.total.toFixed(2)}</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:4px">Estimated Total (30 days)</div>
+        <div class="stat-card accent" style="flex:1;min-width:180px;">
+          <div class="stat-value">$${c.total.toFixed(2)}</div>
+          <div class="stat-label">Estimated Total (30d)</div>
         </div>
-        <div style="flex:1;min-width:180px;background:rgba(255,255,255,.05);border-radius:12px;padding:20px;">
-          <div style="font-size:24px;font-weight:700;color:var(--text)">$${c.delivery.toFixed(2)}</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:4px">Delivery</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:8px">
+        <div class="stat-card" style="flex:1;min-width:180px;">
+          <div class="stat-value" style="font-size:22px;">$${c.delivery.toFixed(2)}</div>
+          <div class="stat-label">Delivery</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;">
             ${d.totalDeliveredMinutes.toLocaleString()} min streamed<br>
-            720p: ${d.delivery.min720.toLocaleString()} min &nbsp; 1080p: ${d.delivery.min1080.toLocaleString()} min &nbsp; 4K: ${d.delivery.min2160.toLocaleString()} min
+            720p: ${d.delivery.min720.toLocaleString()} &nbsp; 1080p: ${d.delivery.min1080.toLocaleString()} &nbsp; 4K: ${d.delivery.min2160.toLocaleString()}
           </div>
         </div>
-        <div style="flex:1;min-width:180px;background:rgba(255,255,255,.05);border-radius:12px;padding:20px;">
-          <div style="font-size:24px;font-weight:700;color:var(--text)">$${c.storage.toFixed(2)}</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:4px">Storage</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:8px">${d.storageHours} hrs of video &nbsp; ${d.assetCount} assets</div>
+        <div class="stat-card" style="flex:1;min-width:180px;">
+          <div class="stat-value" style="font-size:22px;">$${c.storage.toFixed(2)}</div>
+          <div class="stat-label">Storage</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;">${d.storageHours} hrs · ${d.assetCount} assets</div>
         </div>
       </div>
-      <p style="font-size:11px;color:var(--muted);margin-top:12px;">* Estimates based on Mux pay-as-you-go rates. Actual invoice may differ (encoding, live streaming, Data add-ons).</p>
+      <p style="font-size:11px;color:var(--muted);margin-top:12px;">* Estimates based on Mux pay-as-you-go rates. Actual invoice may differ.</p>
     `;
   } catch (e) {
     el.innerHTML = `<p style="color:var(--red)">Failed: ${e.message}</p>`;
@@ -1170,39 +2208,37 @@ async function loadAnalytics() {
     const sessions = sessRes.users || [];
     _analyticsSessions = sessions;
 
-    // Summary cards
     const totalViews = platforms.reduce((s, p) => s + (p.views || 0), 0);
     const totalWatchMs = platforms.reduce((s, p) => s + (p.total_watch_time || 0), 0);
     const totalSessionUsers = sessions.length;
 
     let html = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
-          <div style="font-size:28px;font-weight:700;color:var(--accent);">${totalViews}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Total Views (90d)</div>
+      <div class="stat-grid">
+        <div class="stat-card accent">
+          <div class="stat-value">${totalViews}</div>
+          <div class="stat-label">Total Views (90d)</div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
-          <div style="font-size:28px;font-weight:700;color:var(--green);">${formatTime(totalWatchMs / 1000)}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Total Watch Time (90d)</div>
+        <div class="stat-card green">
+          <div class="stat-value">${formatTime(totalWatchMs / 1000)}</div>
+          <div class="stat-label">Total Watch Time (90d)</div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
-          <div style="font-size:28px;font-weight:700;color:var(--accent2);">${videos.length}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Unique Videos Watched</div>
+        <div class="stat-card purple">
+          <div class="stat-value">${videos.length}</div>
+          <div class="stat-label">Unique Videos Watched</div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;">
-          <div style="font-size:28px;font-weight:700;color:var(--orange);">${totalSessionUsers}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">App Users (30d)*</div>
+        <div class="stat-card orange">
+          <div class="stat-value">${totalSessionUsers}</div>
+          <div class="stat-label">App Users (30d)*</div>
         </div>
       </div>`;
 
-    // Platform breakdown
     if (platforms.length) {
-      html += `<h3 style="font-size:15px;font-weight:700;margin-bottom:10px;">Views by Platform</h3>
+      html += `<h3 style="font-size:14px;font-weight:700;margin-bottom:10px;margin-top:24px;">Views by Platform</h3>
         <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
           ${platforms.map(p => {
             const color = p.field === 'tvOS' ? '#bf5af2' : p.field === 'iOS' ? '#5ac8fa' : '#30d158';
-            return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;min-width:140px;">
-              <span style="color:${color};font-weight:700;font-size:20px;">${p.views}</span>
+            return `<div class="card" style="min-width:140px;">
+              <span style="color:${color};font-weight:800;font-size:22px;">${p.views}</span>
               <span style="color:var(--muted);font-size:13px;margin-left:6px;">${escHtml(p.field)} views</span>
               <div style="font-size:11px;color:var(--muted);margin-top:4px;">${formatTime((p.total_watch_time||0)/1000)} watch time</div>
             </div>`;
@@ -1210,9 +2246,8 @@ async function loadAnalytics() {
         </div>`;
     }
 
-    // Top videos table
     if (videos.length) {
-      html += `<h3 style="font-size:15px;font-weight:700;margin-bottom:10px;">Most Watched Videos</h3>
+      html += `<h3 style="font-size:14px;font-weight:700;margin-bottom:10px;">Most Watched Videos</h3>
         <div class="upload-table-wrap">
           <table class="upload-table">
             <thead><tr><th>Video</th><th style="cursor:pointer" onclick="sortAnalyticsTable('video','views')">Views ↕</th><th style="cursor:pointer" onclick="sortAnalyticsTable('video','time')">Watch Time ↕</th></tr></thead>
@@ -1224,16 +2259,15 @@ async function loadAnalytics() {
               </tr>`).join('')}
             </tbody>
           </table>
-          <div style="margin-top:8px;display:flex;gap:8px;">
+          <div style="margin:8px;display:flex;gap:8px;">
             <button class="btn btn-ghost btn-sm" onclick="sortAnalyticsTable('video','views')">Sort by Views</button>
             <button class="btn btn-ghost btn-sm" onclick="sortAnalyticsTable('video','time')">Sort by Watch Time</button>
           </div>
         </div>`;
     }
 
-    // Per-user app sessions (requires app update)
     if (sessions.length) {
-      html += `<h3 style="font-size:15px;font-weight:700;margin:24px 0 10px;">App Sessions by User (30d)</h3>
+      html += `<h3 style="font-size:14px;font-weight:700;margin:24px 0 10px;">App Sessions by User (30d)</h3>
         <div class="upload-table-wrap">
           <table class="upload-table">
             <thead><tr><th>User</th><th>Platform</th><th style="cursor:pointer" onclick="sortAnalyticsTable('session','count')">Sessions ↕</th><th style="cursor:pointer" onclick="sortAnalyticsTable('session','time')">App Time ↕</th><th>Last Active</th></tr></thead>
@@ -1308,7 +2342,10 @@ async function loadFeedback() {
 
 function updateFeedbackBadge(count) {
   const btn = document.getElementById('tab-btn-feedback');
-  if (btn) btn.textContent = count > 0 ? `💬 Feedback (${count})` : '💬 Feedback';
+  if (btn) {
+    const label = btn.querySelector('.nav-label');
+    if (label) label.textContent = count > 0 ? `Feedback (${count})` : 'Feedback';
+  }
 }
 
 async function markFeedbackRead(id) {
@@ -1331,16 +2368,15 @@ function toggleUploadPanel() {
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
-// Wire inline drop zone to the same upload logic as the old standalone tab
+// Wire inline drop zone to the same upload logic
 const dropZoneInline = document.getElementById('drop-zone-inline');
 const fileInputInline = document.getElementById('file-input-inline');
 if (dropZoneInline) {
-  dropZoneInline.style.cssText += ';border:2px dashed var(--border);border-radius:10px;padding:24px 16px;cursor:pointer;transition:border-color .2s';
   dropZoneInline.addEventListener('click', () => fileInputInline.click());
-  dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); dropZoneInline.style.borderColor='var(--accent)'; });
-  dropZoneInline.addEventListener('dragleave', () => { dropZoneInline.style.borderColor='var(--border)'; });
+  dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); dropZoneInline.style.borderColor='var(--accent)'; dropZoneInline.style.background='var(--accent-dim)'; });
+  dropZoneInline.addEventListener('dragleave', () => { dropZoneInline.style.borderColor=''; dropZoneInline.style.background=''; });
   dropZoneInline.addEventListener('drop', e => {
-    e.preventDefault(); dropZoneInline.style.borderColor='var(--border)';
+    e.preventDefault(); dropZoneInline.style.borderColor=''; dropZoneInline.style.background='';
     handleFiles(e.dataTransfer.files);
   });
   fileInputInline.addEventListener('change', e => { handleFiles(e.target.files); fileInputInline.value=''; });
@@ -1367,6 +2403,8 @@ fileInput.addEventListener('change',   e => { addFiles(e.target.files); fileInpu
 function formatSize(b) { if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB'; if(b<1073741824) return (b/1048576).toFixed(1)+' MB'; return (b/1073741824).toFixed(2)+' GB'; }
 function slugToTitle(n) { return n.replace(/\.[^/.]+$/,'').replace(/[-_]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 
+function handleFiles(list) { addFiles(list); }
+
 function addFiles(list) {
   for (const file of list) {
     pendingFiles.push({ uid: Math.random().toString(36).slice(2), file, title: slugToTitle(file.name), passthrough: 'sermon', status: 'pending', progress: 0 });
@@ -1378,19 +2416,19 @@ function removeFile(uid) { pendingFiles = pendingFiles.filter(f => f.uid !== uid
 function clearDone() { pendingFiles = pendingFiles.filter(f => f.status !== 'done'); renderFileList(); }
 
 function renderFileList() {
-  // Support both inline panel and legacy standalone tab
   const wrap = document.getElementById('pending-wrap-inline') || document.getElementById('pending-wrap');
   const countEl = document.getElementById('pending-count-inline') || document.getElementById('pending-count');
   if (pendingFiles.length === 0) { wrap.style.display = 'none'; return; }
-  // Make sure upload panel is visible
   const panel = document.getElementById('upload-panel');
-  if (panel) panel.style.display = 'block';
+  if (panel && document.getElementById('tab-assets').classList.contains('active')) panel.style.display = 'block';
   wrap.style.display = 'block';
   countEl.textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
-  document.getElementById('file-list').innerHTML = `
+  // Render file list into the wrap that's currently active
+  const listTarget = wrap.querySelector('#file-list') || document.getElementById('file-list');
+  const listHtml = `
     <div class="upload-table-wrap">
     <table class="upload-table">
-      <thead><tr><th>File</th><th>Title</th><th>Passthrough</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>File</th><th>Title</th><th>Category</th><th>Status</th><th></th></tr></thead>
       <tbody>${pendingFiles.map(item => {
         const dis = item.status !== 'pending';
         return `<tr class="${item.status}" id="card-${item.uid}">
@@ -1402,6 +2440,8 @@ function renderFileList() {
         </tr>`;
       }).join('')}</tbody>
     </table></div>`;
+  if (listTarget) listTarget.innerHTML = listHtml;
+  else wrap.insertAdjacentHTML('beforeend', `<div id="file-list">${listHtml}</div>`);
 }
 
 function utBadge(item) {
@@ -1420,9 +2460,10 @@ function updateCard(item) {
 async function uploadAll() {
   const pending = pendingFiles.filter(f => f.status === 'pending');
   if (!pending.length) { toast('Nothing to upload!'); return; }
-  document.getElementById('upload-btn').disabled = true;
+  const uploadBtn = document.getElementById('upload-btn') || document.getElementById('upload-btn-inline');
+  if (uploadBtn) uploadBtn.disabled = true;
   for (const item of pending) await uploadOne(item);
-  document.getElementById('upload-btn').disabled = false;
+  if (uploadBtn) uploadBtn.disabled = false;
   toast('All uploads complete! 🎉');
 }
 
@@ -1443,8 +2484,6 @@ async function uploadOne(item) {
       xhr.send(item.file);
     });
     item.status = 'done'; item.progress = 100; updateCard(item);
-    // Show post-upload dialog (feature + notify)
-    // Asset is created async by Mux after upload — pass title for later lookup
     showUploadDoneModal(item.title, '', '');
   } catch (err) { console.error(err); item.status = 'error'; updateCard(item); }
 }
@@ -1530,7 +2569,7 @@ function sortAssets(assets) {
     } else if (field === 'status') {
       av = a.status || ''; bv = b.status || '';
       return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-    } else { // uploaded
+    } else {
       av = +(a.created_at || 0); bv = +(b.created_at || 0);
     }
     return dir === 'asc' ? av - bv : bv - av;
@@ -1547,13 +2586,11 @@ async function loadAssets() {
     const json = await assetsRes.json();
     allAssets = json.data || [];
     assetEdits = {};
-    // Merge watch metrics into assets
     if (metricsRes && metricsRes.ok) {
       const metrics = await metricsRes.json();
       const metricsMap = {};
       (metrics.data || []).forEach(m => { if (m.assetId) metricsMap[m.assetId] = m; });
       allAssets.forEach(a => {
-        // Match by playback ID (Mux Data returns playback IDs as video_id)
         const pid = a.playback_ids?.[0]?.id;
         const m = metricsMap[a.id] || (pid && metricsMap[pid]);
         if (m) { a._views = m.views || 0; a._watchMin = m.watchMinutes || 0; }
@@ -1606,11 +2643,9 @@ function assetRowHtml(a) {
   const title       = edits.title ?? (a.meta?.title || '');
   const pid         = a.playback_ids?.[0]?.id;
   const ptData      = parsePassthrough(a.passthrough);
-  // Extract just the category string for the dropdown (not the full JSON passthrough)
   const rawCat      = ptData.category || (!a.passthrough?.startsWith('{') ? a.passthrough : '') || '';
   const category    = edits.category ?? rawCat.trim();
   const customThumb = ptData.thumbnail || null;
-  // Use time=10 to match the iOS app's auto-thumbnail frame
   const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=10` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
@@ -1669,7 +2704,6 @@ async function saveAsset(id) {
     if (a) {
       if (!a.meta) a.meta = {};
       a.meta.title = edits.title;
-      // Preserve thumbnail and other JSON fields, only update category
       const pt = parsePassthrough(a.passthrough);
       pt.category = edits.category || '';
       a.passthrough = JSON.stringify(pt);
@@ -1716,7 +2750,6 @@ async function createStream() {
   } catch { toast('Failed ✕'); }
 }
 
-// ── Clipboard ─────────────────────────────────────────────
 // ── MP4 Download ──────────────────────────────────────────
 async function downloadMp4(assetId, title) {
   const btn = document.getElementById('dl-' + assetId);
@@ -1729,7 +2762,6 @@ async function downloadMp4(assetId, title) {
     } else if (data.status === 'errored') {
       toast('❌ MP4 generation failed for this asset');
     } else if (data.status === 'ready' && data.files?.length) {
-      // Open quality picker if multiple files
       if (data.files.length > 1) {
         openDownloadPicker(data.files, assetId, title);
       } else {
@@ -1746,7 +2778,6 @@ async function downloadMp4(assetId, title) {
 }
 
 function openDownloadPicker(files, assetId, title) {
-  // Sort by resolution descending
   files.sort((a, b) => (b.height || 0) - (a.height || 0));
   const labels = { 'high.mp4': 'High', 'medium.mp4': 'Medium', 'low.mp4': 'Low' };
   let html = `<h3>⬇️ Download: ${title || 'Video'}</h3>`;
@@ -1756,13 +2787,10 @@ function openDownloadPicker(files, assetId, title) {
     const quality = f.name.replace('.mp4','');
     const res = f.width && f.height ? `${f.width}×${f.height}` : '';
     const br = f.bitrate ? `${Math.round(f.bitrate / 1000)}kbps` : '';
-    html += `<button class="btn btn-primary" onclick="triggerProxyDownload('${assetId}','${quality}','${escAttr(title)}');closeModal('download-modal')">
-      ${label} ${res ? '(' + res + ')' : ''} ${br ? '· ' + br : ''}
-    </button>`;
+    html += `<button class="btn btn-primary" onclick="triggerProxyDownload('${assetId}','${quality}','${escAttr(title)}');closeModal('download-modal')">${label} ${res ? '(' + res + ')' : ''} ${br ? '· ' + br : ''}</button>`;
   }
   html += '</div>';
   html += '<div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal(\'download-modal\')">Cancel</button></div>';
-  // Reuse or create modal
   let modal = document.getElementById('download-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -1787,12 +2815,11 @@ function triggerProxyDownload(assetId, quality, title) {
   toast('Download started');
 }
 
-// Legacy fallback
 function triggerDownload(url, title) {
   triggerProxyDownload(url, 'high', title);
 }
 
-// ── Push Notifications ───────────────────────────────────────────
+// ── Push Notifications ────────────────────────────────────
 async function notifyUsers(assetId, title, playbackId) {
   if (!confirm(`Send push notification to ALL users?\n\n"🎥 ${title}"\n\nThis cannot be undone.`)) return;
   const btn = document.getElementById('notify-' + assetId);
@@ -1842,8 +2869,6 @@ function openTrimModal(assetId, playbackId, title, duration) {
   updateTrimDuration();
   updateTrimBar();
   document.getElementById('trim-modal').classList.add('open');
-
-  // Playhead tracking
   video.ontimeupdate = () => {
     const pct = duration > 0 ? (video.currentTime / duration) * 100 : 0;
     document.getElementById('trim-playhead').style.left = pct + '%';
@@ -1902,9 +2927,8 @@ function updateTrimDuration() {
   document.getElementById('trim-dur').textContent = `Duration: ${fmtTime(dur)}`;
 }
 
-// Drag handles on timeline
 (function initTrimDrag() {
-  let dragging = null; // 'left' or 'right'
+  let dragging = null;
   function onDown(e, which) {
     e.preventDefault(); dragging = which;
     document.addEventListener('mousemove', onMove);
@@ -1938,13 +2962,11 @@ function updateTrimDuration() {
     document.removeEventListener('touchmove', onMove);
     document.removeEventListener('touchend', onUp);
   }
-  // Attach after DOM ready
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('trim-handle-left')?.addEventListener('mousedown', e => onDown(e, 'left'));
     document.getElementById('trim-handle-right')?.addEventListener('mousedown', e => onDown(e, 'right'));
     document.getElementById('trim-handle-left')?.addEventListener('touchstart', e => onDown(e, 'left'), { passive: false });
     document.getElementById('trim-handle-right')?.addEventListener('touchstart', e => onDown(e, 'right'), { passive: false });
-    // Click on timeline to jump video
     document.getElementById('trim-timeline')?.addEventListener('click', e => {
       if (e.target.classList.contains('trim-handle') || e.target.closest('.trim-handle')) return;
       const rect = e.currentTarget.getBoundingClientRect();
@@ -1993,11 +3015,11 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function escAttr(s) { return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
 
 document.querySelectorAll('.modal-backdrop').forEach(el => {
-  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  el.addEventListener('click', e => { if (e.target === el && !el.classList.contains('hidden')) el.classList.remove('open'); });
 });
 
-// Check auth on page init — show login overlay if needed
-function initApp() { loadAssets(); }
+function initApp() { loadDashboard(); }
+
 (async () => {
   if (await checkAuth()) initApp();
 })();
@@ -2055,7 +3077,6 @@ function sortedUsers(users) {
 }
 
 async function loadUsers() {
-  // Load current PIN
   try {
     const r = await fetch('/api/config/pin');
     const d = await r.json();
@@ -2064,8 +3085,6 @@ async function loadUsers() {
     const st = document.getElementById('pin-status');
     if (st) st.textContent = d.pin ? `Current: ${d.pin}` : 'No PIN set';
   } catch {}
-
-  // Then load users
 
   document.getElementById('users-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
   try {
@@ -2188,7 +3207,6 @@ async function setUserPrivateAccess(uid, access) {
 }
 
 // ── Featured tab ─────────────────────────────────────
-// Also add Firebase Firestore compat SDK dynamically (lazy)
 const FIRESTORE_SDK = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js';
 let firestoreReady = false;
 function loadFirestore() {
@@ -2203,8 +3221,8 @@ function loadFirestore() {
 
 const FB_PROJECT = 'gospel-outreach-tv';
 const FEAT_DOC = `config/featured`;
-let featuredIds = [];   // current saved order from Firestore
-let featuredDraft = []; // working list (all assets, sorted by featured-first)
+let featuredIds = [];
+let featuredDraft = [];
 
 async function getFirestore() {
   await loadFirestore();
@@ -2216,19 +3234,15 @@ async function loadFeatured() {
   const el = document.getElementById('featured-content');
   el.innerHTML = '<div class="spinner"></div>';
   try {
-    // Load assets and current featured list in parallel
     const [assetsResp, db] = await Promise.all([fetch('/api/assets'), getFirestore()]);
     const assetsData = await assetsResp.json();
     const assets = assetsData.data || [];
 
-    // Ensure anonymous auth
     if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
 
-    // Fetch featured doc
     const snap = await db.collection('config').doc('featured').get();
     featuredIds = snap.exists ? (snap.data()?.ids || []) : [];
 
-    // Build draft: featured first (in order), then rest alphabetically
     const featSet = new Set(featuredIds);
     const featAssets = featuredIds.map(id => assets.find(a => a.id === id)).filter(Boolean);
     const restAssets = assets.filter(a => !featSet.has(a.id)).sort((a,b) => (a.meta?.title||'').localeCompare(b.meta?.title||''));
@@ -2268,7 +3282,6 @@ function renderFeatured(el) {
 function featToggle(id, checked) {
   if (checked) {
     if (!featuredIds.includes(id)) featuredIds.push(id);
-    // move to top of draft list
     const idx = featuredDraft.findIndex(a => a.id === id);
     if (idx > 0) { const [a] = featuredDraft.splice(idx, 1); featuredDraft.unshift(a); }
   } else {
@@ -2277,7 +3290,6 @@ function featToggle(id, checked) {
   renderFeatured(document.getElementById('featured-content'));
 }
 
-// Drag-to-reorder
 let dragSrcId = null;
 function featDragStart(e) {
   dragSrcId = e.currentTarget.dataset.id;
@@ -2300,7 +3312,6 @@ function featDrop(e) {
   if (srcIdx < 0 || tgtIdx < 0) return;
   const [moved] = featuredDraft.splice(srcIdx, 1);
   featuredDraft.splice(tgtIdx, 0, moved);
-  // Rebuild featuredIds to match new order (only featured items)
   const featSet = new Set(featuredIds);
   featuredIds = featuredDraft.filter(a => featSet.has(a.id)).map(a => a.id);
   renderFeatured(document.getElementById('featured-content'));
@@ -2318,12 +3329,11 @@ async function saveFeatured() {
   } catch(err) {
     toast('Save failed: ' + err.message);
   } finally {
-    btn.disabled = false; btn.textContent = '\uD83D\uDCBE Save Order';
+    btn.disabled = false; btn.textContent = '💾 Save Order';
   }
 }
 
-// ── Force Update Settings ────────────────────────────────────────────────
-
+// ── Force Update Settings ─────────────────────────────────
 async function loadForceUpdateConfig() {
   try {
     const res = await fetch('/api/config/force-update');
@@ -2335,8 +3345,6 @@ async function loadForceUpdateConfig() {
   } catch (e) {
     console.error('Failed to load force update config:', e);
   }
-
-  // Also load version distribution
   loadVersionDistribution();
 }
 
