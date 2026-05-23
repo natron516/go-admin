@@ -107,6 +107,8 @@ app.use((req, res, next) => {
   if (req.path === '/api/fcm-token' && req.method === 'POST') return next();
   if (req.path === '/cast-receiver.html') return next();
   if (req.path === '/api/login') return next();
+  // Let the HTML page load publicly — login is handled client-side
+  if (!req.path.startsWith('/api/')) return next();
   // Session cookie check — valid cookie = authenticated, no popup ever
   if (verifySessionToken(req.cookies[SESSION_COOKIE])) return next();
   // Fallback: silent basic auth (no WWW-Authenticate header = no browser popup)
