@@ -295,6 +295,25 @@
     .assets-toolbar { flex-wrap: wrap; }
     .assets-toolbar input { min-width: 140px; }
   }
+  /* Login overlay */
+  #login-overlay { position:fixed; inset:0; z-index:9999; background:var(--bg); display:flex; align-items:center; justify-content:center; }
+  #login-overlay.hidden { display:none; }
+  .login-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px 36px; width:340px; text-align:center; box-shadow:var(--shadow); }
+  .login-box h2 { font-size:22px; margin-bottom:6px; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .login-box p { color:var(--muted); font-size:13px; margin-bottom:24px; }
+  .login-box input { width:100%; padding:11px 14px; background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; margin-bottom:12px; outline:none; }
+  .login-box input:focus { border-color:var(--accent); }
+  .login-box .btn { width:100%; justify-content:center; margin-top:8px; }
+  .login-box .login-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+
+  /* Post-upload dialog */
+  .modal-backdrop { position:fixed; inset:0; z-index:500; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
+  .modal-backdrop.hidden { display:none; }
+  .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px 32px; width:420px; max-width:90vw; box-shadow:var(--shadow); }
+  .modal-box h3 { font-size:18px; font-weight:700; margin-bottom:16px; }
+  .modal-box label { display:flex; align-items:center; gap:10px; padding:10px 0; font-size:14px; cursor:pointer; }
+  .modal-box label input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
+  .modal-box .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
 </style>
 <!-- Firebase (compat — works with onclick handlers) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -302,6 +321,32 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 </head>
 <body>
+
+<!-- Login overlay -->
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>GO Admin</h2>
+    <p>Sign in to manage videos</p>
+    <input type="text" id="login-user" placeholder="Username" autocomplete="username">
+    <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+    <button class="btn btn-primary" onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="login-error">Invalid credentials</div>
+  </div>
+</div>
+
+<!-- Post-upload dialog -->
+<div id="upload-done-modal" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <h3>Video Uploaded!</h3>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:16px" id="upload-done-title"></p>
+    <label><input type="checkbox" id="upload-feat-check"> Add to Featured section (top spot)</label>
+    <label><input type="checkbox" id="upload-notify-check" checked> Send push notification to users</label>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeUploadDoneModal()">Skip</button>
+      <button class="btn btn-primary" onclick="applyUploadDoneActions()">Apply</button>
+    </div>
+  </div>
+</div>
 
 <header>
   <div class="logo">🎬 GO Admin</div>
@@ -612,6 +657,106 @@
 </div>
 
 <div id="toast"></div>
+
+<script>
+// ── Login ──────────────────────────────────────────────────────────────
+async function checkAuth() {
+  try {
+    const r = await fetch('/api/assets', { credentials: 'same-origin' });
+    if (r.ok) { document.getElementById('login-overlay').classList.add('hidden'); return true; }
+  } catch {}
+  document.getElementById('login-overlay').classList.remove('hidden');
+  return false;
+}
+async function doLogin() {
+  const user = document.getElementById('login-user').value;
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass }), credentials: 'same-origin'
+    });
+    if (r.ok) {
+      document.getElementById('login-overlay').classList.add('hidden');
+      initApp();
+    } else {
+      errEl.style.display = 'block';
+    }
+  } catch { errEl.style.display = 'block'; }
+}
+document.getElementById('login-pass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('login-user')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-pass').focus(); });
+
+// ── Post-Upload Dialog ────────────────────────────────────────────────
+let lastUploadedAsset = null;
+function showUploadDoneModal(title, assetId, playbackId) {
+  lastUploadedAsset = { title, assetId, playbackId };
+  document.getElementById('upload-done-title').textContent = title || 'Untitled Video';
+  document.getElementById('upload-feat-check').checked = false;
+  document.getElementById('upload-notify-check').checked = true;
+  document.getElementById('upload-done-modal').classList.remove('hidden');
+}
+function closeUploadDoneModal() {
+  document.getElementById('upload-done-modal').classList.add('hidden');
+  lastUploadedAsset = null;
+}
+async function applyUploadDoneActions() {
+  if (!lastUploadedAsset) return;
+  const feat = document.getElementById('upload-feat-check').checked;
+  const notify = document.getElementById('upload-notify-check').checked;
+  let { title, assetId, playbackId } = lastUploadedAsset;
+  closeUploadDoneModal();
+
+  // If we don't have an assetId yet (Mux creates it async), try to find it
+  if ((!assetId || !playbackId) && (feat || notify)) {
+    toast('Looking up the new asset... (Mux may need a moment)');
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await new Promise(r => setTimeout(r, 5000)); // wait 5s between attempts
+      try {
+        const resp = await fetch('/api/assets');
+        const data = await resp.json();
+        const match = (data.data || []).find(a => (a.meta?.title || '') === title);
+        if (match) {
+          assetId = match.id;
+          playbackId = match.playback_ids?.[0]?.id || '';
+          break;
+        }
+      } catch {}
+    }
+    if (!assetId) { toast('Could not find the asset yet. Try featuring/notifying from the Assets tab.'); return; }
+  }
+
+  if (feat) {
+    try {
+      const r = await fetch('/api/featured');
+      const { featured } = await r.json();
+      const newFeatured = [assetId, ...featured.filter(id => id !== assetId)].slice(0, featured.length || 8);
+      await fetch('/api/featured', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featured: newFeatured })
+      });
+      toast('Added to Featured!');
+    } catch (e) { console.error('Feature failed:', e); toast('Failed to feature: ' + e.message); }
+  }
+
+  if (notify) {
+    try {
+      await fetch('/api/notify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'New Video!',
+          body: title || 'A new video has been added',
+          assetId: assetId || '',
+          playbackId: playbackId || ''
+        })
+      });
+      toast('Push notification sent!');
+    } catch (e) { console.error('Notify failed:', e); toast('Failed to notify: ' + e.message); }
+  }
+}
+</script>
 
 <script>
 // ── Firebase Storage ────────────────────────────────────
@@ -1298,6 +1443,9 @@ async function uploadOne(item) {
       xhr.send(item.file);
     });
     item.status = 'done'; item.progress = 100; updateCard(item);
+    // Show post-upload dialog (feature + notify)
+    // Asset is created async by Mux after upload — pass title for later lookup
+    showUploadDoneModal(item.title, '', '');
   } catch (err) { console.error(err); item.status = 'error'; updateCard(item); }
 }
 
@@ -1848,8 +1996,11 @@ document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
 
-// Load assets on page init (Assets is now the default tab)
-loadAssets();
+// Check auth on page init — show login overlay if needed
+function initApp() { loadAssets(); }
+(async () => {
+  if (await checkAuth()) initApp();
+})();
 
 // ── Users tab ─────────────────────────────────────────
 let allUsers = [];

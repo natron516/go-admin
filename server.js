@@ -1,5 +1,6 @@
 const express = require('express');
 const basicAuth = require('express-basic-auth');
+const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const sharp = require('sharp');
 const admin = require('firebase-admin');
@@ -58,20 +59,58 @@ async function fsDelete(collection, docId) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-// Two auth modes:
-//   challengeAuth — sends WWW-Authenticate header → browser shows login popup (HTML pages only)
-//   silentAuth   — returns 401 JSON without WWW-Authenticate → no second popup (API routes)
-const challengeAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' });
+// Session cookie auth: once you log in, a cookie keeps you authenticated.
+// No more repeated browser basic-auth popups.
+const crypto = require('crypto');
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+const SESSION_COOKIE = 'go_admin_session';
+const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function makeSessionToken() {
+  const payload = JSON.stringify({ user: ADMIN_USER, exp: Date.now() + SESSION_MAX_AGE });
+  const hmac = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  return Buffer.from(payload).toString('base64') + '.' + hmac;
+}
+
+function verifySessionToken(token) {
+  if (!token) return false;
+  const [payloadB64, sig] = token.split('.');
+  if (!payloadB64 || !sig) return false;
+  try {
+    const payload = Buffer.from(payloadB64, 'base64').toString();
+    const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+    if (sig !== expected) return false;
+    const { exp } = JSON.parse(payload);
+    return Date.now() < exp;
+  } catch { return false; }
+}
+
+app.use(cookieParser());
+
+// Login endpoint — accepts JSON credentials, sets session cookie
+app.post('/api/login', express.json(), (req, res) => {
+  const { username, password } = req.body || {};
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+    const token = makeSessionToken();
+    res.cookie(SESSION_COOKIE, token, { httpOnly: true, maxAge: SESSION_MAX_AGE, sameSite: 'lax' });
+    return res.json({ ok: true });
+  }
+  res.status(401).json({ error: 'Invalid credentials' });
+});
+
+// Auth middleware — check session cookie first, fall back to basic auth (no popup)
 const silentAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: false, unauthorizedResponse: () => 'Unauthorized' });
 app.use((req, res, next) => {
+  // Public routes
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
-  if (req.path === '/webhooks/mux') return next(); // Mux webhooks bypass basic auth
-  if (req.path === '/api/fcm-token' && req.method === 'POST') return next(); // App reports FCM token without auth
-  if (req.path === '/cast-receiver.html') return next(); // Cast receiver must be publicly accessible
-  // API routes: silent auth (no browser popup on 401)
-  if (req.path.startsWith('/api/')) return silentAuth(req, res, next);
-  // HTML/static: challenge auth (browser login popup)
-  challengeAuth(req, res, next);
+  if (req.path === '/webhooks/mux') return next();
+  if (req.path === '/api/fcm-token' && req.method === 'POST') return next();
+  if (req.path === '/cast-receiver.html') return next();
+  if (req.path === '/api/login') return next();
+  // Session cookie check — valid cookie = authenticated, no popup ever
+  if (verifySessionToken(req.cookies[SESSION_COOKIE])) return next();
+  // Fallback: silent basic auth (no WWW-Authenticate header = no browser popup)
+  silentAuth(req, res, next);
 });
 
 app.use(express.json());
@@ -1055,6 +1094,26 @@ app.post('/api/notify', async (req, res) => {
     console.error('[notify] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Featured API ─────────────────────────────────────────
+app.get('/api/featured', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const doc = await admin.firestore().collection('config').doc('featured').get();
+    const ids = doc.exists ? (doc.data()?.ids || []) : [];
+    res.json({ featured: ids });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/featured', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { featured } = req.body;
+    if (!Array.isArray(featured)) return res.status(400).json({ error: 'featured must be an array' });
+    await admin.firestore().collection('config').doc('featured').set({ ids: featured }, { merge: true });
+    res.json({ ok: true, count: featured.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));
