@@ -1045,14 +1045,17 @@ tr.dirty .at-save { display: inline-flex !important; }
     border-radius: 10px;
     margin-bottom: 8px;
     padding: 10px;
+    max-width: calc(100vw - 32px);
+    overflow: hidden;
+    box-sizing: border-box;
   }
   .assets-table tbody tr.dirty { background: rgba(245,158,11,.05); }
   .assets-table tbody tr.saved { background: rgba(34,197,94,.05); }
   .assets-table td { display: none; padding: 0; border: none; }
-  .td-card { display: block !important; }
+  .td-card { display: block !important; max-width: 100%; overflow: hidden; }
   .card-title-row .at-title-text { font-size: 14px; }
-  .at-thumb { width: 150px; height: 84px; }
-  .at-placeholder { width: 150px; height: 84px; }
+  .at-thumb { width: 120px; height: 68px; }
+  .at-placeholder { width: 120px; height: 68px; }
   .card-body-row { gap: 10px; }
   .card-actions .btn { padding: 4px 8px; font-size: 11px; }
   .assets-toolbar { flex-wrap: wrap; }
