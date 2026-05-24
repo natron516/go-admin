@@ -159,7 +159,7 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
 
   res.sendStatus(200);
 });
-app.use(express.static('public'));
+app.use(express.static('public', { maxAge: 0, etag: false }));
 
 // ── Mux helper ────────────────────────────────────────────────────────────────
 async function mux(method, path, body) {
