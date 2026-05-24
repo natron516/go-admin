@@ -2737,8 +2737,6 @@ function renderAssets(assets) {
     <tbody>${assets.map(a => assetRowHtml(a)).join('')}</tbody>
   </table>
   </div>`;
-  // Restore any in-progress download indicators
-  restoreDlState();
 }
 
 function assetRowHtml(a) {
@@ -2787,7 +2785,7 @@ function assetRowHtml(a) {
             <div class="card-meta">${uploaded}</div>
             <div class="card-actions">
               <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button>
-              <button class="btn btn-ghost btn-sm" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="Download MP4" id="dl-${a.id}">⬇️</button>
+              <button class="btn btn-ghost btn-sm" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'Download MP4' : a.mp4_support === 'standard' ? 'MP4 generating...' : 'Generate MP4'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '⬇️' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
               ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
               ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
               <button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button>
@@ -2891,42 +2889,19 @@ async function createStream() {
 }
 
 // ── MP4 Download ──────────────────────────────────────────
-// Track which assets are being prepared (persisted in sessionStorage)
-const _dlPolling = {};
-function saveDlState() {
-  const state = {};
-  for (const [id, info] of Object.entries(_dlPolling)) {
-    state[id] = { title: info.title, started: info.started || Date.now() };
-  }
-  sessionStorage.setItem('go_dl_polling', JSON.stringify(state));
-}
-function restoreDlState() {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem('go_dl_polling') || '{}');
-    const now = Date.now();
-    for (const [id, info] of Object.entries(saved)) {
-      // Only resume if started less than 5 min ago
-      if (now - (info.started || 0) < 5 * 60 * 1000) {
-        _dlPolling[id] = { title: info.title, attempt: 0, started: info.started };
-        const btn = document.getElementById('dl-' + id);
-        if (btn) { btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = true; btn.title = 'Generating MP4...'; }
-        setTimeout(() => pollMp4(id), 3000);
-      }
-    }
-  } catch {}
-}
+// Download state - no client tracking needed, reads from Mux asset data
 
 async function startDownloadMp4(assetId, title) {
   const btn = document.getElementById('dl-' + assetId);
   if (!btn) return;
-  btn.textContent = '⏳'; btn.disabled = true;
+  btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = true;
   try {
     const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
     if (!r.ok) throw new Error('Server returned ' + r.status);
     const data = await r.json();
     if (data.status === 'ready' && data.files && data.files.length) {
       btn.textContent = '✅'; btn.disabled = false;
-      delete _dlPolling[assetId];
+      toast('Downloading ' + (title || 'video') + '...');
       if (data.files.length > 1) {
         openDownloadPicker(data.files, assetId, title);
       } else {
@@ -2934,14 +2909,9 @@ async function startDownloadMp4(assetId, title) {
       }
       setTimeout(() => { btn.textContent = '⬇️'; }, 3000);
     } else if (data.status === 'preparing') {
-      // Start polling
-      btn.innerHTML = '<span class="dl-pulse">⏳</span>';
-      btn.disabled = true;
-      btn.title = 'Generating MP4...';
-      toast('Generating MP4 — will auto-download when ready (1-3 min)');
-      _dlPolling[assetId] = { title, attempt: 0, started: Date.now() };
-      saveDlState();
-      setTimeout(() => pollMp4(assetId), 15000);
+      toast('Generating MP4 — this takes 1-3 min. Button will pulse until ready.');
+      btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = true;
+      pollMp4(assetId, title, 0);
     } else if (data.status === 'errored') {
       btn.textContent = '❌'; btn.disabled = false;
       toast('MP4 generation failed.');
@@ -2956,35 +2926,32 @@ async function startDownloadMp4(assetId, title) {
   }
 }
 
-async function pollMp4(assetId) {
-  const info = _dlPolling[assetId];
-  if (!info) return;
-  const btn = document.getElementById('dl-' + assetId);
+async function pollMp4(assetId, title, attempt) {
+  if (attempt >= 20) {
+    const btn = document.getElementById('dl-' + assetId);
+    if (btn) { btn.textContent = '⬇️'; btn.disabled = false; }
+    toast('MP4 taking too long. Try download again later.');
+    return;
+  }
+  await new Promise(r => setTimeout(r, 15000));
   try {
     const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
     const data = await r.json();
     if (data.status === 'ready' && data.files && data.files.length) {
-      delete _dlPolling[assetId]; saveDlState();
+      const btn = document.getElementById('dl-' + assetId);
       if (btn) { btn.textContent = '✅'; btn.disabled = false; }
-      toast('MP4 ready — downloading ' + (info.title || 'video'));
+      toast('MP4 ready — downloading ' + (title || 'video'));
       if (data.files.length > 1) {
-        openDownloadPicker(data.files, assetId, info.title);
+        openDownloadPicker(data.files, assetId, title);
       } else {
-        triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), info.title);
+        triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), title);
       }
-      setTimeout(() => { if (btn) btn.textContent = '⬇️'; }, 3000);
+      // Refresh assets to update the button state permanently
+      setTimeout(loadAssets, 2000);
       return;
     }
   } catch {}
-  // Still preparing — keep polling (up to 12 attempts = 3 min)
-  info.attempt++;
-  if (info.attempt < 12) {
-    setTimeout(() => pollMp4(assetId), 15000);
-  } else {
-    delete _dlPolling[assetId]; saveDlState();
-    if (btn) { btn.textContent = '⬇️'; btn.disabled = false; }
-    toast('MP4 is taking longer than expected. Try again in a minute.');
-  }
+  pollMp4(assetId, title, attempt + 1);
 }
 
 // Legacy alias
@@ -3231,7 +3198,7 @@ document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el && !el.classList.contains('hidden')) el.classList.remove('open'); });
 });
 
-function initApp() { loadDashboard(); restoreDlState(); }
+function initApp() { loadDashboard(); }
 
 (async () => {
   if (await checkAuth()) initApp();
