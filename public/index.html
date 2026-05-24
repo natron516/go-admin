@@ -2078,7 +2078,7 @@ function showTab(name, btn) {
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
   if (name === 'live')     loadLive();
-  if (name === 'assets')   { loadAssets(); setTimeout(restoreDlState, 1000); }
+  if (name === 'assets')   loadAssets();
   if (name === 'featured') loadFeatured();
   if (name === 'users')    loadUsers();
   if (name === 'feedback') loadFeedback();
@@ -2737,6 +2737,8 @@ function renderAssets(assets) {
     <tbody>${assets.map(a => assetRowHtml(a)).join('')}</tbody>
   </table>
   </div>`;
+  // Restore any in-progress download indicators
+  restoreDlState();
 }
 
 function assetRowHtml(a) {
