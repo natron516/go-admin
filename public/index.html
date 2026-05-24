@@ -1705,11 +1705,28 @@ async function loadDashboard() {
 
 <script>
 // ── Login ──────────────────────────────────────────────────────────────
+// Override global fetch to include basic auth header on all /api/ requests
+let _authHeader = null;
+const _origFetch = window.fetch;
+window.fetch = function(url, opts = {}) {
+  if (_authHeader && typeof url === 'string' && url.startsWith('/api/')) {
+    opts.headers = { ...(opts.headers || {}), 'Authorization': _authHeader };
+  }
+  return _origFetch.call(this, url, opts);
+};
+
 async function checkAuth() {
-  try {
-    const r = await fetch('/api/assets', { credentials: 'same-origin' });
-    if (r.ok) { document.getElementById('login-overlay').classList.add('hidden'); return true; }
-  } catch {}
+  // Check if we have saved credentials in sessionStorage
+  const saved = sessionStorage.getItem('go_admin_auth');
+  if (saved) {
+    _authHeader = saved;
+    try {
+      const r = await fetch('/api/assets');
+      if (r.ok) { document.getElementById('login-overlay').classList.add('hidden'); return true; }
+    } catch {}
+    _authHeader = null;
+    sessionStorage.removeItem('go_admin_auth');
+  }
   document.getElementById('login-overlay').classList.remove('hidden');
   return false;
 }
@@ -1718,18 +1735,19 @@ async function doLogin() {
   const pass = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
+  // Set basic auth header for all subsequent API calls
+  _authHeader = 'Basic ' + btoa(user + ':' + pass);
   try {
-    const r = await fetch('/api/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user, password: pass }), credentials: 'same-origin'
-    });
+    const r = await fetch('/api/assets');
     if (r.ok) {
+      sessionStorage.setItem('go_admin_auth', _authHeader);
       document.getElementById('login-overlay').classList.add('hidden');
       initApp();
     } else {
+      _authHeader = null;
       errEl.style.display = 'block';
     }
-  } catch { errEl.style.display = 'block'; }
+  } catch { _authHeader = null; errEl.style.display = 'block'; }
 }
 document.getElementById('login-pass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('login-user')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-pass').focus(); });

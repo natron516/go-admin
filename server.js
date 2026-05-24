@@ -67,6 +67,8 @@ app.use((req, res, next) => {
   if (req.path === '/webhooks/mux') return next();
   if (req.path === '/api/fcm-token' && req.method === 'POST') return next();
   if (req.path === '/cast-receiver.html') return next();
+  // Login endpoint: public (no auth needed to log in)
+  if (req.path === '/api/login' && req.method === 'POST') return next();
   // HTML/static: serve publicly (login overlay handles auth)
   if (!req.path.startsWith('/api/')) return next();
   // API routes: silent basic auth (no WWW-Authenticate = no popup)
@@ -74,6 +76,15 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+// Login endpoint for the v2 client-side login overlay
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+    return res.json({ ok: true });
+  }
+  res.status(401).json({ error: 'Invalid credentials' });
+});
 
 // ── Mux Webhook ───────────────────────────────────────────────────────────────
 // Receives events from Mux. Register this URL in the Mux dashboard:
