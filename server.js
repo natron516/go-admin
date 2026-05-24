@@ -58,20 +58,19 @@ async function fsDelete(collection, docId) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-// Two auth modes:
-//   challengeAuth — sends WWW-Authenticate header → browser shows login popup (HTML pages only)
-//   silentAuth   — returns 401 JSON without WWW-Authenticate → no second popup (API routes)
-const challengeAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: true, realm: 'GO Admin' });
+// HTML/static pages served publicly — login handled client-side.
+// Only /api/* routes require auth (silent, no browser popup).
 const silentAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: false, unauthorizedResponse: () => 'Unauthorized' });
 app.use((req, res, next) => {
+  // Public routes
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
-  if (req.path === '/webhooks/mux') return next(); // Mux webhooks bypass basic auth
-  if (req.path === '/api/fcm-token' && req.method === 'POST') return next(); // App reports FCM token without auth
-  if (req.path === '/cast-receiver.html') return next(); // Cast receiver must be publicly accessible
-  // API routes: silent auth (no browser popup on 401)
-  if (req.path.startsWith('/api/')) return silentAuth(req, res, next);
-  // HTML/static: challenge auth (browser login popup)
-  challengeAuth(req, res, next);
+  if (req.path === '/webhooks/mux') return next();
+  if (req.path === '/api/fcm-token' && req.method === 'POST') return next();
+  if (req.path === '/cast-receiver.html') return next();
+  // HTML/static: serve publicly (login overlay handles auth)
+  if (!req.path.startsWith('/api/')) return next();
+  // API routes: silent basic auth (no WWW-Authenticate = no popup)
+  silentAuth(req, res, next);
 });
 
 app.use(express.json());
