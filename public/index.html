@@ -1093,8 +1093,8 @@ tr.dirty .at-save { display: inline-flex !important; }
   .users-cards { display: block !important; }
 }
 
-/* iPad / mid-size tablets also get cards */
-@media (max-width: 1100px) {
+/* Tablets and smaller get user cards */
+@media (max-width: 1400px) {
   .users-table-wrap { display: none !important; }
   .users-cards { display: block !important; }
 }
@@ -1479,7 +1479,7 @@ tr.dirty .at-save { display: inline-flex !important; }
         </div>
 
         <input class="users-search" type="search" placeholder="🔍 Search name or email…" oninput="filterUsers(this.value)" id="user-search">
-        <div class="users-table-wrap assets-wrap">
+        <div class="users-table-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
           <table class="users-table">
             <thead><tr>
               <th>User</th>
