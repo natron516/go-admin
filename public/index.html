@@ -1751,7 +1751,8 @@ async function loadDashboard() {
       recentEl.innerHTML = recent.map(a => {
         const pid = a.playback_ids?.[0]?.id;
         const pt = parsePassthrough(a.passthrough);
-        const thumb = pt.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=10` : '');
+        const thumbTime = pt.thumbnail_time || 10;
+        const thumb = pt.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=${thumbTime}` : '');
         const title = a.meta?.title || 'Untitled';
         const date = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
         const statusColor = a.status === 'ready' ? 'var(--green)' : a.status === 'errored' ? 'var(--red)' : 'var(--accent2)';
@@ -1928,7 +1929,10 @@ function openThumbModal(assetId, title, playbackId, currentThumb) {
   const modal = document.getElementById('thumb-modal');
   document.getElementById('thumb-modal-title').textContent = `Thumbnail — ${title || 'Untitled'}`;
   const preview = document.getElementById('thumb-preview');
-  const fallback = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=10` : '';
+  const a = allAssets.find(x => x.id === assetId);
+  const _pt = a ? parsePassthrough(a.passthrough) : {};
+  const thumbTime = _pt.thumbnail_time || 10;
+  const fallback = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=${thumbTime}` : '';
   const showUrl = currentThumb || fallback;
   if (showUrl) { preview.src = showUrl; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
@@ -2037,7 +2041,7 @@ async function removeThumbnail() {
       const pid = a.playback_ids?.[0]?.id;
       if (pid) {
         const img = document.querySelector(`#arow-${thumbAssetId} .at-thumb`);
-        if (img) img.src = `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=10`;
+        if (img) img.src = `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=10`; // reset uses default
       }
       const badge = document.querySelector(`#arow-${thumbAssetId} .thumb-custom-badge`);
       if (badge) badge.remove();
@@ -2747,7 +2751,8 @@ function assetRowHtml(a) {
   const rawCat      = ptData.category || (!a.passthrough?.startsWith('{') ? a.passthrough : '') || '';
   const category    = edits.category ?? rawCat.trim();
   const customThumb = ptData.thumbnail || null;
-  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=480&time=10` : '');
+  const thumbTime   = ptData.thumbnail_time || 10;
+  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=480&time=${thumbTime}` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
   const isDirty     = !!assetEdits[a.id];
@@ -2973,7 +2978,10 @@ async function notifyUsers(assetId, title, playbackId) {
   const btn = document.getElementById('notify-' + assetId);
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   try {
-    const thumbUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=10` : '';
+    const a = allAssets.find(x => x.id === assetId);
+    const _pt = a ? parsePassthrough(a.passthrough) : {};
+    const thumbTime = _pt.thumbnail_time || 10;
+    const thumbUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=${thumbTime}` : '';
     const r = await fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3410,7 +3418,8 @@ function renderFeatured(el) {
     const isFeat = featSet.has(a.id);
     const pid = a.playback_ids?.[0]?.id;
     const ptData = parsePassthrough(a.passthrough);
-    const thumb = ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=10` : '');
+    const thumbTime = ptData.thumbnail_time || 10;
+    const thumb = ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=${thumbTime}` : '');
     const cat = (ptData.category || a.passthrough || '').trim();
     const num = isFeat ? `<span class="feat-order">${++order}</span>` : `<span class="feat-order" style="color:var(--muted)"></span>`;
     return `<div class="feat-row ${isFeat?'is-featured':''}" data-id="${a.id}" draggable="true"

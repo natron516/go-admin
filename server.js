@@ -126,6 +126,27 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
 
       // Patch meta.title AND store title in passthrough JSON so the iOS app picks it up
       pt.title = title;
+
+      // For Sermon streams on Sundays, pick a thumbnail frame from 10:03–10:07 AM Pacific
+      // instead of the default 10 seconds into the stream
+      const isSermon = catLabel === 'Sermon';
+      const assetDate = new Date(asset.created_at * 1000);
+      // Get day-of-week in Pacific time
+      const pacificDay = new Date(assetDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })).getDay();
+      const isSunday = pacificDay === 0;
+      if (isSermon && isSunday) {
+        // Pick a thumbnail frame from 10:03–10:07 AM Pacific (when sermon starts)
+        const targetMinute = 3 + Math.floor(Math.random() * 5); // 3,4,5,6, or 7
+        const startPacific = new Date(assetDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+        const targetPacific = new Date(startPacific);
+        targetPacific.setHours(10, targetMinute, 0, 0);
+        const offsetSeconds = Math.round((targetPacific - startPacific) / 1000);
+        if (offsetSeconds > 0 && offsetSeconds < (asset.duration || Infinity)) {
+          pt.thumbnail_time = String(offsetSeconds);
+          console.log(`[webhook] Sermon Sunday thumbnail: offset=${offsetSeconds}s (10:${String(targetMinute).padStart(2,'0')} AM Pacific)`);
+        }
+      }
+
       await mux('PATCH', `/video/v1/assets/${assetId}`, {
         meta: { title },
         passthrough: serializePassthrough(pt),
