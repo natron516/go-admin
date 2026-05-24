@@ -170,9 +170,27 @@ function serializePassthrough(pt) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // List all assets (recent 100)
+// Track assets with MP4 generation in progress (server-side, survives client navigation)
+const _mp4Preparing = {}; // { assetId: { title, startedAt } }
+
 app.get('/api/assets', async (req, res) => {
   try {
     const data = await mux('GET', '/video/v1/assets?limit=100&order_direction=desc');
+    // Augment assets with server-tracked MP4 preparation state
+    if (data.data) {
+      const now = Date.now();
+      for (const a of data.data) {
+        // If we know this asset has MP4 in progress, flag it
+        if (_mp4Preparing[a.id]) {
+          // Expire after 10 minutes
+          if (now - _mp4Preparing[a.id].startedAt > 10 * 60 * 1000) {
+            delete _mp4Preparing[a.id];
+          } else {
+            a._mp4Preparing = true;
+          }
+        }
+      }
+    }
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -262,17 +280,23 @@ app.post('/api/assets/:id/mp4', async (req, res) => {
     // If mp4_support is not yet enabled, enable it
     if (asset.mp4_support !== 'standard') {
       await mux('PATCH', `/video/v1/assets/${req.params.id}`, { mp4_support: 'standard' });
+      _mp4Preparing[req.params.id] = { title: asset.meta?.title, startedAt: Date.now() };
       return res.json({ status: 'preparing', message: 'MP4 renditions are being generated. Try again in a minute.' });
     }
 
     // Check static renditions status
     const sr = asset.static_renditions;
     if (!sr || sr.status === 'preparing') {
+      _mp4Preparing[req.params.id] = _mp4Preparing[req.params.id] || { title: asset.meta?.title, startedAt: Date.now() };
       return res.json({ status: 'preparing', message: 'MP4 renditions are still processing. Try again shortly.' });
     }
     if (sr.status === 'errored') {
+      delete _mp4Preparing[req.params.id];
       return res.json({ status: 'errored', message: 'MP4 generation failed for this asset.' });
     }
+
+    // MP4 is ready — clear preparing state
+    delete _mp4Preparing[req.params.id];
 
     // Ready — build download URLs from available files
     const files = (sr.files || []).map(f => ({

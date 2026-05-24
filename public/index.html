@@ -2785,7 +2785,7 @@ function assetRowHtml(a) {
             <div class="card-meta">${uploaded}</div>
             <div class="card-actions">
               <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button>
-              <button class="btn btn-ghost btn-sm" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'Download MP4' : a.mp4_support === 'standard' ? 'MP4 generating...' : 'Generate MP4'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '⬇️' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
+              <button class="btn btn-ghost btn-sm" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a._mp4Preparing ? 'MP4 generating...' : 'Download MP4'}" id="dl-${a.id}">${a._mp4Preparing ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
               ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
               ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
               <button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button>
