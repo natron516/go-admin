@@ -2785,7 +2785,7 @@ function assetRowHtml(a) {
             <div class="card-meta">${uploaded}</div>
             <div class="card-actions">
               <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button>
-              <button class="btn btn-ghost btn-sm" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a._mp4Preparing ? 'MP4 generating...' : 'Download MP4'}" id="dl-${a.id}">${a._mp4Preparing ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
+              <button class="btn btn-ghost btn-sm ${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'dl-ready' : ''}" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' ? 'Download MP4' : 'No MP4 available'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '✅' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
               ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
               ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
               <button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button>
@@ -2894,64 +2894,32 @@ async function createStream() {
 async function startDownloadMp4(assetId, title) {
   const btn = document.getElementById('dl-' + assetId);
   if (!btn) return;
-  btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = true;
+  btn.innerHTML = '⏳'; btn.disabled = true;
   try {
     const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
     if (!r.ok) throw new Error('Server returned ' + r.status);
     const data = await r.json();
     if (data.status === 'ready' && data.files && data.files.length) {
       btn.textContent = '✅'; btn.disabled = false;
-      toast('Downloading ' + (title || 'video') + '...');
       if (data.files.length > 1) {
         openDownloadPicker(data.files, assetId, title);
       } else {
         triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), title);
       }
-      setTimeout(() => { btn.textContent = '⬇️'; }, 3000);
+    } else if (data.status === 'unavailable') {
+      btn.textContent = '⬇️'; btn.disabled = false;
+      toast('No MP4 — this video was uploaded before MP4 was enabled. New uploads will have downloads.');
     } else if (data.status === 'preparing') {
-      toast('Generating MP4 — this takes 1-3 min. Button will pulse until ready.');
-      btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = true;
-      pollMp4(assetId, title, 0);
-    } else if (data.status === 'errored') {
-      btn.textContent = '❌'; btn.disabled = false;
-      toast('MP4 generation failed.');
-      setTimeout(() => { btn.textContent = '⬇️'; }, 5000);
+      btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = false;
+      toast('MP4 is still generating. Try again in a minute.');
     } else {
       btn.textContent = '⬇️'; btn.disabled = false;
-      toast('No MP4 available.');
+      toast(data.message || 'Download not available.');
     }
   } catch (e) {
     btn.textContent = '⬇️'; btn.disabled = false;
     toast('Download error: ' + e.message);
   }
-}
-
-async function pollMp4(assetId, title, attempt) {
-  if (attempt >= 20) {
-    const btn = document.getElementById('dl-' + assetId);
-    if (btn) { btn.textContent = '⬇️'; btn.disabled = false; }
-    toast('MP4 taking too long. Try download again later.');
-    return;
-  }
-  await new Promise(r => setTimeout(r, 15000));
-  try {
-    const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
-    const data = await r.json();
-    if (data.status === 'ready' && data.files && data.files.length) {
-      const btn = document.getElementById('dl-' + assetId);
-      if (btn) { btn.textContent = '✅'; btn.disabled = false; }
-      toast('MP4 ready — downloading ' + (title || 'video'));
-      if (data.files.length > 1) {
-        openDownloadPicker(data.files, assetId, title);
-      } else {
-        triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), title);
-      }
-      // Refresh assets to update the button state permanently
-      setTimeout(loadAssets, 2000);
-      return;
-    }
-  } catch {}
-  pollMp4(assetId, title, attempt + 1);
 }
 
 // Legacy alias

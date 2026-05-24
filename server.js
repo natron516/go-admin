@@ -205,6 +205,7 @@ app.post('/api/create-upload', async (req, res) => {
       cors_origin: '*',
       new_asset_settings: {
         playback_policy: ['public'],
+        mp4_support: 'standard',
         meta: { title: title || 'Untitled' },
         passthrough: passthrough || '',
       },
@@ -269,7 +270,6 @@ app.get('/api/debug/passthrough', async (req, res) => {
 // Get or enable MP4 download for an asset
 app.post('/api/assets/:id/mp4', async (req, res) => {
   try {
-    // Fetch asset to check current mp4_support / static_renditions status
     const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
     const asset = current.data;
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
@@ -277,26 +277,18 @@ app.post('/api/assets/:id/mp4', async (req, res) => {
     const pid = asset.playback_ids?.[0]?.id;
     if (!pid) return res.status(400).json({ error: 'No playback ID' });
 
-    // If mp4_support is not yet enabled, enable it
+    // Check if MP4 is available
     if (asset.mp4_support !== 'standard') {
-      await mux('PATCH', `/video/v1/assets/${req.params.id}`, { mp4_support: 'standard' });
-      _mp4Preparing[req.params.id] = { title: asset.meta?.title, startedAt: Date.now() };
-      return res.json({ status: 'preparing', message: 'MP4 renditions are being generated. Try again in a minute.' });
+      return res.json({ status: 'unavailable', message: 'This video was uploaded before MP4 support was enabled. New uploads will have MP4 available automatically.' });
     }
 
-    // Check static renditions status
     const sr = asset.static_renditions;
     if (!sr || sr.status === 'preparing') {
-      _mp4Preparing[req.params.id] = _mp4Preparing[req.params.id] || { title: asset.meta?.title, startedAt: Date.now() };
-      return res.json({ status: 'preparing', message: 'MP4 renditions are still processing. Try again shortly.' });
+      return res.json({ status: 'preparing', message: 'MP4 is still being generated.' });
     }
     if (sr.status === 'errored') {
-      delete _mp4Preparing[req.params.id];
-      return res.json({ status: 'errored', message: 'MP4 generation failed for this asset.' });
+      return res.json({ status: 'errored', message: 'MP4 generation failed.' });
     }
-
-    // MP4 is ready — clear preparing state
-    delete _mp4Preparing[req.params.id];
 
     // Ready — build download URLs from available files
     const files = (sr.files || []).map(f => ({
