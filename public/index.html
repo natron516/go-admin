@@ -241,7 +241,7 @@ main {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 28px 28px 60px;
-  max-width: 720px;
+  
 }
 
 /* ── Sections ─────────────────────────────────────────── */
@@ -1048,10 +1048,13 @@ tr.dirty .at-save { display: inline-flex !important; }
   .assets-table td { display: none; padding: 0; border: none; }
   .td-card { display: block !important; }
   .card-title-row .at-title-text { font-size: 14px; }
-  .at-thumb { width: 150px; height: 84px; }
-  .at-placeholder { width: 150px; height: 84px; }
-  .card-body-row { gap: 10px; }
-  .card-actions .btn { padding: 4px 8px; font-size: 11px; }
+  .at-thumb { width: 100%; height: auto; aspect-ratio: 16/9; }
+  .at-placeholder { width: 100%; height: auto; aspect-ratio: 16/9; }
+  .card-body-row { flex-direction: column; gap: 8px; }
+  .card-thumb-col { width: 100%; }
+  .card-info-col { width: 100%; }
+  .card-actions .btn { padding: 5px 10px; font-size: 12px; }
+  .card-actions { justify-content: flex-start; }
   .assets-toolbar { flex-wrap: wrap; }
   .assets-toolbar input { min-width: 120px; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
