@@ -241,7 +241,8 @@ main {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 28px 28px 60px;
-  
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* ── Sections ─────────────────────────────────────────── */
@@ -592,8 +593,8 @@ main {
 .assets-table td { padding: 8px 12px; vertical-align: middle; }
 .td-thumb { width: 90px; }
 .at-thumb-wrap { position: relative; display: inline-block; flex-shrink: 0; }
-.at-thumb { width: 180px; height: 102px; object-fit: cover; border-radius: 8px; display: block; background: var(--border); }
-.at-placeholder { width: 180px; height: 102px; background: var(--surface2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--muted); border: 1px solid var(--border); }
+.at-thumb { width: 120px; height: 68px; object-fit: cover; border-radius: 8px; display: block; background: var(--border); }
+.at-placeholder { width: 120px; height: 68px; background: var(--surface2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--muted); border: 1px solid var(--border); }
 .at-dur { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,.85); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; }
 .at-input {
   background: transparent;
@@ -619,61 +620,15 @@ main {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 13px;
-  padding: 2px 6px;
-  opacity: 0.6;
+  font-size: 12px;
+  padding: 2px 4px;
+  opacity: 0.4;
   transition: opacity .15s;
   vertical-align: middle;
-  flex-shrink: 0;
 }
 .at-edit-btn:hover { opacity: 1; }
 .at-edit-hidden { display: none; }
 .at-edit-hidden.visible { display: block; margin-top: 4px; }
-
-/* Card-based asset layout */
-.card-row { display: flex; flex-direction: column; gap: 6px; }
-.card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.card-title-row .at-title-text {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex: 1;
-}
-.card-body-row { display: flex; gap: 14px; }
-.card-thumb-col { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
-.card-stats {
-  display: flex;
-  gap: 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.card-info-col {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.card-meta { font-size: 11px; color: var(--muted); }
-.card-actions {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  margin-top: auto;
-}
-/* Download button states */
-.dl-preparing { opacity: 0.5; pointer-events: none; }
-.dl-ready { background: rgba(34,197,94,.15) !important; color: var(--green) !important; }
 .at-input:hover { border-color: var(--border); }
 .at-input:focus { border-color: var(--accent); background: rgba(99,102,241,.07); }
 .at-select {
@@ -1036,25 +991,35 @@ tr.dirty .at-save { display: inline-flex !important; }
   .assets-table { min-width: unset; }
   .assets-table thead { display: none; }
   .assets-table tbody tr {
-    display: block;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: 'thumb title' 'thumb cat' 'actions actions';
+    gap: 4px 10px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
     margin-bottom: 8px;
     padding: 10px;
+    align-items: start;
+    max-width: 100%;
+    overflow: hidden;
   }
   .assets-table tbody tr.dirty { background: rgba(245,158,11,.05); }
   .assets-table tbody tr.saved { background: rgba(34,197,94,.05); }
-  .assets-table td { display: none; padding: 0; border: none; }
-  .td-card { display: block !important; }
-  .card-title-row .at-title-text { font-size: 14px; }
-  .at-thumb { width: 100%; height: auto; aspect-ratio: 16/9; }
-  .at-placeholder { width: 100%; height: auto; aspect-ratio: 16/9; }
-  .card-body-row { flex-direction: column; gap: 8px; }
-  .card-thumb-col { width: 100%; }
-  .card-info-col { width: 100%; }
-  .card-actions .btn { padding: 5px 10px; font-size: 12px; }
-  .card-actions { justify-content: flex-start; }
+  .assets-table td { display: block; padding: 0; border: none; }
+  .td-thumb { }
+  .at-thumb { width: 100px; height: 56px; }
+  .at-placeholder { width: 100px; height: 56px; }
+  .td-title { padding: 0 0 2px; min-width: 0; }
+  .td-title .at-title-text { font-size: 14px; }
+  .td-title .at-input { font-size: 13px; background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; }
+  .td-cat { padding: 0; }
+  .td-cat .at-select { font-size: 12px; min-width: 0; width: 100%; }
+  .td-status { padding: 0 14px 8px; }
+  .td-actions { padding: 8px 14px 12px; }
+  .td-actions-inner { gap: 6px; flex-wrap: wrap; }
+  .td-meta { display: none; }
+  .td-views { display: none; }
   .assets-toolbar { flex-wrap: wrap; }
   .assets-toolbar input { min-width: 120px; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
@@ -2728,7 +2693,7 @@ function assetRowHtml(a) {
   const rawCat      = ptData.category || (!a.passthrough?.startsWith('{') ? a.passthrough : '') || '';
   const category    = edits.category ?? rawCat.trim();
   const customThumb = ptData.thumbnail || null;
-  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=480&time=10` : '');
+  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=400&time=10` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
   const isDirty     = !!assetEdits[a.id];
@@ -2736,43 +2701,34 @@ function assetRowHtml(a) {
   const statusTxt   = { ready:'✓ Ready', preparing:'⏳ Processing', errored:'✕ Error' }[a.status] || a.status;
   const camTitle    = escAttr(title); const camPid = escAttr(pid||''); const camThumb = escAttr(customThumb||'');
 
-  const viewsStr = a._views ? a._views.toLocaleString() : '0';
-  const hoursStr = a._watchMin ? (a._watchMin >= 60 ? Math.floor(a._watchMin/60) + 'h ' + (a._watchMin%60) + 'm' : a._watchMin + 'm') : '0m';
-
   return `<tr class="${isDirty ? 'dirty' : ''}" id="arow-${a.id}">
-    <td class="td-card" colspan="8">
-      <div class="card-row">
-        <div class="card-title-row">
-          <span class="at-title-text" id="atitle-${a.id}">${escHtml(title) || '<em style="color:var(--muted)">Untitled</em>'}</span>
-          <button class="at-edit-btn" onclick="toggleTitleEdit('${a.id}')" title="Edit title">✏️</button>
-          <span class="at-status ${statusCls}" style="margin-left:auto;">${statusTxt}</span>
-        </div>
-        <input class="at-input at-edit-hidden" id="atitle-input-${a.id}" type="text" value="${escAttr(title)}" placeholder="Title" oninput="setEdit('${a.id}','title',this.value)" onblur="hideTitleEdit('${a.id}')" style="margin-bottom:8px;">
-        <div class="card-body-row">
-          <div class="card-thumb-col">
-            <div class="at-thumb-wrap">
-              ${thumbUrl ? `<img class="at-thumb" src="${thumbUrl}" loading="lazy" alt="">` : `<div class="at-placeholder">🎬</div>`}
-              ${dur ? `<span class="at-dur">${dur}</span>` : ''}
-              ${customThumb ? `<span class="thumb-custom-badge">CUSTOM</span>` : ''}
-              <button class="at-cam-btn" onclick="openThumbModal('${a.id}','${camTitle}','${camPid}','${camThumb}')" title="Set thumbnail">📷</button>
-            </div>
-            <div class="card-stats">
-              <span title="Views">V ${viewsStr}</span>
-              <span title="Watch time">H ${hoursStr}</span>
-            </div>
-          </div>
-          <div class="card-info-col">
-            <select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select>
-            <div class="card-meta">${uploaded}</div>
-            <div class="card-actions">
-              <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button>
-              <button class="btn btn-ghost btn-sm" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="Download MP4" id="dl-${a.id}">⬇️</button>
-              ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
-              ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
-              <button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button>
-            </div>
-          </div>
-        </div>
+    <td class="td-thumb">
+      <div class="at-thumb-wrap">
+        ${thumbUrl ? `<img class="at-thumb" src="${thumbUrl}" loading="lazy" alt="">` : `<div class="at-placeholder">🎬</div>`}
+        ${dur ? `<span class="at-dur">${dur}</span>` : ''}
+        ${customThumb ? `<span class="thumb-custom-badge">CUSTOM</span>` : ''}
+        <button class="at-cam-btn" onclick="openThumbModal('${a.id}','${camTitle}','${camPid}','${camThumb}')" title="Set thumbnail">📷</button>
+      </div>
+    </td>
+    <td class="td-title">
+      <span class="at-title-text" id="atitle-${a.id}">${escHtml(title) || '<em style="color:var(--muted)">Untitled</em>'}</span>
+      <button class="at-edit-btn" onclick="toggleTitleEdit('${a.id}')" title="Edit title">✏️</button>
+      <input class="at-input at-edit-hidden" id="atitle-input-${a.id}" type="text" value="${escAttr(title)}" placeholder="Title" oninput="setEdit('${a.id}','title',this.value)" onblur="hideTitleEdit('${a.id}')">
+    </td>
+    <td class="td-cat">
+      <select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select>
+    </td>
+    <td class="td-views" style="font-size:13px;color:var(--text);text-align:center">${a._views ? a._views.toLocaleString() : '<span style="color:var(--muted)">—</span>'}</td>
+    <td class="td-views" style="font-size:13px;color:var(--text);text-align:center">${a._watchMin ? (a._watchMin >= 60 ? Math.floor(a._watchMin/60) + 'h ' + (a._watchMin%60) + 'm' : a._watchMin + ' min') : '<span style="color:var(--muted)">—</span>'}</td>
+    <td class="td-status"><span class="at-status ${statusCls}">${statusTxt}</span></td>
+    <td class="td-meta">${uploaded}</td>
+    <td class="td-actions">
+      <div class="td-actions-inner">
+        <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾 Save</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadMp4('${a.id}','${escAttr(title)}')" title="Download MP4" id="dl-${a.id}">⬇️</button>
+        ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Send push notification" id="notify-${a.id}">🔔</button>` : ''}
+        ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim video">✂️</button>` : ''}
+        <div id="del-${a.id}"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></div>
       </div>
     </td>
   </tr>`;
@@ -2870,34 +2826,31 @@ async function createStream() {
 }
 
 // ── MP4 Download ──────────────────────────────────────────
-async function startDownloadMp4(assetId, title) {
+async function downloadMp4(assetId, title) {
   const btn = document.getElementById('dl-' + assetId);
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   try {
     const r = await fetch(`/api/assets/${assetId}/mp4`, { method: 'POST' });
     const data = await r.json();
-    if (data.status === 'ready' && data.files?.length) {
+    if (data.status === 'preparing') {
+      toast('⏳ MP4 is being generated — try again in a minute');
+    } else if (data.status === 'errored') {
+      toast('❌ MP4 generation failed for this asset');
+    } else if (data.status === 'ready' && data.files?.length) {
       if (data.files.length > 1) {
         openDownloadPicker(data.files, assetId, title);
       } else {
         triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), title);
       }
-    } else if (data.status === 'preparing') {
-      toast('MP4 is still being generated by Mux. This can take a few minutes for long videos. Try again shortly.');
-    } else if (data.status === 'errored') {
-      toast('MP4 generation failed for this asset.');
     } else {
-      toast('No MP4 available for this asset.');
+      toast('No MP4 available');
     }
   } catch (e) {
-    toast('Download error: ' + e.message);
+    toast('Download failed: ' + e.message);
   } finally {
     if (btn) { btn.textContent = '⬇️'; btn.disabled = false; }
   }
 }
-
-// Legacy alias
-async function downloadMp4(assetId, title) { return startDownloadMp4(assetId, title); }
 
 function openDownloadPicker(files, assetId, title) {
   files.sort((a, b) => (b.height || 0) - (a.height || 0));
@@ -2947,7 +2900,7 @@ async function notifyUsers(assetId, title, playbackId) {
   const btn = document.getElementById('notify-' + assetId);
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   try {
-    const thumbUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=480&time=10` : '';
+    const thumbUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?width=400&time=10` : '';
     const r = await fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
