@@ -218,6 +218,9 @@ body {
   gap: 14px;
   padding: 0 24px;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 .hamburger {
   display: none;
@@ -1785,7 +1788,7 @@ window.fetch = function(url, opts = {}) {
 };
 
 async function checkAuth() {
-  // Check if we have saved credentials in sessionStorage
+  // 1. Check saved credentials from login overlay
   const saved = sessionStorage.getItem('go_admin_auth');
   if (saved) {
     _authHeader = saved;
@@ -1796,6 +1799,12 @@ async function checkAuth() {
     _authHeader = null;
     sessionStorage.removeItem('go_admin_auth');
   }
+  // 2. Check if browser has cached basic auth (from browser popup)
+  try {
+    const r = await _origFetch('/api/assets', { credentials: 'include' });
+    if (r.ok) { document.getElementById('login-overlay').classList.add('hidden'); return true; }
+  } catch {}
+  // 3. Not authenticated — show login overlay
   document.getElementById('login-overlay').classList.remove('hidden');
   return false;
 }
