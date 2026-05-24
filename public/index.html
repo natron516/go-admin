@@ -680,6 +680,8 @@ main {
 /* Download button states */
 .dl-preparing { opacity: 0.5; pointer-events: none; }
 .dl-ready { background: rgba(34,197,94,.15) !important; color: var(--green) !important; }
+.dl-pulse { animation: dlpulse 1s infinite; display: inline-block; }
+@keyframes dlpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 .at-input:hover { border-color: var(--border); }
 .at-input:focus { border-color: var(--accent); background: rgba(99,102,241,.07); }
 .at-select {
@@ -1105,7 +1107,7 @@ tr.dirty .at-save { display: inline-flex !important; }
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- ── Login Overlay ─────────────────────────────────── -->
-<div id="login-overlay">
+<div id="login-overlay" class="hidden">
   <div class="login-box">
     <div class="login-logo">🎬</div>
     <h2>GO Admin</h2>
@@ -2887,10 +2889,12 @@ async function createStream() {
 }
 
 // ── MP4 Download ──────────────────────────────────────────
+// Track which assets are being prepared
+const _dlPolling = {};
+
 async function startDownloadMp4(assetId, title) {
   const btn = document.getElementById('dl-' + assetId);
   if (!btn) return;
-  const origText = btn.textContent;
   btn.textContent = '⏳'; btn.disabled = true;
   try {
     const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
@@ -2898,6 +2902,7 @@ async function startDownloadMp4(assetId, title) {
     const data = await r.json();
     if (data.status === 'ready' && data.files && data.files.length) {
       btn.textContent = '✅'; btn.disabled = false;
+      delete _dlPolling[assetId];
       if (data.files.length > 1) {
         openDownloadPicker(data.files, assetId, title);
       } else {
@@ -2905,8 +2910,13 @@ async function startDownloadMp4(assetId, title) {
       }
       setTimeout(() => { btn.textContent = '⬇️'; }, 3000);
     } else if (data.status === 'preparing') {
-      btn.textContent = '🔄'; btn.disabled = false;
-      toast('MP4 is being generated — this can take a few minutes for long videos. Tap again to check.');
+      // Start polling
+      btn.innerHTML = '<span class="dl-pulse">⏳</span>';
+      btn.disabled = true;
+      btn.title = 'Generating MP4...';
+      toast('Generating MP4 — will auto-download when ready (1-3 min)');
+      _dlPolling[assetId] = { title, attempt: 0 };
+      setTimeout(() => pollMp4(assetId), 15000);
     } else if (data.status === 'errored') {
       btn.textContent = '❌'; btn.disabled = false;
       toast('MP4 generation failed.');
@@ -2918,6 +2928,37 @@ async function startDownloadMp4(assetId, title) {
   } catch (e) {
     btn.textContent = '⬇️'; btn.disabled = false;
     toast('Download error: ' + e.message);
+  }
+}
+
+async function pollMp4(assetId) {
+  const info = _dlPolling[assetId];
+  if (!info) return;
+  const btn = document.getElementById('dl-' + assetId);
+  try {
+    const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
+    const data = await r.json();
+    if (data.status === 'ready' && data.files && data.files.length) {
+      delete _dlPolling[assetId];
+      if (btn) { btn.textContent = '✅'; btn.disabled = false; }
+      toast('MP4 ready — downloading ' + (info.title || 'video'));
+      if (data.files.length > 1) {
+        openDownloadPicker(data.files, assetId, info.title);
+      } else {
+        triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), info.title);
+      }
+      setTimeout(() => { if (btn) btn.textContent = '⬇️'; }, 3000);
+      return;
+    }
+  } catch {}
+  // Still preparing — keep polling (up to 12 attempts = 3 min)
+  info.attempt++;
+  if (info.attempt < 12) {
+    setTimeout(() => pollMp4(assetId), 15000);
+  } else {
+    delete _dlPolling[assetId];
+    if (btn) { btn.textContent = '⬇️'; btn.disabled = false; }
+    toast('MP4 is taking longer than expected. Try again in a minute.');
   }
 }
 
