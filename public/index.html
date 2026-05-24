@@ -1093,6 +1093,12 @@ tr.dirty .at-save { display: inline-flex !important; }
   .users-cards { display: block !important; }
 }
 
+/* iPad / mid-size tablets also get cards */
+@media (max-width: 1100px) {
+  .users-table-wrap { display: none !important; }
+  .users-cards { display: block !important; }
+}
+
 /* ── Analytics section ───────────────────────────────── */
 .analytics-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
 
