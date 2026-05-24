@@ -990,29 +990,33 @@ tr.dirty .at-save { display: inline-flex !important; }
   .assets-table { min-width: unset; }
   .assets-table thead { display: none; }
   .assets-table tbody tr {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    grid-template-areas: 'thumb title actions' 'thumb cat status';
-    gap: 6px 8px;
+    display: flex;
+    flex-direction: column;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-bottom: 8px;
-    padding: 8px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    padding: 0;
+    overflow: hidden;
   }
   .assets-table tbody tr.dirty { background: rgba(245,158,11,.05); }
   .assets-table tbody tr.saved { background: rgba(34,197,94,.05); }
   .assets-table td { display: block; padding: 0; border: none; }
-  .td-thumb  { grid-area: thumb; align-self: center; }
-  .td-title  { grid-area: title; align-self: center; min-width: 0; }
-  .td-cat    { grid-area: cat; align-self: center; }
-  .td-status { grid-area: status; align-self: center; justify-self: start; }
-  .td-actions { grid-area: actions; align-self: center; }
+  .td-thumb { width: 100%; }
+  .td-thumb .at-thumb-wrap { display: block; width: 100%; }
+  .at-thumb { width: 100%; height: 180px; border-radius: 0; }
+  .at-placeholder { width: 100%; height: 180px; border-radius: 0; }
+  .td-title { padding: 12px 14px 4px; }
+  .td-title .at-title-full { font-size: 17px; font-weight: 700; }
+  .td-title .at-input { font-size: 13px; margin-top: 6px; background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; }
+  .td-cat { padding: 4px 14px 8px; }
+  .td-cat .at-cat-label { font-size: 13px; padding: 4px 12px; }
+  .td-cat .at-select { font-size: 12px; min-width: 0; width: 100%; margin-top: 6px; }
+  .td-status { padding: 0 14px 8px; }
+  .td-actions { padding: 8px 14px 12px; }
+  .td-actions-inner { gap: 6px; flex-wrap: wrap; }
   .td-meta { display: none; }
-  .at-thumb { width: 72px; height: 40px; }
-  .at-input { font-size: 14px; padding: 4px 6px; width: 100%; min-width: 0; background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; }
-  .at-select { font-size: 12px; min-width: 0; width: 100%; }
-  .td-actions-inner { gap: 4px; }
+  .td-views { display: none; }
   .assets-toolbar { flex-wrap: wrap; }
   .assets-toolbar input { min-width: 120px; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
@@ -2711,8 +2715,8 @@ function assetRowHtml(a) {
       ${category ? `<span class="at-cat-label">${escHtml(category)}</span>` : '<span style="color:var(--muted);font-size:12px;">No category</span>'}
       <select class="at-select" onchange="setEdit('${a.id}','category',this.value)" style="font-size:11px;margin-top:4px;">${catOptions(category)}</select>
     </td>
-    <td style="font-size:13px;color:var(--text);text-align:center">${a._views ? a._views.toLocaleString() : '<span style="color:var(--muted)">—</span>'}</td>
-    <td style="font-size:13px;color:var(--text);text-align:center">${a._watchMin ? (a._watchMin >= 60 ? Math.floor(a._watchMin/60) + 'h ' + (a._watchMin%60) + 'm' : a._watchMin + ' min') : '<span style="color:var(--muted)">—</span>'}</td>
+    <td class="td-views" style="font-size:13px;color:var(--text);text-align:center">${a._views ? a._views.toLocaleString() : '<span style="color:var(--muted)">—</span>'}</td>
+    <td class="td-views" style="font-size:13px;color:var(--text);text-align:center">${a._watchMin ? (a._watchMin >= 60 ? Math.floor(a._watchMin/60) + 'h ' + (a._watchMin%60) + 'm' : a._watchMin + ' min') : '<span style="color:var(--muted)">—</span>'}</td>
     <td class="td-status"><span class="at-status ${statusCls}">${statusTxt}</span></td>
     <td class="td-meta">${uploaded}</td>
     <td class="td-actions">
