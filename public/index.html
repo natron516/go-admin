@@ -591,23 +591,42 @@ main {
 .assets-table tbody tr.saved  { background: rgba(34,197,94,.05); }
 .assets-table td { padding: 8px 12px; vertical-align: middle; }
 .td-thumb { width: 90px; }
-.at-thumb-wrap { position: relative; display: inline-block; }
-.at-thumb { width: 160px; height: 90px; object-fit: cover; border-radius: 8px; display: block; background: var(--border); }
-.at-placeholder { width: 160px; height: 90px; background: var(--surface2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--muted); border: 1px solid var(--border); }
-.at-dur { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,.85); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
+.at-thumb-wrap { position: relative; display: inline-block; flex-shrink: 0; }
+.at-thumb { width: 200px; height: 112px; object-fit: cover; border-radius: 10px; display: block; background: var(--border); }
+.at-placeholder { width: 200px; height: 112px; background: var(--surface2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--muted); border: 1px solid var(--border); }
+.at-dur { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,.85); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
 .at-input {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text);
   font-size: 14px;
+  font-weight: 500;
   padding: 6px 8px;
   outline: none;
   width: 100%;
-  min-width: 180px;
-  white-space: normal;
-  word-wrap: break-word;
   transition: border-color var(--transition), background var(--transition);
+}
+/* Full-width title display above input */
+.at-title-full {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
+.at-cat-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--accent2);
+  background: var(--accent-dim);
+  padding: 3px 10px;
+  border-radius: 99px;
+  margin-bottom: 6px;
 }
 .at-input:hover { border-color: var(--border); }
 .at-input:focus { border-color: var(--accent); background: rgba(99,102,241,.07); }
@@ -2667,7 +2686,7 @@ function assetRowHtml(a) {
   const rawCat      = ptData.category || (!a.passthrough?.startsWith('{') ? a.passthrough : '') || '';
   const category    = edits.category ?? rawCat.trim();
   const customThumb = ptData.thumbnail || null;
-  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=160&time=10` : '');
+  const thumbUrl    = customThumb || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=400&time=10` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
   const isDirty     = !!assetEdits[a.id];
@@ -2684,8 +2703,14 @@ function assetRowHtml(a) {
         <button class="at-cam-btn" onclick="openThumbModal('${a.id}','${camTitle}','${camPid}','${camThumb}')" title="Set thumbnail">📷</button>
       </div>
     </td>
-    <td class="td-title"><input class="at-input" type="text" value="${escAttr(title)}" placeholder="Untitled" oninput="setEdit('${a.id}','title',this.value)"></td>
-    <td class="td-cat"><select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select></td>
+    <td class="td-title">
+      <div class="at-title-full">${escHtml(title) || '<em style="color:var(--muted)">Untitled</em>'}</div>
+      <input class="at-input" type="text" value="${escAttr(title)}" placeholder="Edit title..." oninput="setEdit('${a.id}','title',this.value)" style="font-size:12px;color:var(--muted);padding:4px 6px;">
+    </td>
+    <td class="td-cat">
+      ${category ? `<span class="at-cat-label">${escHtml(category)}</span>` : '<span style="color:var(--muted);font-size:12px;">No category</span>'}
+      <select class="at-select" onchange="setEdit('${a.id}','category',this.value)" style="font-size:11px;margin-top:4px;">${catOptions(category)}</select>
+    </td>
     <td style="font-size:13px;color:var(--text);text-align:center">${a._views ? a._views.toLocaleString() : '<span style="color:var(--muted)">—</span>'}</td>
     <td style="font-size:13px;color:var(--text);text-align:center">${a._watchMin ? (a._watchMin >= 60 ? Math.floor(a._watchMin/60) + 'h ' + (a._watchMin%60) + 'm' : a._watchMin + ' min') : '<span style="color:var(--muted)">—</span>'}</td>
     <td class="td-status"><span class="at-status ${statusCls}">${statusTxt}</span></td>
