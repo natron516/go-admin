@@ -2567,7 +2567,7 @@ function handleFiles(list) { addFiles(list); }
 
 function addFiles(list) {
   for (const file of list) {
-    pendingFiles.push({ uid: Math.random().toString(36).slice(2), file, title: slugToTitle(file.name), passthrough: 'sermon', status: 'pending', progress: 0 });
+    pendingFiles.push({ uid: Math.random().toString(36).slice(2), file, title: slugToTitle(file.name), passthrough: 'sermon', status: 'pending', progress: 0, notify: true, featured: false });
   }
   renderFileList();
 }
@@ -2593,6 +2593,8 @@ function renderFileList() {
   const listTarget = wrap.querySelector('#file-list');
   const listHtml = pendingFiles.map(item => {
     const dis = item.status !== 'pending';
+    const notifyChecked = item.notify !== false ? 'checked' : '';
+    const featChecked = item.featured ? 'checked' : '';
     return `<div class="upload-card" id="card-${item.uid}" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <div><div style="font-size:13px;font-weight:600;">${escHtml(item.file.name)}</div><div style="font-size:11px;color:var(--muted);">${formatSize(item.file.size)}</div></div>
@@ -2602,17 +2604,15 @@ function renderFileList() {
         </div>
       </div>
       <div style="margin-bottom:6px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Title</label><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"></div>
-      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Category</label><select class="ut-select" onchange="updateFile('${item.uid}','passthrough',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);">${catOptions(item.passthrough)}</select></div>
+      <div style="margin-bottom:8px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Category</label><select class="ut-select" onchange="updateFile('${item.uid}','passthrough',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);">${catOptions(item.passthrough)}</select></div>
+      <div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--border);padding-top:8px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" ${notifyChecked} onchange="updateFile('${item.uid}','notify',this.checked)" ${dis?'disabled':''} style="width:18px;height:18px;"> 🔔 Notify users</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" ${featChecked} onchange="updateFile('${item.uid}','featured',this.checked)" ${dis?'disabled':''} style="width:18px;height:18px;"> ⭐ Add to Featured</label>
+      </div>
     </div>`;
   }).join('');
 
-  // Add notify + featured checkboxes before upload button
-  const checkboxesHtml = `<div style="margin:12px 0;">
-    <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:8px;cursor:pointer;"><input type="checkbox" id="pre-upload-notify" checked style="width:18px;height:18px;"> Send push notification when complete</label>
-    <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;"><input type="checkbox" id="pre-upload-feat" style="width:18px;height:18px;"> Add to Featured (top spot)</label>
-  </div>`;
-
-  const fullHtml = listHtml + checkboxesHtml;
+  const fullHtml = listHtml;
   if (listTarget) listTarget.innerHTML = fullHtml;
   else wrap.insertAdjacentHTML('beforeend', `<div id="file-list">${fullHtml}</div>`);
 }
@@ -2662,6 +2662,9 @@ async function uploadOne(item) {
       xhr.send(item.file);
     });
     item.status = 'done'; item.progress = 100; updateCard(item);
+    // Auto-apply notify + featured per-file settings
+    window._preUploadNotify = item.notify;
+    window._preUploadFeat = item.featured;
     showUploadDoneModal(item.title, '', '');
   } catch (err) { console.error(err); item.status = 'error'; updateCard(item); }
 }
