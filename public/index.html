@@ -1133,6 +1133,8 @@ tr.dirty .at-save { display: inline-flex !important; }
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 </head>
 <body>
+<!-- Global file input — MUST be outside overflow:hidden containers for iOS Safari -->
+<input type="file" id="global-file-input" multiple style="position:fixed;top:-9999px;left:-9999px;opacity:0;">
 
 <!-- Mobile sidebar overlay -->
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -1396,11 +1398,8 @@ tr.dirty .at-save { display: inline-flex !important; }
               <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
             </svg>
-            <p style="font-size:14px;font-weight:600;margin-bottom:10px;">Select a video file:</p>
-            <form id="upload-form" onsubmit="return false;">
-              <input type="file" id="file-input-inline" name="video" multiple style="font-size:16px;display:block;margin-bottom:10px;">
-            </form>
-            <div id="upload-status-msg" style="font-size:13px;color:var(--green);margin-top:6px;"></div>
+            <button class="btn btn-primary" id="select-video-btn" style="padding:14px 24px;font-size:16px;width:100%;">📁 Select Video to Upload</button>
+            <div id="upload-status-msg" style="font-size:13px;color:var(--muted);margin-top:8px;"></div>
           </div>
           <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
@@ -2509,38 +2508,28 @@ function toggleUploadPanel() {
 }
 
 // Wire inline drop zone to the same upload logic
-const dropZoneInline = document.getElementById('drop-zone-inline');
-const fileInputInline = document.getElementById('file-input-inline');
-if (dropZoneInline) {
-  dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); dropZoneInline.style.borderColor='var(--accent)'; dropZoneInline.style.background='var(--accent-dim)'; });
-  dropZoneInline.addEventListener('dragleave', () => { dropZoneInline.style.borderColor=''; dropZoneInline.style.background=''; });
-  dropZoneInline.addEventListener('drop', e => {
-    e.preventDefault(); dropZoneInline.style.borderColor=''; dropZoneInline.style.background='';
-    handleFiles(e.dataTransfer.files);
+// Global file input lives on <body>, outside all overflow:hidden containers
+const globalFileInput = document.getElementById('global-file-input');
+const selectVideoBtn = document.getElementById('select-video-btn');
+if (selectVideoBtn && globalFileInput) {
+  selectVideoBtn.addEventListener('click', () => globalFileInput.click());
+  globalFileInput.addEventListener('change', function() {
+    const msg = document.getElementById('upload-status-msg');
+    if (this.files && this.files.length > 0) {
+      if (msg) { msg.textContent = '✓ ' + this.files.length + ' file(s) added!'; msg.style.color = 'var(--green)'; }
+      addFiles(this.files);
+      this.value = '';
+    } else {
+      if (msg) { msg.textContent = 'No files selected'; msg.style.color = 'var(--orange)'; }
+    }
   });
 }
-if (fileInputInline) {
-  // Multiple event types for maximum iOS compatibility
-  ['change', 'input'].forEach(evt => {
-    fileInputInline.addEventListener(evt, function() {
-      if (this.files && this.files.length > 0) {
-        const msg = document.getElementById('upload-status-msg');
-        if (msg) msg.textContent = '✓ ' + this.files.length + ' file(s) selected';
-        handleFiles(this.files);
-        this.value = '';
-      }
-    });
-  });
-  // Polling fallback: check every 500ms after focus returns to page
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      let checks = 0;
-      const poll = setInterval(() => {
-        if (fileInputInline.files && fileInputInline.files.length > 0) {
-          handleFiles(fileInputInline.files);
-          fileInputInline.value = '';
-          clearInterval(poll);
-        }
+// Desktop drag-and-drop
+const dropZoneInline = document.getElementById('drop-zone-inline');
+if (dropZoneInline) {
+  dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); });
+  dropZoneInline.addEventListener('drop', e => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
+}
         if (++checks > 20) clearInterval(poll); // stop after 10s
       }, 500);
     }
