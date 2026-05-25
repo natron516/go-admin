@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 2;
+const ADMIN_BUILD = 3;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -153,6 +153,16 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
         passthrough: serializePassthrough(pt),
       });
       console.log(`[webhook] Auto-titled asset ${assetId}: "${title}"`);
+
+      // Enable MP4 downloads on the new VOD asset
+      if (asset.mp4_support !== 'standard') {
+        try {
+          await mux('PUT', `/video/v1/assets/${assetId}/mp4-support`, { mp4_support: 'standard' });
+          console.log(`[webhook] Enabled mp4_support for ${assetId}`);
+        } catch (e) {
+          console.error(`[webhook] Failed to enable mp4_support: ${e.message}`);
+        }
+      }
     } catch (err) {
       console.error('[webhook] Failed to auto-title asset:', err.message);
     }
