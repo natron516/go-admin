@@ -1874,8 +1874,8 @@ let lastUploadedAsset = null;
 function showUploadDoneModal(title, assetId, playbackId) {
   lastUploadedAsset = { title, assetId, playbackId };
   document.getElementById('upload-done-title').textContent = title || 'Untitled Video';
-  document.getElementById('upload-feat-check').checked = false;
-  document.getElementById('upload-notify-check').checked = true;
+  document.getElementById('upload-feat-check').checked = window._preUploadFeat || false;
+  document.getElementById('upload-notify-check').checked = window._preUploadNotify !== undefined ? window._preUploadNotify : true;
   document.getElementById('upload-done-modal').classList.remove('hidden');
 }
 function closeUploadDoneModal() {
@@ -2591,23 +2591,30 @@ function renderFileList() {
   countEl.textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
   // Render file list into the wrap that's currently active
   const listTarget = wrap.querySelector('#file-list');
-  const listHtml = `
-    <div class="upload-table-wrap">
-    <table class="upload-table">
-      <thead><tr><th>File</th><th>Title</th><th>Category</th><th>Status</th><th></th></tr></thead>
-      <tbody>${pendingFiles.map(item => {
-        const dis = item.status !== 'pending';
-        return `<tr class="${item.status}" id="card-${item.uid}">
-          <td><div class="ut-name">${escHtml(item.file.name)}</div><div class="ut-size">${formatSize(item.file.size)}</div></td>
-          <td><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${dis?'disabled':''}></td>
-          <td><select class="ut-select" onchange="updateFile('${item.uid}','passthrough',this.value)" ${dis?'disabled':''}>${catOptions(item.passthrough)}</select></td>
-          <td id="status-${item.uid}">${utBadge(item)}</td>
-          <td><button class="btn btn-danger btn-sm" onclick="removeFile('${item.uid}')" ${dis?'disabled':''}>✕</button></td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table></div>`;
-  if (listTarget) listTarget.innerHTML = listHtml;
-  else wrap.insertAdjacentHTML('beforeend', `<div id="file-list">${listHtml}</div>`);
+  const listHtml = pendingFiles.map(item => {
+    const dis = item.status !== 'pending';
+    return `<div class="upload-card" id="card-${item.uid}" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div><div style="font-size:13px;font-weight:600;">${escHtml(item.file.name)}</div><div style="font-size:11px;color:var(--muted);">${formatSize(item.file.size)}</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="status-${item.uid}">${utBadge(item)}</span>
+          <button class="btn btn-danger btn-sm" onclick="removeFile('${item.uid}')" ${dis?'disabled':''} style="padding:4px 8px;">✕</button>
+        </div>
+      </div>
+      <div style="margin-bottom:6px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Title</label><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"></div>
+      <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Category</label><select class="ut-select" onchange="updateFile('${item.uid}','passthrough',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);">${catOptions(item.passthrough)}</select></div>
+    </div>`;
+  }).join('');
+
+  // Add notify + featured checkboxes before upload button
+  const checkboxesHtml = `<div style="margin:12px 0;">
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:8px;cursor:pointer;"><input type="checkbox" id="pre-upload-notify" checked style="width:18px;height:18px;"> Send push notification when complete</label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;"><input type="checkbox" id="pre-upload-feat" style="width:18px;height:18px;"> Add to Featured (top spot)</label>
+  </div>`;
+
+  const fullHtml = listHtml + checkboxesHtml;
+  if (listTarget) listTarget.innerHTML = fullHtml;
+  else wrap.insertAdjacentHTML('beforeend', `<div id="file-list">${fullHtml}</div>`);
 }
 
 function utBadge(item) {
@@ -2626,6 +2633,11 @@ function updateCard(item) {
 async function uploadAll() {
   const pending = pendingFiles.filter(f => f.status === 'pending');
   if (!pending.length) { toast('Nothing to upload!'); return; }
+  // Read pre-upload checkboxes
+  const preNotify = document.getElementById('pre-upload-notify');
+  const preFeat = document.getElementById('pre-upload-feat');
+  if (preNotify) window._preUploadNotify = preNotify.checked;
+  if (preFeat) window._preUploadFeat = preFeat.checked;
   const uploadBtn = document.getElementById('upload-btn') || document.getElementById('upload-btn-inline');
   if (uploadBtn) uploadBtn.disabled = true;
   for (const item of pending) await uploadOne(item);
