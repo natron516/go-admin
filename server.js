@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 4;
+const ADMIN_BUILD = 5;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -67,6 +67,7 @@ app.use((req, res, next) => {
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
   if (req.path === '/webhooks/mux') return next();
   if (req.path === '/api/fcm-token' && req.method === 'POST') return next();
+  if (req.path === '/api/build') return next();
   if (req.path === '/cast-receiver.html') return next();
   // Login endpoint: public (no auth needed to log in)
   if (req.path === '/api/login' && req.method === 'POST') return next();

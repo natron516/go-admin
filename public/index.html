@@ -2522,7 +2522,7 @@ if (dropZoneInline) {
 }
 
 // Build version display
-fetch('/api/build').then(r=>r.json()).then(d=>{
+fetch('/api/build',{credentials:'include'}).then(r=>r.json()).then(d=>{
   const v = 'b' + d.build;
   document.querySelectorAll('#admin-build,#admin-build-main,#build-tag').forEach(el => { if(el) el.textContent = v; });
   document.title = 'GO Admin ' + v;
