@@ -2530,11 +2530,6 @@ if (dropZoneInline) {
   dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); });
   dropZoneInline.addEventListener('drop', e => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
 }
-        if (++checks > 20) clearInterval(poll); // stop after 10s
-      }, 500);
-    }
-  });
-}
 
 // Build version display
 fetch('/api/build',{credentials:'include'}).then(r=>r.json()).then(d=>{
