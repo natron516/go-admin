@@ -1391,15 +1391,16 @@ tr.dirty .at-save { display: inline-flex !important; }
 
         <!-- Inline upload panel -->
         <div id="upload-panel">
-          <div id="drop-zone-inline" style="text-align:center;">
+          <label for="file-input-inline" id="drop-zone-inline" style="text-align:center;cursor:pointer;display:block;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;margin:0 auto 8px;display:block;color:var(--muted)">
               <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
             </svg>
-            <div style="font-size:14px;font-weight:600;">Drop video files here</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px;">or click to browse · MP4, MOV, MKV, M4V</div>
-          </div>
-          <input type="file" id="file-input-inline" multiple accept="video/*,video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v,.mkv" style="display:none">
+            <div style="font-size:14px;font-weight:600;">Tap to select video</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">MP4, MOV, MKV, M4V</div>
+          </label>
+          <input type="file" id="file-input-inline" multiple accept="video/*,.mp4,.mov,.m4v,.mkv" style="display:none" onchange="handleFiles(this.files);this.value='';">
+          <div id="file-input-debug" style="font-size:11px;color:var(--orange);margin-top:6px;display:none;"></div>
           <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
               <span id="pending-count-inline" style="font-size:13px;font-weight:600;flex:1;"></span>
@@ -2510,29 +2511,13 @@ function toggleUploadPanel() {
 const dropZoneInline = document.getElementById('drop-zone-inline');
 const fileInputInline = document.getElementById('file-input-inline');
 if (dropZoneInline) {
-  dropZoneInline.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    fileInputInline.click();
-  });
+  // Label handles click→file natively (most reliable on iOS)
+  // Keep drag-and-drop for desktop
   dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); dropZoneInline.style.borderColor='var(--accent)'; dropZoneInline.style.background='var(--accent-dim)'; });
   dropZoneInline.addEventListener('dragleave', () => { dropZoneInline.style.borderColor=''; dropZoneInline.style.background=''; });
   dropZoneInline.addEventListener('drop', e => {
     e.preventDefault(); dropZoneInline.style.borderColor=''; dropZoneInline.style.background='';
     handleFiles(e.dataTransfer.files);
-  });
-  fileInputInline.addEventListener('change', e => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFiles(e.target.files);
-    }
-    fileInputInline.value='';
-  });
-  // iOS Safari: re-check file input after returning from photo picker
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && fileInputInline.files && fileInputInline.files.length > 0) {
-      handleFiles(fileInputInline.files);
-      fileInputInline.value='';
-    }
   });
 }
 
@@ -2540,6 +2525,8 @@ if (dropZoneInline) {
 fetch('/api/build').then(r=>r.json()).then(d=>{
   const el = document.getElementById('admin-build');
   if(el) el.textContent = 'b' + d.build;
+  const tag = document.getElementById('build-tag');
+  if(tag) tag.textContent = 'b' + d.build;
   document.title = 'GO Admin b' + d.build;
 }).catch(()=>{});
 
@@ -3667,5 +3654,6 @@ async function loadVersionDistribution() {
   }
 }
 </script>
+<div id="build-tag" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:rgba(255,255,255,.25);pointer-events:none;z-index:9999;"></div>
 </body>
 </html>
