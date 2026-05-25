@@ -1397,10 +1397,13 @@ tr.dirty .at-save { display: inline-flex !important; }
               <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
             </svg>
             <div style="font-size:14px;font-weight:600;margin-bottom:8px;">Upload Video</div>
-            <input type="file" id="file-input-inline" multiple
-              style="font-size:16px;width:100%;padding:12px;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer;"
-            >
-            <div style="font-size:12px;color:var(--muted);margin-top:8px;">MP4, MOV, MKV, M4V</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="file" id="file-input-inline" multiple
+                style="font-size:16px;flex:1;min-width:0;"
+              >
+              <button class="btn btn-primary" onclick="processSelectedFiles()" style="padding:10px 20px;font-size:14px;white-space:nowrap;">Add Files</button>
+            </div>
+            <div id="upload-status-msg" style="font-size:12px;color:var(--muted);margin-top:8px;">Select video files, then tap Add Files</div>
           </div>
           <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
@@ -2558,6 +2561,20 @@ function formatSize(b) { if(b<1024) return b+' B'; if(b<1048576) return (b/1024)
 function slugToTitle(n) { return n.replace(/\.[^/.]+$/,'').replace(/[-_]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 
 function handleFiles(list) { addFiles(list); }
+
+function processSelectedFiles() {
+  const input = document.getElementById('file-input-inline');
+  const msg = document.getElementById('upload-status-msg');
+  if (!input || !input.files || input.files.length === 0) {
+    if (msg) msg.textContent = '⚠️ No files selected. Tap the file chooser first.';
+    if (msg) msg.style.color = 'var(--orange)';
+    return;
+  }
+  if (msg) { msg.textContent = '✓ Adding ' + input.files.length + ' file(s)...'; msg.style.color = 'var(--green)'; }
+  addFiles(input.files);
+  input.value = '';
+  if (msg) { msg.textContent = 'Select video files, then tap Add Files'; msg.style.color = 'var(--muted)'; }
+}
 
 function addFiles(list) {
   for (const file of list) {
