@@ -1391,16 +1391,18 @@ tr.dirty .at-save { display: inline-flex !important; }
 
         <!-- Inline upload panel -->
         <div id="upload-panel">
-          <label for="file-input-inline" id="drop-zone-inline" style="text-align:center;cursor:pointer;display:block;">
+          <div id="drop-zone-inline" style="text-align:center;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;margin:0 auto 8px;display:block;color:var(--muted)">
               <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
             </svg>
-            <div style="font-size:14px;font-weight:600;">Tap to select video</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px;">MP4, MOV, MKV, M4V</div>
-          </label>
-          <input type="file" id="file-input-inline" multiple accept="video/*,.mp4,.mov,.m4v,.mkv" style="display:none" onchange="handleFiles(this.files);this.value='';">
-          <div id="file-input-debug" style="font-size:11px;color:var(--orange);margin-top:6px;display:none;"></div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:8px;">Upload Video</div>
+            <input type="file" id="file-input-inline" multiple accept="video/*,.mp4,.mov,.m4v,.mkv"
+              style="font-size:16px;width:100%;padding:12px;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer;"
+              onchange="if(this.files.length){handleFiles(this.files);this.value='';}"
+            >
+            <div style="font-size:12px;color:var(--muted);margin-top:8px;">MP4, MOV, MKV, M4V</div>
+          </div>
           <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
               <span id="pending-count-inline" style="font-size:13px;font-weight:600;flex:1;"></span>
