@@ -1396,8 +1396,11 @@ tr.dirty .at-save { display: inline-flex !important; }
               <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
             </svg>
-            <button class="btn btn-primary" onclick="openFilePicker()" style="padding:14px 24px;font-size:16px;width:100%;">📁 Select Video to Upload</button>
-            <div id="upload-status-msg" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+            <p style="font-size:14px;font-weight:600;margin-bottom:10px;">Select a video file:</p>
+            <form id="upload-form" onsubmit="return false;">
+              <input type="file" id="file-input-inline" name="video" multiple accept="video/*" style="font-size:16px;display:block;margin-bottom:10px;">
+            </form>
+            <div id="upload-status-msg" style="font-size:13px;color:var(--green);margin-top:6px;"></div>
           </div>
           <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
@@ -2517,12 +2520,30 @@ if (dropZoneInline) {
   });
 }
 if (fileInputInline) {
-  fileInputInline.addEventListener('change', function() {
-    toast('File selected: ' + (this.files.length || 0) + ' file(s)');
-    if (this.files && this.files.length > 0) {
-      handleFiles(this.files);
+  // Multiple event types for maximum iOS compatibility
+  ['change', 'input'].forEach(evt => {
+    fileInputInline.addEventListener(evt, function() {
+      if (this.files && this.files.length > 0) {
+        const msg = document.getElementById('upload-status-msg');
+        if (msg) msg.textContent = '✓ ' + this.files.length + ' file(s) selected';
+        handleFiles(this.files);
+        this.value = '';
+      }
+    });
+  });
+  // Polling fallback: check every 500ms after focus returns to page
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      let checks = 0;
+      const poll = setInterval(() => {
+        if (fileInputInline.files && fileInputInline.files.length > 0) {
+          handleFiles(fileInputInline.files);
+          fileInputInline.value = '';
+          clearInterval(poll);
+        }
+        if (++checks > 20) clearInterval(poll); // stop after 10s
+      }, 500);
     }
-    this.value = '';
   });
 }
 
@@ -2556,33 +2577,7 @@ function slugToTitle(n) { return n.replace(/\.[^/.]+$/,'').replace(/[-_]/g,' ').
 
 function handleFiles(list) { addFiles(list); }
 
-function openFilePicker() {
-  const msg = document.getElementById('upload-status-msg');
-  if (msg) { msg.textContent = 'Opening file picker...'; msg.style.color = 'var(--accent2)'; }
-  // Create a fresh input on document.body each time — avoids iOS Safari bug
-  // where file inputs inside scrollable/overflow containers lose their files
-  const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.multiple = true;
-  inp.style.position = 'fixed';
-  inp.style.top = '0';
-  inp.style.left = '0';
-  inp.style.opacity = '0.01';
-  inp.style.width = '1px';
-  inp.style.height = '1px';
-  document.body.appendChild(inp);
-  inp.addEventListener('change', function() {
-    if (this.files && this.files.length > 0) {
-      if (msg) { msg.textContent = '\u2713 ' + this.files.length + ' file(s) added'; msg.style.color = 'var(--green)'; }
-      addFiles(this.files);
-    } else {
-      if (msg) { msg.textContent = 'No files selected'; msg.style.color = 'var(--orange)'; }
-    }
-    document.body.removeChild(inp);
-  });
-  // iOS needs a small delay before .click() works on dynamically created inputs
-  setTimeout(() => inp.click(), 50);
-}
+
 
 function addFiles(list) {
   for (const file of list) {
