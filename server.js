@@ -1,3 +1,4 @@
+const ADMIN_BUILD = 1;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -159,6 +160,7 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
 
   res.sendStatus(200);
 });
+app.get('/api/build', (req, res) => res.json({ build: ADMIN_BUILD }));
 app.use(express.static('public', { maxAge: 0, etag: false }));
 
 // ── Mux helper ────────────────────────────────────────────────────────────────

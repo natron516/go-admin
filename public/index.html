@@ -1172,6 +1172,7 @@ tr.dirty .at-save { display: inline-flex !important; }
     <div class="sidebar-header">
       <span class="logo-icon">🎬</span>
       <span class="logo-text">GO Admin</span>
+      <span class="logo-text" style="font-size:10px;color:var(--muted);margin-left:4px;" id="admin-build"></span>
       <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 18l-6-6 6-6"/>
@@ -2534,6 +2535,13 @@ if (dropZoneInline) {
     }
   });
 }
+
+// Build version display
+fetch('/api/build').then(r=>r.json()).then(d=>{
+  const el = document.getElementById('admin-build');
+  if(el) el.textContent = 'b' + d.build;
+  document.title = 'GO Admin b' + d.build;
+}).catch(()=>{});
 
 // Toast
 function toast(msg) {
