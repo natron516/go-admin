@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 8;
+const ADMIN_BUILD = 9;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
