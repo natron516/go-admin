@@ -1300,7 +1300,7 @@ tr.dirty .at-save { display: inline-flex !important; }
       <section id="tab-dashboard" class="section active">
         <div class="page-header">
           <div class="page-header-text">
-            <div class="page-title">Dashboard</div>
+            <div class="page-title">Dashboard <span id="admin-build-main" style="font-size:12px;font-weight:400;color:var(--muted);margin-left:8px;"></span></div>
             <div class="page-subtitle">Overview of your GO Videos platform</div>
           </div>
           <div class="page-actions">
@@ -2523,11 +2523,9 @@ if (dropZoneInline) {
 
 // Build version display
 fetch('/api/build').then(r=>r.json()).then(d=>{
-  const el = document.getElementById('admin-build');
-  if(el) el.textContent = 'b' + d.build;
-  const tag = document.getElementById('build-tag');
-  if(tag) tag.textContent = 'b' + d.build;
-  document.title = 'GO Admin b' + d.build;
+  const v = 'b' + d.build;
+  document.querySelectorAll('#admin-build,#admin-build-main,#build-tag').forEach(el => { if(el) el.textContent = v; });
+  document.title = 'GO Admin ' + v;
 }).catch(()=>{});
 
 // Toast
