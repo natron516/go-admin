@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upload Test</title>
+<style>
+body { font-family: -apple-system, sans-serif; padding: 20px; background: #111; color: #eee; }
+.result { margin-top: 20px; padding: 15px; background: #222; border-radius: 8px; min-height: 50px; }
+button { font-size: 18px; padding: 15px 30px; margin: 10px 0; display: block; width: 100%; }
+h3 { margin-top: 20px; }
+</style>
+</head>
+<body>
+<h2>iOS Upload Test</h2>
+
+<h3>Test 1: Plain file input (no JS)</h3>
+<input type="file" id="test1" multiple style="font-size:18px;display:block;margin:10px 0;">
+<div class="result" id="r1">Select a file above...</div>
+
+<h3>Test 2: Plain file input (video only)</h3>
+<input type="file" id="test2" multiple accept="video/*" style="font-size:18px;display:block;margin:10px 0;">
+<div class="result" id="r2">Select a file above...</div>
+
+<h3>Test 3: Button triggers visible input</h3>
+<input type="file" id="test3" multiple style="font-size:18px;display:block;margin:10px 0;">
+<button onclick="document.getElementById('test3').click()">Click me to pick file</button>
+<div class="result" id="r3">Tap button above...</div>
+
+<h3>Test 4: Button triggers hidden input</h3>
+<input type="file" id="test4" multiple style="display:none;">
+<button onclick="document.getElementById('test4').click()">Click me to pick file (hidden input)</button>
+<div class="result" id="r4">Tap button above...</div>
+
+<script>
+['test1','test2','test3','test4'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('change', function() {
+    const r = document.getElementById('r' + id.replace('test',''));
+    if (this.files.length > 0) {
+      const names = Array.from(this.files).map(f => f.name + ' (' + (f.size/1048576).toFixed(1) + 'MB)').join(', ');
+      r.innerHTML = '<b style="color:#22c55e;">✓ SUCCESS!</b><br>' + names;
+    } else {
+      r.innerHTML = '<b style="color:#ef4444;">✗ Change fired but no files</b>';
+    }
+  });
+});
+</script>
+</body>
+</html>
