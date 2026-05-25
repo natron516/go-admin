@@ -2561,7 +2561,7 @@ function renderFileList() {
   wrap.style.display = 'block';
   countEl.textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
   // Render file list into the wrap that's currently active
-  const listTarget = wrap.querySelector('#file-list') || document.getElementById('file-list');
+  const listTarget = wrap.querySelector('#file-list');
   const listHtml = `
     <div class="upload-table-wrap">
     <table class="upload-table">
