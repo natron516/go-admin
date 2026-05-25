@@ -1359,7 +1359,8 @@ tr.dirty .at-save { display: inline-flex !important; }
           <div class="dz-title">Drop video files here</div>
           <div class="dz-sub">or click to browse · MP4, MOV, MKV, M4V supported</div>
         </div>
-        <input type="file" id="file-input" multiple accept="video/*,video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v,.mkv">
+        <input type="file" id="file-input" multiple style="font-size:16px;display:block;margin:12px 0;"
+          onchange="if(this.files.length>0 && typeof addFiles==='function'){addFiles(this.files);this.value='';}">
 
         <div id="pending-wrap" style="display:none">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
