@@ -2576,8 +2576,14 @@ function removeFile(uid) { pendingFiles = pendingFiles.filter(f => f.uid !== uid
 function clearDone() { pendingFiles = pendingFiles.filter(f => f.status !== 'done'); renderFileList(); }
 
 function renderFileList() {
-  const wrap = document.getElementById('pending-wrap-inline') || document.getElementById('pending-wrap');
-  const countEl = document.getElementById('pending-count-inline') || document.getElementById('pending-count');
+  // Show file list in whichever tab is active
+  const uploadTabActive = document.getElementById('tab-upload')?.classList.contains('active');
+  const wrap = uploadTabActive
+    ? document.getElementById('pending-wrap')
+    : (document.getElementById('pending-wrap-inline') || document.getElementById('pending-wrap'));
+  const countEl = uploadTabActive
+    ? document.getElementById('pending-count')
+    : (document.getElementById('pending-count-inline') || document.getElementById('pending-count'));
   if (pendingFiles.length === 0) { wrap.style.display = 'none'; return; }
   const panel = document.getElementById('upload-panel');
   if (panel && document.getElementById('tab-assets').classList.contains('active')) panel.style.display = 'block';
