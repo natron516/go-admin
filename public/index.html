@@ -1135,7 +1135,7 @@ tr.dirty .at-save { display: inline-flex !important; }
 <body>
 <!-- Global file input — MUST be outside overflow:hidden containers for iOS Safari -->
 <input type="file" id="global-file-input" multiple style="position:fixed;top:-9999px;left:-9999px;opacity:0;"
-  onchange="if(this.files.length>0){window._pendingUploadFiles=this.files;document.getElementById('upload-status-msg').textContent='✓ '+this.files.length+' file(s) selected';document.getElementById('upload-status-msg').style.color='#22c55e';if(typeof addFiles==='function'){addFiles(this.files);this.value='';}}">
+  onchange="alert('FILE SELECTED: '+this.files.length+' file(s): '+(this.files[0]?this.files[0].name:'none'));if(this.files.length>0){if(typeof addFiles==='function'){addFiles(this.files);}this.value='';}">
 <script>
 function triggerGlobalFilePicker(){
   document.getElementById('global-file-input').click();
