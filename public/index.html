@@ -1357,7 +1357,7 @@ tr.dirty .at-save { display: inline-flex !important; }
           <div class="dz-title">Drop video files here</div>
           <div class="dz-sub">or click to browse · MP4, MOV, MKV, M4V supported</div>
         </div>
-        <input type="file" id="file-input" multiple accept="video/*">
+        <input type="file" id="file-input" multiple accept="video/*,video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v,.mkv">
 
         <div id="pending-wrap" style="display:none">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
@@ -1398,7 +1398,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <div style="font-size:14px;font-weight:600;">Drop video files here</div>
             <div style="font-size:12px;color:var(--muted);margin-top:4px;">or click to browse · MP4, MOV, MKV, M4V</div>
           </div>
-          <input type="file" id="file-input-inline" multiple accept="video/*" style="display:none">
+          <input type="file" id="file-input-inline" multiple accept="video/*,video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v,.mkv" style="display:none">
           <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
               <span id="pending-count-inline" style="font-size:13px;font-weight:600;flex:1;"></span>
@@ -2509,14 +2509,30 @@ function toggleUploadPanel() {
 const dropZoneInline = document.getElementById('drop-zone-inline');
 const fileInputInline = document.getElementById('file-input-inline');
 if (dropZoneInline) {
-  dropZoneInline.addEventListener('click', () => fileInputInline.click());
+  dropZoneInline.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fileInputInline.click();
+  });
   dropZoneInline.addEventListener('dragover', e => { e.preventDefault(); dropZoneInline.style.borderColor='var(--accent)'; dropZoneInline.style.background='var(--accent-dim)'; });
   dropZoneInline.addEventListener('dragleave', () => { dropZoneInline.style.borderColor=''; dropZoneInline.style.background=''; });
   dropZoneInline.addEventListener('drop', e => {
     e.preventDefault(); dropZoneInline.style.borderColor=''; dropZoneInline.style.background='';
     handleFiles(e.dataTransfer.files);
   });
-  fileInputInline.addEventListener('change', e => { handleFiles(e.target.files); fileInputInline.value=''; });
+  fileInputInline.addEventListener('change', e => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+    }
+    fileInputInline.value='';
+  });
+  // iOS Safari: re-check file input after returning from photo picker
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && fileInputInline.files && fileInputInline.files.length > 0) {
+      handleFiles(fileInputInline.files);
+      fileInputInline.value='';
+    }
+  });
 }
 
 // Toast
