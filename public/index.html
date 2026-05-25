@@ -1133,14 +1133,7 @@ tr.dirty .at-save { display: inline-flex !important; }
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 </head>
 <body>
-<!-- Global file input — MUST be outside overflow:hidden containers for iOS Safari -->
-<input type="file" id="global-file-input" multiple style="position:fixed;top:-9999px;left:-9999px;opacity:0;"
-  onchange="alert('FILE SELECTED: '+this.files.length+' file(s): '+(this.files[0]?this.files[0].name:'none'));if(this.files.length>0){if(typeof addFiles==='function'){addFiles(this.files);}this.value='';}">
-<script>
-function triggerGlobalFilePicker(){
-  document.getElementById('global-file-input').click();
-}
-</script>
+
 
 <!-- Mobile sidebar overlay -->
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -1404,8 +1397,10 @@ function triggerGlobalFilePicker(){
               <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
             </svg>
-            <button class="btn btn-primary" onclick="triggerGlobalFilePicker()" style="padding:14px 24px;font-size:16px;width:100%;">📁 Select Video to Upload</button>
-            <div id="upload-status-msg" style="font-size:13px;color:var(--muted);margin-top:8px;"></div>
+            <p style="font-size:14px;font-weight:600;margin-bottom:8px;">Select video to upload:</p>
+            <input type="file" id="file-input-inline" multiple
+              onchange="alert('Got '+this.files.length+' file(s)');if(this.files.length>0 && typeof addFiles==='function'){addFiles(this.files);this.value='';}">
+            <div id="upload-status-msg" style="font-size:13px;margin-top:8px;"></div>
           </div>
           <div id="pending-wrap-inline" style="display:none;margin-top:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
