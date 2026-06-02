@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 21;
+const ADMIN_BUILD = 22;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1116,6 +1116,330 @@ app.post('/api/notify', async (req, res) => {
     console.error('[notify] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Books ────────────────────────────────────────────────────────────────────
+
+app.get('/api/books', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('books').orderBy('sortOrder', 'asc').get();
+    const books = [];
+    snap.forEach(doc => books.push({ id: doc.id, ...doc.data() }));
+    res.json({ books });
+  } catch (e) {
+    // Try without ordering if no index
+    try {
+      const db = admin.firestore();
+      const snap = await db.collection('books').get();
+      const books = [];
+      snap.forEach(doc => books.push({ id: doc.id, ...doc.data() }));
+      res.json({ books });
+    } catch (e2) { res.status(500).json({ error: e2.message }); }
+  }
+});
+
+app.post('/api/books', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, featured, sortOrder } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const data = {
+      title,
+      author: author || '',
+      description: description || '',
+      coverImageUrl: coverImageUrl || '',
+      category: category || '',
+      amazonUrl: amazonUrl || '',
+      kindleUrl: kindleUrl || '',
+      audiobookUrl: audiobookUrl || '',
+      featured: !!featured,
+      sortOrder: Number(sortOrder) || 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const ref = await db.collection('books').add(data);
+    res.json({ id: ref.id, ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/books/:id', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, featured, sortOrder } = req.body;
+    const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (title !== undefined) update.title = title;
+    if (author !== undefined) update.author = author;
+    if (description !== undefined) update.description = description;
+    if (coverImageUrl !== undefined) update.coverImageUrl = coverImageUrl;
+    if (category !== undefined) update.category = category;
+    if (amazonUrl !== undefined) update.amazonUrl = amazonUrl;
+    if (kindleUrl !== undefined) update.kindleUrl = kindleUrl;
+    if (audiobookUrl !== undefined) update.audiobookUrl = audiobookUrl;
+    if (featured !== undefined) update.featured = !!featured;
+    if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
+    await db.collection('books').doc(req.params.id).update(update);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/books/:id', async (req, res) => {
+  try {
+    await admin.firestore().collection('books').doc(req.params.id).delete();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Articles ──────────────────────────────────────────────────────────────────
+
+app.get('/api/articles', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('articles').orderBy('sortOrder', 'asc').get();
+    const articles = [];
+    snap.forEach(doc => articles.push({ id: doc.id, ...doc.data() }));
+    res.json({ articles });
+  } catch (e) {
+    try {
+      const db = admin.firestore();
+      const snap = await db.collection('articles').get();
+      const articles = [];
+      snap.forEach(doc => articles.push({ id: doc.id, ...doc.data() }));
+      res.json({ articles });
+    } catch (e2) { res.status(500).json({ error: e2.message }); }
+  }
+});
+
+app.post('/api/articles', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const data = {
+      title,
+      author: author || '',
+      content: content || '',
+      excerpt: excerpt || '',
+      coverImageUrl: coverImageUrl || '',
+      category: category || 'articles',
+      published: !!published,
+      featured: !!featured,
+      sortOrder: Number(sortOrder) || 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const ref = await db.collection('articles').add(data);
+    res.json({ id: ref.id, ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/articles/:id', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder } = req.body;
+    const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (title !== undefined) update.title = title;
+    if (author !== undefined) update.author = author;
+    if (content !== undefined) update.content = content;
+    if (excerpt !== undefined) update.excerpt = excerpt;
+    if (coverImageUrl !== undefined) update.coverImageUrl = coverImageUrl;
+    if (category !== undefined) update.category = category;
+    if (published !== undefined) update.published = !!published;
+    if (featured !== undefined) update.featured = !!featured;
+    if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
+    await db.collection('articles').doc(req.params.id).update(update);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/articles/:id', async (req, res) => {
+  try {
+    await admin.firestore().collection('articles').doc(req.params.id).delete();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Podcasts ──────────────────────────────────────────────────────────────────
+
+app.get('/api/podcasts', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('podcasts').orderBy('sortOrder', 'asc').get();
+    const podcasts = [];
+    snap.forEach(doc => podcasts.push({ id: doc.id, ...doc.data() }));
+    res.json({ podcasts });
+  } catch (e) {
+    try {
+      const db = admin.firestore();
+      const snap = await db.collection('podcasts').get();
+      const podcasts = [];
+      snap.forEach(doc => podcasts.push({ id: doc.id, ...doc.data() }));
+      res.json({ podcasts });
+    } catch (e2) { res.status(500).json({ error: e2.message }); }
+  }
+});
+
+app.post('/api/podcasts', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, feedUrl, description, artworkUrl, category, enabled, sortOrder } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    if (!feedUrl) return res.status(400).json({ error: 'feedUrl required' });
+    const data = {
+      title,
+      feedUrl,
+      description: description || '',
+      artworkUrl: artworkUrl || '',
+      category: category || 'sermons',
+      enabled: enabled !== false,
+      sortOrder: Number(sortOrder) || 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const ref = await db.collection('podcasts').add(data);
+    res.json({ id: ref.id, ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/podcasts/:id', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, feedUrl, description, artworkUrl, category, enabled, sortOrder } = req.body;
+    const update = {};
+    if (title !== undefined) update.title = title;
+    if (feedUrl !== undefined) update.feedUrl = feedUrl;
+    if (description !== undefined) update.description = description;
+    if (artworkUrl !== undefined) update.artworkUrl = artworkUrl;
+    if (category !== undefined) update.category = category;
+    if (enabled !== undefined) update.enabled = !!enabled;
+    if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
+    await db.collection('podcasts').doc(req.params.id).update(update);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/podcasts/:id', async (req, res) => {
+  try {
+    await admin.firestore().collection('podcasts').doc(req.params.id).delete();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Fetch and parse podcast RSS feed
+app.get('/api/podcasts/:id/episodes', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const doc = await db.collection('podcasts').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Podcast not found' });
+    const { feedUrl } = doc.data();
+    if (!feedUrl) return res.status(400).json({ error: 'No feed URL configured' });
+
+    const feedRes = await fetch(feedUrl, {
+      headers: { 'User-Agent': 'GO-Admin/1.0 (RSS Reader)' },
+    });
+    if (!feedRes.ok) throw new Error(`Feed returned ${feedRes.status}`);
+    const xml = await feedRes.text();
+
+    // Parse RSS with fast-xml-parser
+    let XMLParser;
+    try {
+      ({ XMLParser } = require('fast-xml-parser'));
+    } catch {
+      return res.status(503).json({ error: 'RSS parser not installed (run npm install)' });
+    }
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: '@_',
+      isArray: (name) => name === 'item',
+    });
+    const feed = parser.parse(xml);
+    const channel = feed?.rss?.channel || {};
+    const items = (Array.isArray(channel.item) ? channel.item : channel.item ? [channel.item] : []).slice(0, 30);
+
+    const episodes = items.map(item => ({
+      title: item.title || '',
+      description: item.description || item['itunes:summary'] || '',
+      pubDate: item.pubDate || '',
+      duration: item['itunes:duration'] || '',
+      audioUrl: item.enclosure?.['@_url'] || '',
+      guid: item.guid?.['#text'] || item.guid || '',
+      image: item['itunes:image']?.['@_href'] || '',
+    }));
+
+    res.json({
+      feedTitle: channel.title || '',
+      feedDescription: channel.description || '',
+      feedImage: channel.image?.url || channel['itunes:image']?.['@_href'] || '',
+      episodes,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Audio Assets ──────────────────────────────────────────────────────────────
+
+app.get('/api/audio', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('audioAssets').orderBy('sortOrder', 'asc').get();
+    const audio = [];
+    snap.forEach(doc => audio.push({ id: doc.id, ...doc.data() }));
+    res.json({ audio });
+  } catch (e) {
+    try {
+      const db = admin.firestore();
+      const snap = await db.collection('audioAssets').get();
+      const audio = [];
+      snap.forEach(doc => audio.push({ id: doc.id, ...doc.data() }));
+      res.json({ audio });
+    } catch (e2) { res.status(500).json({ error: e2.message }); }
+  }
+});
+
+app.post('/api/audio', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const data = {
+      title,
+      artist: artist || '',
+      description: description || '',
+      audioUrl: audioUrl || '',
+      coverImageUrl: coverImageUrl || '',
+      category: category || 'music',
+      duration: Number(duration) || 0,
+      featured: !!featured,
+      sortOrder: Number(sortOrder) || 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const ref = await db.collection('audioAssets').add(data);
+    res.json({ id: ref.id, ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/audio/:id', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder } = req.body;
+    const update = {};
+    if (title !== undefined) update.title = title;
+    if (artist !== undefined) update.artist = artist;
+    if (description !== undefined) update.description = description;
+    if (audioUrl !== undefined) update.audioUrl = audioUrl;
+    if (coverImageUrl !== undefined) update.coverImageUrl = coverImageUrl;
+    if (category !== undefined) update.category = category;
+    if (duration !== undefined) update.duration = Number(duration);
+    if (featured !== undefined) update.featured = !!featured;
+    if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
+    await db.collection('audioAssets').doc(req.params.id).update(update);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/audio/:id', async (req, res) => {
+  try {
+    await admin.firestore().collection('audioAssets').doc(req.params.id).delete();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));

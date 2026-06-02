@@ -1131,6 +1131,19 @@ tr.dirty .at-save { display: inline-flex !important; }
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<!-- Quill rich text editor -->
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<style>
+/* Quill dark theme overrides */
+.ql-toolbar.ql-snow { background: rgba(255,255,255,.06); border-color: var(--border); border-radius: 8px 8px 0 0; }
+.ql-container.ql-snow { border-color: var(--border); border-radius: 0 0 8px 8px; }
+.ql-toolbar.ql-snow .ql-stroke { stroke: var(--muted); }
+.ql-toolbar.ql-snow .ql-fill { fill: var(--muted); }
+.ql-toolbar.ql-snow button:hover .ql-stroke, .ql-toolbar.ql-snow .ql-active .ql-stroke { stroke: var(--text); }
+.ql-toolbar.ql-snow button:hover .ql-fill, .ql-toolbar.ql-snow .ql-active .ql-fill { fill: var(--text); }
+.ql-editor { color: var(--text); min-height: 180px; font-size: 13px; font-family: inherit; }
+.ql-editor.ql-blank::before { color: var(--muted); font-style: normal; }
+</style>
 </head>
 <body>
 
@@ -1277,6 +1290,49 @@ tr.dirty .at-save { display: inline-flex !important; }
           </svg>
         </span>
         <span class="nav-label">Settings</span>
+      </button>
+
+      <button class="tab" data-label="Books" onclick="navTo('books', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Books</span>
+      </button>
+
+      <button class="tab" data-label="Articles" onclick="navTo('articles', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="14 2 14 8 20 8" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="16" y1="13" x2="8" y2="13" stroke-linecap="round"/>
+            <line x1="16" y1="17" x2="8" y2="17" stroke-linecap="round"/>
+            <polyline points="10 9 9 9 8 9" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Articles</span>
+      </button>
+
+      <button class="tab" data-label="Podcasts" onclick="navTo('podcasts', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="2"/>
+            <path d="M16.24 7.76a6 6 0 010 8.49M7.76 16.24a6 6 0 010-8.49M20.49 3.51a12 12 0 010 16.97M3.51 20.49a12 12 0 010-16.97" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Podcasts</span>
+      </button>
+
+      <button class="tab" data-label="Audio" onclick="navTo('audio', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 18v-6a9 9 0 0118 0v6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Audio</span>
       </button>
     </nav>
   </aside>
@@ -1636,9 +1692,326 @@ tr.dirty .at-save { display: inline-flex !important; }
         </div>
       </section>
 
+      <!-- ── BOOKS ────────────────────────────────────── -->
+      <section id="tab-books" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Books</div>
+            <div class="page-subtitle">Manage book recommendations for the app</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadBooks()">&#8634; Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openBookModal()">+ Add Book</button>
+          </div>
+        </div>
+        <div id="books-content"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── ARTICLES ───────────────────────────────────── -->
+      <section id="tab-articles" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Articles</div>
+            <div class="page-subtitle">Manage articles and written content for the app</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadArticles()">&#8634; Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openArticleModal()">+ Add Article</button>
+          </div>
+        </div>
+        <div id="articles-content"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── PODCASTS ───────────────────────────────────── -->
+      <section id="tab-podcasts" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Podcasts</div>
+            <div class="page-subtitle">Manage podcast RSS feed subscriptions</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadPodcasts()">&#8634; Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openPodcastModal()">+ Add Podcast</button>
+          </div>
+        </div>
+        <div id="podcasts-content"><div class="spinner"></div></div>
+      </section>
+
+      <!-- ── AUDIO ──────────────────────────────────────── -->
+      <section id="tab-audio" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Audio</div>
+            <div class="page-subtitle">Manage audio assets — music, sermons, spoken word</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadAudio()">&#8634; Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openAudioModal()">+ Add Audio</button>
+          </div>
+        </div>
+        <div id="audio-content"><div class="spinner"></div></div>
+      </section>
+
     </main><!-- /main -->
   </div><!-- /main-wrap -->
 </div><!-- /app-layout -->
+
+<!-- ── Book Modal ────────────────────────────────────── -->
+<div class="modal-backdrop" id="book-modal" onclick="if(event.target===this)closeBookModal()">
+  <div class="modal" style="max-width:560px;">
+    <h3 id="book-modal-title">Add Book</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field-group" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label>Title *</label>
+          <input type="text" id="book-title" placeholder="Book title">
+        </div>
+        <div class="field">
+          <label>Author</label>
+          <input type="text" id="book-author" placeholder="Author name">
+        </div>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="book-description" rows="3" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+      <div class="field">
+        <label>Cover Image URL</label>
+        <input type="url" id="book-cover" placeholder="https://...">
+      </div>
+      <div class="field-group" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label>Category</label>
+          <select id="book-category">
+            <option value="devotional">Devotional</option>
+            <option value="theology">Theology</option>
+            <option value="biography">Biography</option>
+            <option value="children">Children's</option>
+            <option value="fiction">Fiction</option>
+            <option value="reference">Reference</option>
+            <option value="study-guide">Study Guide</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sort Order</label>
+          <input type="number" id="book-sort" value="0" min="0">
+        </div>
+      </div>
+      <div class="field">
+        <label>Amazon URL</label>
+        <input type="url" id="book-amazon" placeholder="https://amazon.com/...">
+      </div>
+      <div class="field">
+        <label>Kindle URL</label>
+        <input type="url" id="book-kindle" placeholder="https://...">
+      </div>
+      <div class="field">
+        <label>Audiobook URL</label>
+        <input type="url" id="book-audiobook" placeholder="https://...">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="book-featured" style="accent-color:var(--accent);width:15px;height:15px;">
+        <label for="book-featured" style="font-size:13px;cursor:pointer;">Featured</label>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeBookModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBook()">Save Book</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Article Modal ─────────────────────────────────── -->
+<div class="modal-backdrop" id="article-modal" onclick="if(event.target===this)closeArticleModal()">
+  <div class="modal" style="max-width:720px;">
+    <h3 id="article-modal-title">Add Article</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field-group" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label>Title *</label>
+          <input type="text" id="article-title" placeholder="Article title">
+        </div>
+        <div class="field">
+          <label>Author</label>
+          <input type="text" id="article-author" placeholder="Author name">
+        </div>
+      </div>
+      <div class="field">
+        <label>Excerpt (short description)</label>
+        <input type="text" id="article-excerpt" placeholder="Brief summary shown in listings">
+      </div>
+      <div class="field">
+        <label>Cover Image URL</label>
+        <input type="url" id="article-cover" placeholder="https://...">
+      </div>
+      <div class="field-group" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label>Category</label>
+          <select id="article-category">
+            <option value="articles">Articles</option>
+            <option value="devotional">Devotional</option>
+            <option value="news">News</option>
+            <option value="children">Children's</option>
+            <option value="study">Study</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sort Order</label>
+          <input type="number" id="article-sort" value="0" min="0">
+        </div>
+      </div>
+      <div class="field">
+        <label>Content (HTML Rich Text)</label>
+        <div id="article-quill-editor" style="height:220px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:0 0 8px 8px;"></div>
+        <input type="hidden" id="article-content">
+      </div>
+      <div style="display:flex;gap:16px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="article-published" style="accent-color:var(--accent);width:15px;height:15px;">
+          <label for="article-published" style="font-size:13px;cursor:pointer;">Published</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="article-featured" style="accent-color:var(--accent);width:15px;height:15px;">
+          <label for="article-featured" style="font-size:13px;cursor:pointer;">Featured</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeArticleModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveArticle()">Save Article</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Article Preview Modal ─────────────────────────── -->
+<div class="modal-backdrop" id="article-preview-modal" onclick="if(event.target===this)document.getElementById('article-preview-modal').classList.remove('open')">
+  <div class="modal" style="max-width:720px;">
+    <h3 id="article-preview-title">Preview</h3>
+    <div id="article-preview-body" style="max-height:60vh;overflow-y:auto;padding:16px;background:rgba(255,255,255,.03);border-radius:8px;line-height:1.7;font-size:14px;"></div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="document.getElementById('article-preview-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Podcast Modal ─────────────────────────────────── -->
+<div class="modal-backdrop" id="podcast-modal" onclick="if(event.target===this)closePodcastModal()">
+  <div class="modal" style="max-width:540px;">
+    <h3 id="podcast-modal-title">Add Podcast</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field">
+        <label>Title *</label>
+        <input type="text" id="podcast-title" placeholder="Podcast name">
+      </div>
+      <div class="field">
+        <label>RSS Feed URL *</label>
+        <input type="url" id="podcast-feed" placeholder="https://feeds.example.com/podcast.xml">
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="podcast-description" rows="2" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+      <div class="field">
+        <label>Artwork URL</label>
+        <input type="url" id="podcast-artwork" placeholder="https://...">
+      </div>
+      <div class="field-group" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label>Category</label>
+          <select id="podcast-category">
+            <option value="sermons">Sermons</option>
+            <option value="devotional">Devotional</option>
+            <option value="children">Children's</option>
+            <option value="teaching">Teaching</option>
+            <option value="music">Music</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sort Order</label>
+          <input type="number" id="podcast-sort" value="0" min="0">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="podcast-enabled" checked style="accent-color:var(--accent);width:15px;height:15px;">
+        <label for="podcast-enabled" style="font-size:13px;cursor:pointer;">Enabled</label>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closePodcastModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="savePodcast()">Save Podcast</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Podcast Episodes Modal ────────────────────────── -->
+<div class="modal-backdrop" id="podcast-episodes-modal" onclick="if(event.target===this)document.getElementById('podcast-episodes-modal').classList.remove('open')">
+  <div class="modal" style="max-width:640px;">
+    <h3 id="podcast-episodes-title">Episodes</h3>
+    <div id="podcast-episodes-body" style="max-height:65vh;overflow-y:auto;"><div class="spinner"></div></div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="document.getElementById('podcast-episodes-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Audio Modal ───────────────────────────────────── -->
+<div class="modal-backdrop" id="audio-modal" onclick="if(event.target===this)closeAudioModal()">
+  <div class="modal" style="max-width:540px;">
+    <h3 id="audio-modal-title">Add Audio</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field-group" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label>Title *</label>
+          <input type="text" id="audio-title" placeholder="Track title">
+        </div>
+        <div class="field">
+          <label>Artist</label>
+          <input type="text" id="audio-artist" placeholder="Artist or speaker">
+        </div>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="audio-description" rows="2" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+      <div class="field">
+        <label>Audio URL</label>
+        <input type="url" id="audio-url" placeholder="https://...mp3">
+      </div>
+      <div class="field">
+        <label>Cover Image URL</label>
+        <input type="url" id="audio-cover" placeholder="https://...">
+      </div>
+      <div class="field-group" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="field">
+          <label>Category</label>
+          <select id="audio-category">
+            <option value="music">Music</option>
+            <option value="children">Children's</option>
+            <option value="sermons">Sermons</option>
+            <option value="spoken-word">Spoken Word</option>
+            <option value="audiobook">Audiobook</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Duration (sec)</label>
+          <input type="number" id="audio-duration" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>Sort Order</label>
+          <input type="number" id="audio-sort" value="0" min="0">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="audio-featured" style="accent-color:var(--accent);width:15px;height:15px;">
+        <label for="audio-featured" style="font-size:13px;cursor:pointer;">Featured</label>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeAudioModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAudio()">Save Audio</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Thumbnail Modal ────────────────────────────────── -->
 <div class="modal-backdrop" id="thumb-modal">
@@ -2126,6 +2499,10 @@ function showTab(name, btn) {
   if (name === 'sessions') loadSessions();
   if (name === 'settings') loadForceUpdateConfig();
   if (name === 'dashboard') loadDashboard();
+  if (name === 'books')    loadBooks();
+  if (name === 'articles') loadArticles();
+  if (name === 'podcasts') loadPodcasts();
+  if (name === 'audio')    loadAudio();
 }
 
 // ── Sessions ─────────────────────────────────────────────
@@ -3685,6 +4062,552 @@ async function loadVersionDistribution() {
   } catch (e) {
     el.innerHTML = '<p style="font-size:13px;color:var(--red);">Failed to load version data.</p>';
   }
+}
+</script>
+
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+// =============================================================
+// BOOKS
+// =============================================================
+let _books = [];
+let _editingBookId = null;
+let _quillArticle = null;
+
+async function loadBooks() {
+  const el = document.getElementById('books-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/books');
+    const data = await r.json();
+    _books = data.books || [];
+    renderBooksTable();
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--red)">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+function renderBooksTable() {
+  const el = document.getElementById('books-content');
+  if (!_books.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No books yet. Click <b>+ Add Book</b> to get started.</div>';
+    return;
+  }
+  const rows = _books.map(b => `
+    <tr>
+      <td style="padding:10px 12px;">
+        ${b.coverImageUrl ? `<img src="${escHtml(b.coverImageUrl)}" style="width:36px;height:48px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:8px;">` : ''}
+        <span style="font-weight:600;">${escHtml(b.title)}</span>
+      </td>
+      <td style="padding:10px 12px;color:var(--muted);">${escHtml(b.author||'')}</td>
+      <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(b.category||'')}</span></td>
+      <td style="padding:10px 12px;">${b.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
+      <td style="padding:10px 12px;">
+        ${b.amazonUrl ? `<a href="${escAttr(b.amazonUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;margin-right:6px;">Amazon</a>` : ''}
+        ${b.kindleUrl ? `<a href="${escAttr(b.kindleUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;margin-right:6px;">Kindle</a>` : ''}
+        ${b.audiobookUrl ? `<a href="${escAttr(b.audiobookUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;">Audio</a>` : ''}
+      </td>
+      <td style="padding:10px 12px;white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="editBook('${escAttr(b.id)}')">Edit</button>
+        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteBook('${escAttr(b.id)}', '${escAttr(b.title)}')">Delete</button>
+      </td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
+      <table style="width:100%;border-collapse:collapse;min-width:640px;">
+        <thead>
+          <tr style="background:rgba(0,0,0,.2);">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Author</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Links</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openBookModal(book) {
+  _editingBookId = book ? book.id : null;
+  document.getElementById('book-modal-title').textContent = book ? 'Edit Book' : 'Add Book';
+  document.getElementById('book-title').value = book?.title || '';
+  document.getElementById('book-author').value = book?.author || '';
+  document.getElementById('book-description').value = book?.description || '';
+  document.getElementById('book-cover').value = book?.coverImageUrl || '';
+  document.getElementById('book-category').value = book?.category || 'devotional';
+  document.getElementById('book-sort').value = book?.sortOrder ?? 0;
+  document.getElementById('book-amazon').value = book?.amazonUrl || '';
+  document.getElementById('book-kindle').value = book?.kindleUrl || '';
+  document.getElementById('book-audiobook').value = book?.audiobookUrl || '';
+  document.getElementById('book-featured').checked = !!book?.featured;
+  document.getElementById('book-modal').classList.add('open');
+}
+
+function closeBookModal() {
+  document.getElementById('book-modal').classList.remove('open');
+  _editingBookId = null;
+}
+
+function editBook(id) {
+  const book = _books.find(b => b.id === id);
+  if (book) openBookModal(book);
+}
+
+async function saveBook() {
+  const title = document.getElementById('book-title').value.trim();
+  if (!title) { toast('Title is required'); return; }
+  const payload = {
+    title,
+    author: document.getElementById('book-author').value.trim(),
+    description: document.getElementById('book-description').value.trim(),
+    coverImageUrl: document.getElementById('book-cover').value.trim(),
+    category: document.getElementById('book-category').value,
+    sortOrder: Number(document.getElementById('book-sort').value) || 0,
+    amazonUrl: document.getElementById('book-amazon').value.trim(),
+    kindleUrl: document.getElementById('book-kindle').value.trim(),
+    audiobookUrl: document.getElementById('book-audiobook').value.trim(),
+    featured: document.getElementById('book-featured').checked,
+  };
+  try {
+    const url = _editingBookId ? `/api/books/${_editingBookId}` : '/api/books';
+    const method = _editingBookId ? 'PATCH' : 'POST';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast(_editingBookId ? 'Book updated' : 'Book added');
+    closeBookModal();
+    loadBooks();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deleteBook(id, title) {
+  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch(`/api/books/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed');
+    toast('Book deleted');
+    loadBooks();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+// =============================================================
+// ARTICLES
+// =============================================================
+let _articles = [];
+let _editingArticleId = null;
+
+async function loadArticles() {
+  const el = document.getElementById('articles-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/articles');
+    const data = await r.json();
+    _articles = data.articles || [];
+    renderArticlesTable();
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--red)">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+function renderArticlesTable() {
+  const el = document.getElementById('articles-content');
+  if (!_articles.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No articles yet. Click <b>+ Add Article</b> to get started.</div>';
+    return;
+  }
+  const rows = _articles.map(a => `
+    <tr>
+      <td style="padding:10px 12px;font-weight:600;">${escHtml(a.title)}</td>
+      <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.author||'')}</td>
+      <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
+      <td style="padding:10px 12px;">${a.published ? '<span style="color:var(--green);font-weight:600;">Published</span>' : '<span style="color:var(--muted);">Draft</span>'}</td>
+      <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
+      <td style="padding:10px 12px;white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="previewArticle('${escAttr(a.id)}')">Preview</button>
+        <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editArticle('${escAttr(a.id)}')">Edit</button>
+        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteArticle('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
+      </td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
+      <table style="width:100%;border-collapse:collapse;min-width:700px;">
+        <thead>
+          <tr style="background:rgba(0,0,0,.2);">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Author</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function initQuill() {
+  if (_quillArticle) return;
+  if (typeof Quill === 'undefined') return;
+  _quillArticle = new Quill('#article-quill-editor', {
+    theme: 'snow',
+    placeholder: 'Write article content here...',
+    modules: {
+      toolbar: [
+        [{ header: [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        ['link', 'blockquote'],
+        ['clean'],
+      ],
+    },
+  });
+}
+
+function openArticleModal(article) {
+  _editingArticleId = article ? article.id : null;
+  document.getElementById('article-modal-title').textContent = article ? 'Edit Article' : 'Add Article';
+  document.getElementById('article-title').value = article?.title || '';
+  document.getElementById('article-author').value = article?.author || '';
+  document.getElementById('article-excerpt').value = article?.excerpt || '';
+  document.getElementById('article-cover').value = article?.coverImageUrl || '';
+  document.getElementById('article-category').value = article?.category || 'articles';
+  document.getElementById('article-sort').value = article?.sortOrder ?? 0;
+  document.getElementById('article-published').checked = !!article?.published;
+  document.getElementById('article-featured').checked = !!article?.featured;
+  document.getElementById('article-modal').classList.add('open');
+  // Init Quill after modal is visible
+  setTimeout(() => {
+    initQuill();
+    if (_quillArticle) _quillArticle.root.innerHTML = article?.content || '';
+  }, 50);
+}
+
+function closeArticleModal() {
+  document.getElementById('article-modal').classList.remove('open');
+  _editingArticleId = null;
+}
+
+function editArticle(id) {
+  const a = _articles.find(x => x.id === id);
+  if (a) openArticleModal(a);
+}
+
+function previewArticle(id) {
+  const a = _articles.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('article-preview-title').textContent = a.title;
+  document.getElementById('article-preview-body').innerHTML = a.content || '<em style="color:var(--muted)">No content.</em>';
+  document.getElementById('article-preview-modal').classList.add('open');
+}
+
+async function saveArticle() {
+  const title = document.getElementById('article-title').value.trim();
+  if (!title) { toast('Title is required'); return; }
+  const content = _quillArticle ? _quillArticle.root.innerHTML : document.getElementById('article-content').value;
+  const payload = {
+    title,
+    author: document.getElementById('article-author').value.trim(),
+    excerpt: document.getElementById('article-excerpt').value.trim(),
+    coverImageUrl: document.getElementById('article-cover').value.trim(),
+    category: document.getElementById('article-category').value,
+    sortOrder: Number(document.getElementById('article-sort').value) || 0,
+    content,
+    published: document.getElementById('article-published').checked,
+    featured: document.getElementById('article-featured').checked,
+  };
+  try {
+    const url = _editingArticleId ? `/api/articles/${_editingArticleId}` : '/api/articles';
+    const method = _editingArticleId ? 'PATCH' : 'POST';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast(_editingArticleId ? 'Article updated' : 'Article added');
+    closeArticleModal();
+    loadArticles();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deleteArticle(id, title) {
+  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch(`/api/articles/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed');
+    toast('Article deleted');
+    loadArticles();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+// =============================================================
+// PODCASTS
+// =============================================================
+let _podcasts = [];
+let _editingPodcastId = null;
+
+async function loadPodcasts() {
+  const el = document.getElementById('podcasts-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/podcasts');
+    const data = await r.json();
+    _podcasts = data.podcasts || [];
+    renderPodcastsTable();
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--red)">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+function renderPodcastsTable() {
+  const el = document.getElementById('podcasts-content');
+  if (!_podcasts.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No podcasts yet. Click <b>+ Add Podcast</b> to get started.</div>';
+    return;
+  }
+  const rows = _podcasts.map(p => `
+    <tr>
+      <td style="padding:10px 12px;">
+        ${p.artworkUrl ? `<img src="${escHtml(p.artworkUrl)}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px;">` : ''}
+        <span style="font-weight:600;">${escHtml(p.title)}</span>
+      </td>
+      <td style="padding:10px 12px;max-width:240px;"><span style="font-size:11px;color:var(--muted);word-break:break-all;">${escHtml(p.feedUrl||'')}</span></td>
+      <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(p.category||'')}</span></td>
+      <td style="padding:10px 12px;">${p.enabled !== false ? '<span style="color:var(--green);font-weight:600;">Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>'}</td>
+      <td style="padding:10px 12px;white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="previewPodcastEpisodes('${escAttr(p.id)}')">Episodes</button>
+        <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editPodcast('${escAttr(p.id)}')">Edit</button>
+        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deletePodcast('${escAttr(p.id)}', '${escAttr(p.title)}')">Delete</button>
+      </td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
+      <table style="width:100%;border-collapse:collapse;min-width:700px;">
+        <thead>
+          <tr style="background:rgba(0,0,0,.2);">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Podcast</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Feed URL</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openPodcastModal(podcast) {
+  _editingPodcastId = podcast ? podcast.id : null;
+  document.getElementById('podcast-modal-title').textContent = podcast ? 'Edit Podcast' : 'Add Podcast';
+  document.getElementById('podcast-title').value = podcast?.title || '';
+  document.getElementById('podcast-feed').value = podcast?.feedUrl || '';
+  document.getElementById('podcast-description').value = podcast?.description || '';
+  document.getElementById('podcast-artwork').value = podcast?.artworkUrl || '';
+  document.getElementById('podcast-category').value = podcast?.category || 'sermons';
+  document.getElementById('podcast-sort').value = podcast?.sortOrder ?? 0;
+  document.getElementById('podcast-enabled').checked = podcast?.enabled !== false;
+  document.getElementById('podcast-modal').classList.add('open');
+}
+
+function closePodcastModal() {
+  document.getElementById('podcast-modal').classList.remove('open');
+  _editingPodcastId = null;
+}
+
+function editPodcast(id) {
+  const p = _podcasts.find(x => x.id === id);
+  if (p) openPodcastModal(p);
+}
+
+async function savePodcast() {
+  const title = document.getElementById('podcast-title').value.trim();
+  const feedUrl = document.getElementById('podcast-feed').value.trim();
+  if (!title) { toast('Title is required'); return; }
+  if (!feedUrl) { toast('Feed URL is required'); return; }
+  const payload = {
+    title,
+    feedUrl,
+    description: document.getElementById('podcast-description').value.trim(),
+    artworkUrl: document.getElementById('podcast-artwork').value.trim(),
+    category: document.getElementById('podcast-category').value,
+    sortOrder: Number(document.getElementById('podcast-sort').value) || 0,
+    enabled: document.getElementById('podcast-enabled').checked,
+  };
+  try {
+    const url = _editingPodcastId ? `/api/podcasts/${_editingPodcastId}` : '/api/podcasts';
+    const method = _editingPodcastId ? 'PATCH' : 'POST';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast(_editingPodcastId ? 'Podcast updated' : 'Podcast added');
+    closePodcastModal();
+    loadPodcasts();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deletePodcast(id, title) {
+  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch(`/api/podcasts/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed');
+    toast('Podcast deleted');
+    loadPodcasts();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function previewPodcastEpisodes(id) {
+  const p = _podcasts.find(x => x.id === id);
+  document.getElementById('podcast-episodes-title').textContent = p ? `Episodes: ${p.title}` : 'Episodes';
+  document.getElementById('podcast-episodes-body').innerHTML = '<div class="spinner"></div>';
+  document.getElementById('podcast-episodes-modal').classList.add('open');
+  try {
+    const r = await fetch(`/api/podcasts/${id}/episodes`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed to fetch episodes');
+    const eps = data.episodes || [];
+    if (!eps.length) {
+      document.getElementById('podcast-episodes-body').innerHTML = '<p style="color:var(--muted);padding:16px;">No episodes found.</p>';
+      return;
+    }
+    document.getElementById('podcast-episodes-body').innerHTML = eps.map(ep => `
+      <div style="padding:12px 0;border-bottom:1px solid var(--border);">
+        <div style="font-weight:600;margin-bottom:4px;">${escHtml(ep.title)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">${escHtml(ep.pubDate)} ${ep.duration ? '&#183; ' + escHtml(ep.duration) : ''}</div>
+        ${ep.description ? `<div style="font-size:12px;color:var(--muted);max-height:48px;overflow:hidden;text-overflow:ellipsis;">${escHtml(ep.description.replace(/<[^>]*>/g,'').slice(0,200))}</div>` : ''}
+        ${ep.audioUrl ? `<a href="${escAttr(ep.audioUrl)}" target="_blank" style="font-size:11px;color:var(--accent2);margin-top:4px;display:inline-block;">&#9654; Listen</a>` : ''}
+      </div>`).join('');
+  } catch (e) {
+    document.getElementById('podcast-episodes-body').innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+// =============================================================
+// AUDIO
+// =============================================================
+let _audioAssets = [];
+let _editingAudioId = null;
+
+async function loadAudio() {
+  const el = document.getElementById('audio-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/audio');
+    const data = await r.json();
+    _audioAssets = data.audio || [];
+    renderAudioTable();
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--red)">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+function fmtDuration(secs) {
+  if (!secs) return '\u2014';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function renderAudioTable() {
+  const el = document.getElementById('audio-content');
+  if (!_audioAssets.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No audio assets yet. Click <b>+ Add Audio</b> to get started.</div>';
+    return;
+  }
+  const rows = _audioAssets.map(a => `
+    <tr>
+      <td style="padding:10px 12px;">
+        ${a.coverImageUrl ? `<img src="${escHtml(a.coverImageUrl)}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px;">` : ''}
+        <span style="font-weight:600;">${escHtml(a.title)}</span>
+      </td>
+      <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.artist||'')}</td>
+      <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
+      <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDuration(a.duration)}</td>
+      <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
+      <td style="padding:10px 12px;white-space:nowrap;">
+        ${a.audioUrl ? `<a href="${escAttr(a.audioUrl)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-right:4px;">&#9654; Play</a>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="editAudio('${escAttr(a.id)}')">Edit</button>
+        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
+      </td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
+      <table style="width:100%;border-collapse:collapse;min-width:700px;">
+        <thead>
+          <tr style="background:rgba(0,0,0,.2);">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Artist</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Duration</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openAudioModal(audio) {
+  _editingAudioId = audio ? audio.id : null;
+  document.getElementById('audio-modal-title').textContent = audio ? 'Edit Audio' : 'Add Audio';
+  document.getElementById('audio-title').value = audio?.title || '';
+  document.getElementById('audio-artist').value = audio?.artist || '';
+  document.getElementById('audio-description').value = audio?.description || '';
+  document.getElementById('audio-url').value = audio?.audioUrl || '';
+  document.getElementById('audio-cover').value = audio?.coverImageUrl || '';
+  document.getElementById('audio-category').value = audio?.category || 'music';
+  document.getElementById('audio-duration').value = audio?.duration ?? 0;
+  document.getElementById('audio-sort').value = audio?.sortOrder ?? 0;
+  document.getElementById('audio-featured').checked = !!audio?.featured;
+  document.getElementById('audio-modal').classList.add('open');
+}
+
+function closeAudioModal() {
+  document.getElementById('audio-modal').classList.remove('open');
+  _editingAudioId = null;
+}
+
+function editAudio(id) {
+  const a = _audioAssets.find(x => x.id === id);
+  if (a) openAudioModal(a);
+}
+
+async function saveAudio() {
+  const title = document.getElementById('audio-title').value.trim();
+  if (!title) { toast('Title is required'); return; }
+  const payload = {
+    title,
+    artist: document.getElementById('audio-artist').value.trim(),
+    description: document.getElementById('audio-description').value.trim(),
+    audioUrl: document.getElementById('audio-url').value.trim(),
+    coverImageUrl: document.getElementById('audio-cover').value.trim(),
+    category: document.getElementById('audio-category').value,
+    duration: Number(document.getElementById('audio-duration').value) || 0,
+    sortOrder: Number(document.getElementById('audio-sort').value) || 0,
+    featured: document.getElementById('audio-featured').checked,
+  };
+  try {
+    const url = _editingAudioId ? `/api/audio/${_editingAudioId}` : '/api/audio';
+    const method = _editingAudioId ? 'PATCH' : 'POST';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast(_editingAudioId ? 'Audio updated' : 'Audio added');
+    closeAudioModal();
+    loadAudio();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deleteAudio(id, title) {
+  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch(`/api/audio/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed');
+    toast('Audio deleted');
+    loadAudio();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 </script>
 <div id="build-tag" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:rgba(255,255,255,.25);pointer-events:none;z-index:9999;"></div>
