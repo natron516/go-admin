@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 30;
+const ADMIN_BUILD = 31;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1274,7 +1274,8 @@ app.post('/api/music/album', async (req, res) => {
     const data = doc.exists ? doc.data() : { albums: [], playlists: [] };
     const albums = data.albums || [];
     if (albums.find(a => a.albumId === albumId)) return res.status(409).json({ error: 'Album already added' });
-    albums.push({ albumId, title: title || '', artist: artist || '', type: type || 'album', addedAt: new Date().toISOString() });
+    const artworkUrl = req.body.artworkUrl || '';
+    albums.push({ albumId, title: title || '', artist: artist || '', type: type || 'album', artworkUrl, addedAt: new Date().toISOString() });
     await ref.set({ ...data, albums }, { merge: true });
     res.json({ ok: true, albums });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1307,6 +1308,37 @@ app.patch('/api/music/album/:albumId', async (req, res) => {
     await ref.set({ ...data, albums });
     res.json({ ok: true, albums });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Music Search (iTunes Search API proxy) ───────────────────────────────────
+app.get('/api/music/search', async (req, res) => {
+  const q = req.query.q;
+  if (!q) return res.json({ results: [] });
+  try {
+    const entity = req.query.entity || 'album';
+    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=${entity}&limit=15`);
+    const data = await r.json();
+    const results = (data.results || []).map(item => ({
+      albumId: String(item.collectionId || item.trackId || ''),
+      title: item.collectionName || item.trackName || '',
+      artist: item.artistName || '',
+      artworkUrl: (item.artworkUrl100 || '').replace('100x100', '600x600'),
+      type: item.collectionType === 'Album' ? 'album' : 'single',
+      trackCount: item.trackCount || 0,
+      releaseDate: item.releaseDate || '',
+      genre: item.primaryGenreName || '',
+      collectionViewUrl: item.collectionViewUrl || '',
+    }));
+    const seen = new Set();
+    const unique = results.filter(r => {
+      if (!r.albumId || seen.has(r.albumId)) return false;
+      seen.add(r.albumId);
+      return true;
+    });
+    res.json({ results: unique });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Seed music config with hardcoded album IDs (one-time migration)

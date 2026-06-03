@@ -787,6 +787,36 @@ tr.dirty .at-save { display: inline-flex !important; }
 .sort-arrow { margin-left: 4px; font-size: 10px; opacity: .6; }
 .sort-th.active .sort-arrow { opacity: 1; }
 
+/* ── Music search ──────────────────────────────────────── */
+.music-search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background .12s;
+  border-bottom: 1px solid var(--border);
+}
+.music-search-item:last-child { border-bottom: none; }
+.music-search-item:hover { background: rgba(99,102,241,.08); }
+.music-search-item.already-added { opacity: .5; cursor: default; }
+.music-search-thumb {
+  width: 50px; height: 50px;
+  border-radius: 6px; object-fit: cover;
+  background: var(--surface2); flex-shrink: 0;
+}
+.music-search-info { flex: 1; min-width: 0; }
+.music-search-title { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-search-artist { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-search-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.music-search-add-btn {
+  font-size: 11px; font-weight: 700; padding: 4px 12px;
+  border-radius: 6px; border: none; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.music-search-add-btn.add { background: rgba(99,102,241,.15); color: var(--accent2); }
+.music-search-add-btn.add:hover { background: rgba(99,102,241,.25); }
+.music-search-add-btn.added { background: rgba(34,197,94,.15); color: var(--green); cursor: default; }
+
 /* ── Featured ─────────────────────────────────────────── */
 .feat-list { display: flex; flex-direction: column; gap: 6px; }
 .feat-row {
@@ -1127,6 +1157,17 @@ tr.dirty .at-save { display: inline-flex !important; }
 }
 #drop-zone-inline:hover { border-color: var(--accent); background: var(--accent-dim); }
 /* ── Book Search ──────────────────────────────────────── */
+#music-search-bar { margin-bottom: 16px; position: relative; }
+#music-search-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; padding: 9px 12px; outline: none; font-family: inherit; transition: border-color var(--transition); }
+#music-search-input:focus { border-color: var(--accent); }
+#music-search-results { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); z-index: 100; box-shadow: var(--shadow); max-height: 380px; overflow-y: auto; }
+.music-search-item { display: flex; gap: 10px; align-items: center; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background var(--transition); }
+.music-search-item:last-child { border-bottom: none; }
+.music-search-item:hover { background: var(--accent-dim); }
+.music-search-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--border); }
+.music-search-info { flex: 1; min-width: 0; }
+.music-search-title { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-search-artist { font-size: 11px; color: var(--muted); margin-top: 2px; }
 #book-search-bar { margin-bottom: 16px; position: relative; }
 #book-search-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; padding: 9px 12px; outline: none; font-family: inherit; transition: border-color var(--transition); }
 #book-search-input:focus { border-color: var(--accent); }
@@ -1818,7 +1859,7 @@ tr.dirty .at-save { display: inline-flex !important; }
         <div id="series-content"><div class="spinner"></div></div>
       </section>
 
-      <!-- ── AUDIO ──────────────────────────────────────── -->
+      <!-- ── MUSIC ──────────────────────────────────────── -->
       <section id="tab-music" class="section">
         <div class="page-header">
           <div class="page-header-text">
@@ -1827,9 +1868,22 @@ tr.dirty .at-save { display: inline-flex !important; }
           </div>
           <div class="page-actions">
             <button class="btn btn-ghost btn-sm" onclick="loadMusic()">&#8634; Refresh</button>
-            <button class="btn btn-primary btn-sm" onclick="openAddMusicModal()">+ Add Album/Single</button>
+            <button class="btn btn-primary btn-sm" onclick="openAddMusicModal()">+ Add by ID</button>
           </div>
         </div>
+
+        <!-- Search bar -->
+        <div id="music-search-bar" style="position:relative;margin-bottom:16px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="music-search-input" placeholder="Search Apple Music albums, artists, songs&hellip;"
+              style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:10px 14px;outline:none;max-width:480px;"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();searchAppleMusic();}">
+            <button class="btn btn-primary btn-sm" id="music-search-btn" onclick="searchAppleMusic()">&#128269; Search</button>
+            <button class="btn btn-ghost btn-sm" id="music-search-clear" onclick="clearMusicSearch()" style="display:none;">Clear</button>
+          </div>
+          <div id="music-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;max-width:600px;max-height:420px;overflow-y:auto;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:var(--shadow);z-index:50;margin-top:4px;"></div>
+        </div>
+
         <div id="music-content"><div class="spinner"></div></div>
       </section>
 
@@ -4494,6 +4548,7 @@ async function deleteBook(id, title) {
 // MUSIC (Apple Music curated albums)
 // =============================================================
 let _musicAlbums = [];
+let _musicSearchResults = [];
 
 async function loadMusic() {
   const el = document.getElementById('music-content');
@@ -4503,7 +4558,6 @@ async function loadMusic() {
     const data = await r.json();
     _musicAlbums = data.albums || [];
     if (!_musicAlbums.length) {
-      // Try seeding with defaults
       const sr = await fetch('/api/music/seed', { method: 'POST' });
       const sd = await sr.json();
       if (sd.ok && sd.count > 0) {
@@ -4516,22 +4570,123 @@ async function loadMusic() {
   } catch (e) { el.innerHTML = `<div style="color:var(--red);padding:24px;">Error: ${e.message}</div>`; }
 }
 
+// ── Apple Music Search ─────────────────
+async function searchAppleMusic() {
+  const q = document.getElementById('music-search-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('music-search-btn');
+  btn.disabled = true;
+  btn.textContent = '...';
+  const resultsEl = document.getElementById('music-search-results');
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = '<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Searching Apple Music...</div>';
+  try {
+    const r = await fetch('/api/music/search?q=' + encodeURIComponent(q));
+    const data = await r.json();
+    _musicSearchResults = data.results || [];
+    if (!_musicSearchResults.length) {
+      resultsEl.innerHTML = '<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No results found.</div>';
+      return;
+    }
+    const existingIds = new Set(_musicAlbums.map(a => a.albumId));
+    resultsEl.innerHTML = _musicSearchResults.map((item, i) => {
+      const alreadyAdded = existingIds.has(item.albumId);
+      const thumb = item.artworkUrl
+        ? '<img class="music-search-thumb" src="' + escHtml(item.artworkUrl) + '" alt="" onerror="this.style.display=\'none\'">'
+        : '<div class="music-search-thumb" style="display:flex;align-items:center;justify-content:center;font-size:24px;">&#127925;</div>';
+      const year = item.releaseDate ? item.releaseDate.slice(0, 4) : '';
+      const meta = [item.genre, year, item.trackCount ? item.trackCount + ' tracks' : ''].filter(Boolean).join(' &#183; ');
+      const addBtn = alreadyAdded
+        ? '<span class="music-search-add-btn added">&#10003; Added</span>'
+        : '<button class="music-search-add-btn add" id="ms-add-' + i + '" onclick="event.stopPropagation();addMusicFromSearch(' + i + ')">+ Add</button>';
+      return '<div class="music-search-item' + (alreadyAdded ? ' already-added' : '') + '">' +
+        thumb +
+        '<div class="music-search-info">' +
+          '<div class="music-search-title">' + escHtml(item.title) + '</div>' +
+          '<div class="music-search-artist">' + escHtml(item.artist) + '</div>' +
+          (meta ? '<div class="music-search-meta">' + meta + '</div>' : '') +
+        '</div>' +
+        addBtn +
+      '</div>';
+    }).join('');
+    document.getElementById('music-search-clear').style.display = '';
+  } catch (e) {
+    resultsEl.innerHTML = '<div style="padding:14px 16px;color:var(--red);font-size:12px;">Error: ' + escHtml(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#128269; Search';
+  }
+}
+
+async function addMusicFromSearch(idx) {
+  const item = _musicSearchResults[idx];
+  if (!item) return;
+  const btn = document.getElementById('ms-add-' + idx);
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const r = await fetch('/api/music/album', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        albumId: item.albumId,
+        title: item.title,
+        artist: item.artist,
+        type: item.type || 'album',
+        artworkUrl: item.artworkUrl || '',
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    if (btn) { btn.outerHTML = '<span class="music-search-add-btn added">&#10003; Added</span>'; }
+    toast(item.title + ' added');
+    loadMusic();
+  } catch (e) {
+    if (e.message.includes('already')) {
+      if (btn) { btn.outerHTML = '<span class="music-search-add-btn added">&#10003; Added</span>'; }
+    } else {
+      toast('Error: ' + e.message, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '+ Add'; }
+    }
+  }
+}
+
+function clearMusicSearch() {
+  document.getElementById('music-search-input').value = '';
+  document.getElementById('music-search-results').style.display = 'none';
+  document.getElementById('music-search-results').innerHTML = '';
+  document.getElementById('music-search-clear').style.display = 'none';
+  _musicSearchResults = [];
+}
+
+document.addEventListener('click', function(e) {
+  const bar = document.getElementById('music-search-bar');
+  if (bar && !bar.contains(e.target)) {
+    const r = document.getElementById('music-search-results');
+    if (r) r.style.display = 'none';
+  }
+});
+
 function renderMusicTable() {
   const el = document.getElementById('music-content');
   if (!_musicAlbums.length) {
-    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No music yet. Click <b>+ Add Album/Single</b> to get started.</div>';
+    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No music yet. Search above or click <b>+ Add by ID</b> to get started.</div>';
     return;
   }
   const typeOpts = (sel) => ['album','single'].map(v => `<option value="${v}"${v===sel?' selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('');
-  const rows = _musicAlbums.map((a, i) => `
+  const rows = _musicAlbums.map((a, i) => {
+    const artwork = a.artworkUrl
+      ? `<img src="${escHtml(a.artworkUrl)}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;vertical-align:middle;margin-right:10px;">`
+      : '<div style="width:40px;height:40px;border-radius:6px;background:var(--surface2);display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:10px;font-size:18px;">&#127925;</div>';
+    return `
     <tr>
-      <td style="padding:10px 12px;font-weight:600;">${escHtml(a.title || a.albumId)}</td>
+      <td style="padding:10px 12px;">${artwork}<span style="font-weight:600;">${escHtml(a.title || a.albumId)}</span></td>
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.artist || '')}</td>
       <td style="padding:10px 12px;"><code style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:12px;">${escHtml(a.albumId)}</code></td>
       <td style="padding:10px 12px;"><select onchange="updateMusicAlbum('${escAttr(a.albumId)}',{type:this.value})" style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:12px;border:1px solid transparent;cursor:pointer;">${typeOpts(a.type||'album')}</select></td>
       <td style="padding:10px 12px;"><a href="https://music.apple.com/us/album/${a.albumId}" target="_blank" style="color:var(--accent2);font-size:12px;">View ↗</a></td>
       <td style="padding:10px 12px;"><button class="btn btn-danger btn-sm" onclick="deleteMusicAlbum('${escAttr(a.albumId)}','${escAttr(a.title||a.albumId)}')">Remove</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   el.innerHTML = `
     <div style="margin-bottom:12px;color:var(--muted);font-size:13px;">${_musicAlbums.length} album${_musicAlbums.length===1?'':'s'}/single${_musicAlbums.length===1?'':'s'} in the app</div>
     <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
