@@ -2074,12 +2074,22 @@ tr.dirty .at-save { display: inline-flex !important; }
 </div>
 
 <!-- ── Series Episodes Modal ──────────────────────────── -->
-<div class="modal-backdrop" id="series-episodes-modal" onclick="if(event.target===this)document.getElementById('series-episodes-modal').classList.remove('open')">
-  <div class="modal" style="max-width:660px;">
-    <h3 id="series-episodes-title">Episodes</h3>
-    <div id="series-episodes-body" style="max-height:65vh;overflow-y:auto;"><div class="spinner"></div></div>
-    <div class="modal-actions" style="margin-top:20px;">
-      <button class="btn btn-ghost" onclick="document.getElementById('series-episodes-modal').classList.remove('open')">Close</button>
+<div class="modal-backdrop" id="series-episodes-modal" onclick="if(event.target===this)closeSeriesEpisodesModal()">
+  <div class="modal" style="max-width:760px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 id="series-episodes-title" style="margin:0;">Episodes</h3>
+    </div>
+    <div id="series-episodes-sort-bar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Sort:</span>
+      <button class="btn btn-ghost btn-sm series-sort-btn active" data-sort="episode" onclick="setSeriesEpSort('episode')">By Episode #</button>
+      <button class="btn btn-ghost btn-sm series-sort-btn" data-sort="title" onclick="setSeriesEpSort('title')">By Title A-Z</button>
+      <button class="btn btn-ghost btn-sm series-sort-btn" data-sort="date-desc" onclick="setSeriesEpSort('date-desc')">Newest First</button>
+      <button class="btn btn-ghost btn-sm series-sort-btn" data-sort="date-asc" onclick="setSeriesEpSort('date-asc')">Oldest First</button>
+      <button class="btn btn-ghost btn-sm series-sort-btn" data-sort="custom" onclick="setSeriesEpSort('custom')">&#8597; Custom Order</button>
+    </div>
+    <div id="series-episodes-body" style="max-height:58vh;overflow-y:auto;"><div class="spinner"></div></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-ghost" onclick="closeSeriesEpisodesModal()">Close</button>
     </div>
   </div>
 </div>
@@ -4947,7 +4957,262 @@ async function deleteSeries(id, title) {
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
+// ── Series Episodes Modal State ──────────────────────────
+let _seriesEpData = [];        // raw episodes from server
+let _seriesEpId = '';          // current series id
+let _seriesEpSort = 'episode'; // current sort mode
+let _seriesEpDragSrc = null;   // drag source row index
+
+function closeSeriesEpisodesModal() {
+  document.getElementById('series-episodes-modal').classList.remove('open');
+  _seriesEpData = [];
+  _seriesEpId = '';
+}
+
+function setSeriesEpSort(mode) {
+  _seriesEpSort = mode;
+  // update button active states
+  document.querySelectorAll('.series-sort-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.sort === mode);
+  });
+  renderSeriesEpisodes();
+}
+
+function getSortedSeriesEps() {
+  const eps = _seriesEpData.slice();
+  if (_seriesEpSort === 'title') {
+    eps.sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
+  } else if (_seriesEpSort === 'date-desc') {
+    eps.sort(function(a, b) { return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); });
+  } else if (_seriesEpSort === 'date-asc') {
+    eps.sort(function(a, b) { return new Date(a.createdAt || 0) - new Date(b.createdAt || 0); });
+  } else if (_seriesEpSort === 'custom') {
+    // keep current _seriesEpData order (already reordered by drag)
+    return eps;
+  } else {
+    // default: by episode number
+    eps.sort(function(a, b) {
+      const an = a.episodeNumber != null ? a.episodeNumber : 9999;
+      const bn = b.episodeNumber != null ? b.episodeNumber : 9999;
+      return an - bn;
+    });
+  }
+  return eps;
+}
+
+function fmtDateShort(dateStr) {
+  if (!dateStr) return '\u2014';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch(e) { return '\u2014'; }
+}
+
+function renderSeriesEpisodes() {
+  const body = document.getElementById('series-episodes-body');
+  const sorted = getSortedSeriesEps();
+  const isCustom = _seriesEpSort === 'custom';
+
+  if (!sorted.length) {
+    body.innerHTML = '<div style="color:var(--muted);padding:16px;">No episodes in this series yet.</div>';
+    return;
+  }
+
+  const thStyle = 'padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap;';
+  const tdStyle = 'padding:8px 10px;vertical-align:middle;';
+
+  let rows = '';
+  sorted.forEach(function(ep, idx) {
+    const epNum = ep.episodeNumber != null ? ep.episodeNumber : '\u2014';
+    const mediaTypeBadge = ep.mediaType === 'video'
+      ? '<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(139,92,246,.2);color:#c084fc;text-transform:uppercase;">VIDEO</span>'
+      : '<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(59,130,246,.15);color:#60a5fa;text-transform:uppercase;">AUDIO</span>';
+    const dragHandle = isCustom
+      ? '<td ' + tdStyle.replace('padding:8px 10px;', 'padding:8px 6px;') + 'cursor:grab;color:var(--muted);font-size:16px;user-select:none;" class="se-drag-handle" draggable="true" data-idx="' + idx + '">&#8691;</td>'
+      : '';
+    rows +=
+      '<tr class="se-row" style="border-bottom:1px solid var(--border);transition:background .15s;" data-id="' + escAttr(ep.id) + '" data-idx="' + idx + '">' +
+      dragHandle +
+      '<td style="' + tdStyle + 'color:var(--muted);font-size:12px;min-width:32px;">' + escHtml(String(epNum)) + '</td>' +
+      '<td style="' + tdStyle + 'font-weight:500;min-width:140px;" class="se-title-cell" data-id="' + escAttr(ep.id) + '">' +
+        '<span class="se-title-text" style="cursor:pointer;" title="Click to edit" onclick="startSeriesEpTitleEdit(this, \'' + escAttr(ep.id) + '\')">' + escHtml(ep.title) + '</span>' +
+        '<span class="se-edit-icon" style="opacity:0;margin-left:5px;cursor:pointer;font-size:12px;" onclick="startSeriesEpTitleEdit(this.previousElementSibling, \'' + escAttr(ep.id) + '\')" title="Edit title">✏️</span>' +
+      '</td>' +
+      '<td style="' + tdStyle + 'white-space:nowrap;">' + mediaTypeBadge + '</td>' +
+      '<td style="' + tdStyle + 'color:var(--muted);font-size:12px;white-space:nowrap;">' + fmtDuration(ep.duration) + '</td>' +
+      '<td style="' + tdStyle + 'color:var(--muted);font-size:12px;white-space:nowrap;">' + fmtDateShort(ep.createdAt) + '</td>' +
+      '<td style="' + tdStyle + '">' +
+        '<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="deleteSeriesEpisode(\'' + escAttr(ep.id) + '\', \'' + escAttr(ep.title) + '\')">&times;</button>' +
+      '</td>' +
+      '</tr>';
+  });
+
+  const dragHandleTh = isCustom ? '<th style="' + thStyle + 'width:24px;"></th>' : '';
+
+  body.innerHTML =
+    '<table style="width:100%;border-collapse:collapse;">' +
+      '<thead>' +
+        '<tr style="background:rgba(0,0,0,.2);">' +
+          dragHandleTh +
+          '<th style="' + thStyle + 'width:32px;">#</th>' +
+          '<th style="' + thStyle + '">Title</th>' +
+          '<th style="' + thStyle + '">Type</th>' +
+          '<th style="' + thStyle + '">Duration</th>' +
+          '<th style="' + thStyle + '">Uploaded</th>' +
+          '<th style="' + thStyle + 'width:48px;"></th>' +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>';
+
+  // hover effect for edit icon
+  body.querySelectorAll('.se-row').forEach(function(row) {
+    row.addEventListener('mouseenter', function() {
+      const icon = row.querySelector('.se-edit-icon');
+      if (icon) icon.style.opacity = '0.6';
+      row.style.background = 'rgba(255,255,255,.03)';
+    });
+    row.addEventListener('mouseleave', function() {
+      const icon = row.querySelector('.se-edit-icon');
+      if (icon) icon.style.opacity = '0';
+      row.style.background = '';
+    });
+  });
+
+  // drag-to-reorder (custom mode only)
+  if (isCustom) {
+    body.querySelectorAll('.se-drag-handle').forEach(function(handle) {
+      const row = handle.closest('tr');
+      row.setAttribute('draggable', 'true');
+      row.addEventListener('dragstart', function(e) {
+        _seriesEpDragSrc = parseInt(row.dataset.idx);
+        e.dataTransfer.effectAllowed = 'move';
+        row.style.opacity = '0.4';
+      });
+      row.addEventListener('dragend', function() {
+        row.style.opacity = '';
+        body.querySelectorAll('.se-row').forEach(function(r) { r.style.background = ''; });
+      });
+      row.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        row.style.background = 'rgba(99,102,241,.15)';
+      });
+      row.addEventListener('dragleave', function() {
+        row.style.background = '';
+      });
+      row.addEventListener('drop', function(e) {
+        e.preventDefault();
+        row.style.background = '';
+        const srcIdx = _seriesEpDragSrc;
+        const dstIdx = parseInt(row.dataset.idx);
+        if (srcIdx === dstIdx || srcIdx == null) return;
+        // reorder _seriesEpData
+        const current = getSortedSeriesEps();
+        const [moved] = current.splice(srcIdx, 1);
+        current.splice(dstIdx, 0, moved);
+        // re-number and store back
+        current.forEach(function(ep, i) { ep.episodeNumber = i + 1; });
+        _seriesEpData = current;
+        renderSeriesEpisodes();
+        // batch-save new episode numbers
+        batchSaveSeriesEpOrder(current);
+      });
+    });
+  }
+}
+
+async function batchSaveSeriesEpOrder(episodes) {
+  const saves = episodes.map(function(ep, i) {
+    return fetch('/api/audio/' + ep.id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ episodeNumber: i + 1 })
+    });
+  });
+  try {
+    await Promise.all(saves);
+    toast('Episode order saved');
+  } catch (e) {
+    toast('Error saving order: ' + e.message);
+  }
+}
+
+function startSeriesEpTitleEdit(spanEl, epId) {
+  if (spanEl.tagName === 'INPUT') return; // already editing
+  const currentTitle = spanEl.textContent;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentTitle;
+  input.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-size:14px;padding:3px 8px;outline:none;width:100%;font-weight:500;font-family:inherit;';
+  const cell = spanEl.closest('.se-title-cell');
+  cell.innerHTML = '';
+  cell.appendChild(input);
+  input.focus();
+  input.select();
+
+  async function saveTitle() {
+    const newTitle = input.value.trim();
+    if (!newTitle) { input.focus(); return; }
+    if (newTitle === currentTitle) {
+      cell.innerHTML =
+        '<span class="se-title-text" style="cursor:pointer;" title="Click to edit" onclick="startSeriesEpTitleEdit(this, \'' + escAttr(epId) + '\')">' + escHtml(newTitle) + '</span>' +
+        '<span class="se-edit-icon" style="opacity:0;margin-left:5px;cursor:pointer;font-size:12px;" onclick="startSeriesEpTitleEdit(this.previousElementSibling, \'' + escAttr(epId) + '\')" title="Edit title">✏️</span>';
+      return;
+    }
+    input.disabled = true;
+    try {
+      const r = await fetch('/api/audio/' + epId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle })
+      });
+      if (!r.ok) throw new Error('Save failed');
+      // update local data
+      const ep = _seriesEpData.find(function(x) { return x.id === epId; });
+      if (ep) ep.title = newTitle;
+      toast('Title updated');
+    } catch(e) {
+      toast('Error: ' + e.message);
+    }
+    cell.innerHTML =
+      '<span class="se-title-text" style="cursor:pointer;" title="Click to edit" onclick="startSeriesEpTitleEdit(this, \'' + escAttr(epId) + '\')">' + escHtml(_seriesEpData.find(function(x){return x.id===epId;})?.title || newTitle) + '</span>' +
+      '<span class="se-edit-icon" style="opacity:0;margin-left:5px;cursor:pointer;font-size:12px;" onclick="startSeriesEpTitleEdit(this.previousElementSibling, \'' + escAttr(epId) + '\')" title="Edit title">✏️</span>';
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); saveTitle(); }
+    if (e.key === 'Escape') {
+      cell.innerHTML =
+        '<span class="se-title-text" style="cursor:pointer;" title="Click to edit" onclick="startSeriesEpTitleEdit(this, \'' + escAttr(epId) + '\')">' + escHtml(currentTitle) + '</span>' +
+        '<span class="se-edit-icon" style="opacity:0;margin-left:5px;cursor:pointer;font-size:12px;" onclick="startSeriesEpTitleEdit(this.previousElementSibling, \'' + escAttr(epId) + '\')" title="Edit title">✏️</span>';
+    }
+  });
+  input.addEventListener('blur', saveTitle);
+}
+
+async function deleteSeriesEpisode(epId, title) {
+  if (!confirm('Remove "' + title + '" from this series?\n\nThis deletes the audio/video asset permanently.')) return;
+  try {
+    const r = await fetch('/api/audio/' + epId, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Delete failed');
+    _seriesEpData = _seriesEpData.filter(function(ep) { return ep.id !== epId; });
+    renderSeriesEpisodes();
+    toast('Episode deleted');
+    // refresh audio list if visible
+    if (typeof loadAudio === 'function') loadAudio();
+  } catch(e) {
+    toast('Error: ' + e.message);
+  }
+}
+
 async function viewSeriesEpisodes(seriesId, seriesTitle) {
+  _seriesEpId = seriesId;
+  _seriesEpSort = 'episode';
+  // reset sort buttons
+  document.querySelectorAll('.series-sort-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.sort === 'episode');
+  });
   document.getElementById('series-episodes-title').textContent = 'Episodes: ' + seriesTitle;
   const body = document.getElementById('series-episodes-body');
   body.innerHTML = '<div class="spinner"></div>';
@@ -4955,32 +5220,8 @@ async function viewSeriesEpisodes(seriesId, seriesTitle) {
   try {
     const r = await fetch('/api/series/' + seriesId + '/episodes');
     const data = await r.json();
-    const episodes = data.episodes || [];
-    if (!episodes.length) {
-      body.innerHTML = '<div style="color:var(--muted);padding:16px;">No episodes in this series yet.</div>';
-      return;
-    }
-    let rows = '';
-    episodes.forEach(function(ep) {
-      rows += '<tr style="border-bottom:1px solid var(--border);">' +
-        '<td style="padding:8px 12px;color:var(--muted);font-size:12px;">' + (ep.episodeNumber !== undefined && ep.episodeNumber !== null ? ep.episodeNumber : '&mdash;') + '</td>' +
-        '<td style="padding:8px 12px;font-weight:500;">' + escHtml(ep.title) + '</td>' +
-        '<td style="padding:8px 12px;"><span style="font-size:11px;color:var(--muted);">' + (ep.mediaType === 'video' ? '&#127916; Video' : '&#127925; Audio') + '</span></td>' +
-        '<td style="padding:8px 12px;color:var(--muted);font-size:12px;">' + fmtDuration(ep.duration) + '</td>' +
-        '</tr>';
-    });
-    body.innerHTML =
-      '<table style="width:100%;border-collapse:collapse;">' +
-        '<thead>' +
-          '<tr style="background:rgba(0,0,0,.2);">' +
-            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">#</th>' +
-            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Title</th>' +
-            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Type</th>' +
-            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Duration</th>' +
-          '</tr>' +
-        '</thead>' +
-        '<tbody>' + rows + '</tbody>' +
-      '</table>';
+    _seriesEpData = data.episodes || [];
+    renderSeriesEpisodes();
   } catch (e) {
     body.innerHTML = '<p style="color:var(--red);">Error: ' + escHtml(e.message) + '</p>';
   }
