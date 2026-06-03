@@ -1926,9 +1926,18 @@ tr.dirty .at-save { display: inline-flex !important; }
         </div>
       </div>
       <div class="field">
-        <label>Content (HTML Rich Text)</label>
+        <label>Content — write HTML below OR upload a PDF</label>
         <div id="article-quill-editor" style="height:220px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:0 0 8px 8px;"></div>
         <input type="hidden" id="article-content">
+      </div>
+      <div class="field">
+        <label>Or Upload PDF</label>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="file" id="article-pdf-file" accept=".pdf" style="font-size:13px;color:var(--text);">
+          <span id="article-pdf-status" style="font-size:12px;color:var(--muted);"></span>
+        </div>
+        <input type="hidden" id="article-pdf-url">
+        <p style="font-size:11px;color:var(--muted);margin-top:4px;">If a PDF is uploaded, it will be shown in the app instead of the HTML content above. Max 10MB.</p>
       </div>
       <div style="display:flex;gap:16px;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -4492,6 +4501,9 @@ function openArticleModal(article) {
   document.getElementById('article-sort').value = article?.sortOrder ?? 0;
   document.getElementById('article-published').checked = !!article?.published;
   document.getElementById('article-featured').checked = !!article?.featured;
+  document.getElementById('article-pdf-file').value = '';
+  document.getElementById('article-pdf-url').value = article?.pdfUrl || '';
+  document.getElementById('article-pdf-status').textContent = article?.pdfUrl ? '✓ PDF attached' : '';
   document.getElementById('article-modal').classList.add('open');
   // Init Quill after modal is visible
   setTimeout(() => {
@@ -4522,6 +4534,25 @@ async function saveArticle() {
   const title = document.getElementById('article-title').value.trim();
   if (!title) { toast('Title is required'); return; }
   const content = _quillArticle ? _quillArticle.root.innerHTML : document.getElementById('article-content').value;
+  // Upload PDF if a file is selected
+  let pdfUrl = document.getElementById('article-pdf-url').value;
+  const pdfFile = document.getElementById('article-pdf-file').files[0];
+  if (pdfFile) {
+    if (pdfFile.size > 10 * 1024 * 1024) { toast('PDF too large (max 10MB)'); return; }
+    document.getElementById('article-pdf-status').textContent = 'Uploading PDF...';
+    try {
+      const formData = new FormData();
+      formData.append('pdf', pdfFile);
+      const pdfRes = await fetch('/api/articles/upload-pdf', { method: 'POST', body: formData });
+      const pdfData = await pdfRes.json();
+      if (!pdfRes.ok) throw new Error(pdfData.error || 'Upload failed');
+      pdfUrl = pdfData.pdfUrl;
+      document.getElementById('article-pdf-status').textContent = '✓ PDF uploaded';
+    } catch (e) {
+      document.getElementById('article-pdf-status').textContent = 'Upload failed: ' + e.message;
+      return;
+    }
+  }
   const payload = {
     title,
     author: document.getElementById('article-author').value.trim(),
@@ -4532,6 +4563,7 @@ async function saveArticle() {
     content,
     published: document.getElementById('article-published').checked,
     featured: document.getElementById('article-featured').checked,
+    pdfUrl,
   };
   try {
     const url = _editingArticleId ? `/api/articles/${_editingArticleId}` : '/api/articles';

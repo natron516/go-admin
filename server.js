@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 25;
+const ADMIN_BUILD = 26;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1247,10 +1247,21 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
+// Upload PDF for articles — stores as base64 data URL in Firestore
+app.post('/api/articles/upload-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No PDF file' });
+    if (req.file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'PDF too large (max 10MB)' });
+    const base64 = req.file.buffer.toString('base64');
+    const dataUrl = `data:application/pdf;base64,${base64}`;
+    res.json({ pdfUrl: dataUrl, size: req.file.size, name: req.file.originalname });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/articles', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder } = req.body;
+    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder, pdfUrl } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
@@ -1262,6 +1273,7 @@ app.post('/api/articles', async (req, res) => {
       published: !!published,
       featured: !!featured,
       sortOrder: Number(sortOrder) || 0,
+      pdfUrl: pdfUrl || '',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -1273,7 +1285,7 @@ app.post('/api/articles', async (req, res) => {
 app.patch('/api/articles/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder } = req.body;
+    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder, pdfUrl } = req.body;
     const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
     if (title !== undefined) update.title = title;
     if (author !== undefined) update.author = author;
@@ -1284,6 +1296,7 @@ app.patch('/api/articles/:id', async (req, res) => {
     if (published !== undefined) update.published = !!published;
     if (featured !== undefined) update.featured = !!featured;
     if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
+    if (pdfUrl !== undefined) update.pdfUrl = pdfUrl;
     await db.collection('articles').doc(req.params.id).update(update);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
