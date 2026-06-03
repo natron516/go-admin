@@ -1195,24 +1195,30 @@ app.get('/api/books/search', async (req, res) => {
   const q = req.query.q;
   if (!q) return res.json({ results: [] });
   try {
-    const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8`);
+    // Use Open Library API (free, no rate limits) instead of Google Books
+    const r = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=8&fields=title,author_name,first_sentence,isbn,cover_i,number_of_pages_median,first_publish_year,subject`);
     const data = await r.json();
-    const results = (data.items || []).map(item => {
-      const info = item.volumeInfo || {};
-      const isbn13 = (info.industryIdentifiers || []).find(i => i.type === 'ISBN_13')?.identifier;
-      const isbn10 = (info.industryIdentifiers || []).find(i => i.type === 'ISBN_10')?.identifier;
-      const isbn = isbn13 || isbn10 || '';
+    const results = (data.docs || []).map(doc => {
+      const isbns = doc.isbn || [];
+      const isbn13 = isbns.find(i => i.length === 13) || '';
+      const isbn10 = isbns.find(i => i.length === 10) || '';
+      const isbn = isbn10 || isbn13;
+      const coverId = doc.cover_i;
+      const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : '';
+      const title = doc.title || '';
+      const author = (doc.author_name || []).join(', ');
+      const firstSentence = Array.isArray(doc.first_sentence) ? doc.first_sentence[0] : (doc.first_sentence || '');
       return {
-        title: info.title || '',
-        author: (info.authors || []).join(', '),
-        description: info.description || '',
-        coverImageUrl: (info.imageLinks?.thumbnail || '').replace('http:', 'https:'),
-        amazonUrl: isbn ? `https://www.amazon.com/dp/${isbn10 || isbn13}` : `https://www.amazon.com/s?k=${encodeURIComponent(info.title || '')}`,
-        kindleUrl: isbn ? `https://www.amazon.com/dp/${isbn10 || isbn13}?binding=kindle` : '',
-        audiobookUrl: isbn ? `https://www.audible.com/search?keywords=${encodeURIComponent(info.title || '')}` : '',
-        pageCount: info.pageCount || 0,
-        publishedDate: info.publishedDate || '',
-        categories: info.categories || [],
+        title,
+        author,
+        description: firstSentence,
+        coverImageUrl: coverUrl,
+        amazonUrl: isbn ? `https://www.amazon.com/dp/${isbn}` : `https://www.amazon.com/s?k=${encodeURIComponent(title)}`,
+        kindleUrl: `https://www.amazon.com/s?k=${encodeURIComponent(title + ' ' + author)}&i=digital-text`,
+        audiobookUrl: `https://www.audible.com/search?keywords=${encodeURIComponent(title + ' ' + author)}`,
+        pageCount: doc.number_of_pages_median || 0,
+        publishedDate: doc.first_publish_year ? String(doc.first_publish_year) : '',
+        categories: doc.subject ? doc.subject.slice(0, 5) : [],
       };
     });
     res.json({ results });
