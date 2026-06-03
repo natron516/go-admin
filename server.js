@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 29;
+const ADMIN_BUILD = 30;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1251,6 +1251,101 @@ app.get('/api/books/search', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Music (Apple Music curated albums) ────────────────────────────────────────
+
+app.get('/api/music', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const doc = await db.collection('config').doc('music').get();
+    const data = doc.exists ? doc.data() : {};
+    res.json({ albums: data.albums || [], playlists: data.playlists || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/music/album', async (req, res) => {
+  try {
+    const { albumId, title, artist, type } = req.body;
+    if (!albumId) return res.status(400).json({ error: 'albumId required' });
+    const db = admin.firestore();
+    const ref = db.collection('config').doc('music');
+    const doc = await ref.get();
+    const data = doc.exists ? doc.data() : { albums: [], playlists: [] };
+    const albums = data.albums || [];
+    if (albums.find(a => a.albumId === albumId)) return res.status(409).json({ error: 'Album already added' });
+    albums.push({ albumId, title: title || '', artist: artist || '', type: type || 'album', addedAt: new Date().toISOString() });
+    await ref.set({ ...data, albums }, { merge: true });
+    res.json({ ok: true, albums });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/music/album/:albumId', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const ref = db.collection('config').doc('music');
+    const doc = await ref.get();
+    if (!doc.exists) return res.json({ ok: true });
+    const data = doc.data();
+    data.albums = (data.albums || []).filter(a => a.albumId !== req.params.albumId);
+    await ref.set(data);
+    res.json({ ok: true, albums: data.albums });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/music/album/:albumId', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const ref = db.collection('config').doc('music');
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'No music config' });
+    const data = doc.data();
+    const albums = data.albums || [];
+    const idx = albums.findIndex(a => a.albumId === req.params.albumId);
+    if (idx < 0) return res.status(404).json({ error: 'Album not found' });
+    Object.assign(albums[idx], req.body);
+    await ref.set({ ...data, albums });
+    res.json({ ok: true, albums });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Seed music config with hardcoded album IDs (one-time migration)
+app.post('/api/music/seed', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const ref = db.collection('config').doc('music');
+    const doc = await ref.get();
+    if (doc.exists && (doc.data().albums || []).length > 0) {
+      return res.json({ ok: true, message: 'Already seeded', count: doc.data().albums.length });
+    }
+    const defaultAlbums = [
+      { albumId: '1887383546', title: 'Your Word Is a Lamp', type: 'album' },
+      { albumId: '1841667676', title: 'Gospel Outreach Scripture Songs', type: 'album' },
+      { albumId: '1831598367', title: 'On the Carousel', type: 'album' },
+      { albumId: '1811597280', title: 'Sing Choirs of Angels', type: 'album' },
+      { albumId: '1750051715', title: 'Lullabies', type: 'album' },
+      { albumId: '1811680979', title: 'I Am Always with You', type: 'album' },
+      { albumId: '1750085812', title: 'New Mercies', type: 'album' },
+      { albumId: '6766344106', title: 'I Am Pressing On', type: 'single' },
+      { albumId: '1889967963', title: 'My Father\'s World', type: 'single' },
+      { albumId: '1882054119', title: 'Great Is the Lord', type: 'single' },
+      { albumId: '724376682', title: 'Far Away Places', type: 'album' },
+      { albumId: '724482211', title: 'Hymns II', type: 'album' },
+      { albumId: '724693225', title: 'Hymns Instrumental', type: 'album' },
+      { albumId: '724606076', title: 'Night Light', type: 'album' },
+      { albumId: '715990922', title: 'The Roar of Love', type: 'album' },
+      { albumId: '723893734', title: 'Singer Sower', type: 'album' },
+      { albumId: '1167738867', title: 'Encores', type: 'album' },
+      { albumId: '724642282', title: 'Rejoice', type: 'album' },
+      { albumId: '724076458', title: 'Mansion Builder', type: 'album' },
+      { albumId: '715917383', title: 'How the West Was One', type: 'album' },
+      { albumId: '1167728908', title: 'To the Bride', type: 'album' },
+      { albumId: '1841979336', title: 'In the Volume of the Book', type: 'album' },
+      { albumId: '1841979100', title: 'With Footnotes', type: 'album' },
+    ].map(a => ({ ...a, artist: '', addedAt: new Date().toISOString() }));
+    await ref.set({ albums: defaultAlbums, playlists: [] });
+    res.json({ ok: true, message: 'Seeded', count: defaultAlbums.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Articles ──────────────────────────────────────────────────────────────────

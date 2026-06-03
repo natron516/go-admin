@@ -1366,6 +1366,17 @@ tr.dirty .at-save { display: inline-flex !important; }
         <span class="nav-label">Podcasts</span>
       </button>
 
+      <button class="tab" data-label="Music" onclick="navTo('music', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18V5l12-2v13" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="6" cy="18" r="3"/>
+            <circle cx="18" cy="16" r="3"/>
+          </svg>
+        </span>
+        <span class="nav-label">Music</span>
+      </button>
+
       <button class="tab" data-label="Audio" onclick="navTo('audio', this)">
         <span class="nav-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1808,6 +1819,20 @@ tr.dirty .at-save { display: inline-flex !important; }
       </section>
 
       <!-- ── AUDIO ──────────────────────────────────────── -->
+      <section id="tab-music" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Music</div>
+            <div class="page-subtitle">Manage Apple Music albums and singles shown in the app</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadMusic()">&#8634; Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openAddMusicModal()">+ Add Album/Single</button>
+          </div>
+        </div>
+        <div id="music-content"><div class="spinner"></div></div>
+      </section>
+
       <section id="tab-audio" class="section">
         <div class="page-header">
           <div class="page-header-text">
@@ -2233,6 +2258,39 @@ tr.dirty .at-save { display: inline-flex !important; }
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeBatchUploadModal()">Cancel</button>
       <button class="btn btn-primary" id="batch-upload-btn" onclick="startBatchUpload()">&#11014; Upload All</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Music Modal ──────────────────────────────────── -->
+<div class="modal-backdrop" id="music-modal" onclick="if(event.target===this)closeMusicModal()">
+  <div class="modal" style="max-width:480px;">
+    <h3>Add Apple Music Album or Single</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field">
+        <label>Apple Music Album/Single ID</label>
+        <input type="text" id="music-album-id" placeholder="e.g. 1887383546">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Find the ID in the Apple Music URL: music.apple.com/us/album/name/<b>123456789</b></div>
+      </div>
+      <div class="field">
+        <label>Title (optional — for your reference)</label>
+        <input type="text" id="music-title" placeholder="Album or single name">
+      </div>
+      <div class="field">
+        <label>Artist (optional)</label>
+        <input type="text" id="music-artist" placeholder="Artist name">
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <select id="music-type">
+          <option value="album">Album</option>
+          <option value="single">Single</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeMusicModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addMusicAlbum()">Add</button>
     </div>
   </div>
 </div>
@@ -2728,6 +2786,7 @@ function showTab(name, btn) {
   if (name === 'podcasts') loadPodcasts();
   if (name === 'audio')    loadAudio();
   if (name === 'series')   loadSeries();
+  if (name === 'music')    loadMusic();
 }
 
 // ── Sessions ─────────────────────────────────────────────
@@ -4428,6 +4487,121 @@ async function deleteBook(id, title) {
     if (!r.ok) throw new Error('Failed');
     toast('Book deleted');
     loadBooks();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+// =============================================================
+// MUSIC (Apple Music curated albums)
+// =============================================================
+let _musicAlbums = [];
+
+async function loadMusic() {
+  const el = document.getElementById('music-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/music');
+    const data = await r.json();
+    _musicAlbums = data.albums || [];
+    if (!_musicAlbums.length) {
+      // Try seeding with defaults
+      const sr = await fetch('/api/music/seed', { method: 'POST' });
+      const sd = await sr.json();
+      if (sd.ok && sd.count > 0) {
+        const r2 = await fetch('/api/music');
+        const d2 = await r2.json();
+        _musicAlbums = d2.albums || [];
+      }
+    }
+    renderMusicTable();
+  } catch (e) { el.innerHTML = `<div style="color:var(--red);padding:24px;">Error: ${e.message}</div>`; }
+}
+
+function renderMusicTable() {
+  const el = document.getElementById('music-content');
+  if (!_musicAlbums.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No music yet. Click <b>+ Add Album/Single</b> to get started.</div>';
+    return;
+  }
+  const typeOpts = (sel) => ['album','single'].map(v => `<option value="${v}"${v===sel?' selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('');
+  const rows = _musicAlbums.map((a, i) => `
+    <tr>
+      <td style="padding:10px 12px;font-weight:600;">${escHtml(a.title || a.albumId)}</td>
+      <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.artist || '')}</td>
+      <td style="padding:10px 12px;"><code style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:12px;">${escHtml(a.albumId)}</code></td>
+      <td style="padding:10px 12px;"><select onchange="updateMusicAlbum('${escAttr(a.albumId)}',{type:this.value})" style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:12px;border:1px solid transparent;cursor:pointer;">${typeOpts(a.type||'album')}</select></td>
+      <td style="padding:10px 12px;"><a href="https://music.apple.com/us/album/${a.albumId}" target="_blank" style="color:var(--accent2);font-size:12px;">View ↗</a></td>
+      <td style="padding:10px 12px;"><button class="btn btn-danger btn-sm" onclick="deleteMusicAlbum('${escAttr(a.albumId)}','${escAttr(a.title||a.albumId)}')">Remove</button></td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div style="margin-bottom:12px;color:var(--muted);font-size:13px;">${_musicAlbums.length} album${_musicAlbums.length===1?'':'s'}/single${_musicAlbums.length===1?'':'s'} in the app</div>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
+      <table style="width:100%;border-collapse:collapse;min-width:600px;">
+        <thead>
+          <tr style="background:rgba(0,0,0,.2);">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Artist</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Album ID</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Type</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Link</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openAddMusicModal() {
+  document.getElementById('music-album-id').value = '';
+  document.getElementById('music-title').value = '';
+  document.getElementById('music-artist').value = '';
+  document.getElementById('music-type').value = 'album';
+  document.getElementById('music-modal').classList.add('open');
+}
+function closeMusicModal() { document.getElementById('music-modal').classList.remove('open'); }
+
+async function addMusicAlbum() {
+  const albumId = document.getElementById('music-album-id').value.trim();
+  if (!albumId) { toast('Album ID is required', 'error'); return; }
+  try {
+    const r = await fetch('/api/music/album', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        albumId,
+        title: document.getElementById('music-title').value.trim(),
+        artist: document.getElementById('music-artist').value.trim(),
+        type: document.getElementById('music-type').value,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast('Album added');
+    closeMusicModal();
+    loadMusic();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function updateMusicAlbum(albumId, fields) {
+  try {
+    const r = await fetch(`/api/music/album/${albumId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+    if (!r.ok) throw new Error('Failed');
+    toast('Updated');
+    loadMusic();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deleteMusicAlbum(albumId, title) {
+  if (!confirm(`Remove "${title}" from the app?`)) return;
+  try {
+    const r = await fetch(`/api/music/album/${albumId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed');
+    toast('Album removed');
+    loadMusic();
   } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
