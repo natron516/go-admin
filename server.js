@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 31;
+const ADMIN_BUILD = 32;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1336,6 +1336,90 @@ app.get('/api/music/search', async (req, res) => {
       return true;
     });
     res.json({ results: unique });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Music Playlists CRUD ─────────────────────────────────────────────────────
+app.get('/api/music/playlists', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const ref = db.collection('config').doc('music');
+    const doc = await ref.get();
+    const data = doc.exists ? doc.data() : {};
+    res.json({ playlists: data.playlists || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/music/playlist', async (req, res) => {
+  try {
+    const { playlistId, title, curatorName, artworkUrl, description } = req.body;
+    if (!playlistId) return res.status(400).json({ error: 'playlistId required' });
+    const db = admin.firestore();
+    const ref = db.collection('config').doc('music');
+    const doc = await ref.get();
+    const data = doc.exists ? doc.data() : { albums: [], playlists: [] };
+    const playlists = data.playlists || [];
+    if (playlists.some(p => p.playlistId === playlistId)) {
+      return res.status(409).json({ error: 'Playlist already added' });
+    }
+    playlists.push({
+      playlistId,
+      title: title || '',
+      curatorName: curatorName || '',
+      artworkUrl: artworkUrl || '',
+      description: description || '',
+      addedAt: new Date().toISOString(),
+    });
+    await ref.set({ ...data, playlists });
+    res.json({ ok: true, playlists });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/music/playlist/:playlistId', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const ref = db.collection('config').doc('music');
+    const doc = await ref.get();
+    if (!doc.exists) return res.json({ ok: true });
+    const data = doc.data();
+    data.playlists = (data.playlists || []).filter(p => p.playlistId !== req.params.playlistId);
+    await ref.set(data);
+    res.json({ ok: true, playlists: data.playlists });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Music Playlist Search (iTunes Search API) ────────────────────────────────
+app.get('/api/music/search-playlists', async (req, res) => {
+  const q = req.query.q;
+  if (!q) return res.json({ results: [] });
+  try {
+    // iTunes doesn't have a direct playlist search, but we can search for playlists
+    // by using the Apple Music catalog search via storefront
+    // Alternative: use iTunes search with entity=musicArtist then build curated lists
+    // For now, we search Apple Music's catalog endpoint
+    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=musicArtist&limit=10`);
+    // Actually, iTunes API doesn't expose playlists directly.
+    // We'll use a workaround: search the Apple Music web catalog
+    const catalogR = await fetch(`https://api.music.apple.com/v1/catalog/us/search?types=playlists&term=${encodeURIComponent(q)}&limit=15`, {
+      headers: { 'Authorization': 'Bearer ' + (process.env.APPLE_MUSIC_TOKEN || '') }
+    }).catch(() => null);
+    
+    if (catalogR && catalogR.ok) {
+      const data = await catalogR.json();
+      const playlists = (data.results?.playlists?.data || []).map(p => ({
+        playlistId: p.id,
+        title: p.attributes?.name || '',
+        curatorName: p.attributes?.curatorName || '',
+        artworkUrl: (p.attributes?.artwork?.url || '').replace('{w}', '600').replace('{h}', '600'),
+        description: p.attributes?.description?.short || '',
+      }));
+      return res.json({ results: playlists });
+    }
+    
+    // Fallback: return empty — admin can add by ID manually
+    res.json({ results: [], note: 'Apple Music API token not configured — add playlists by ID' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

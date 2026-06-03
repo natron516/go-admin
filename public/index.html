@@ -1885,6 +1885,18 @@ tr.dirty .at-save { display: inline-flex !important; }
         </div>
 
         <div id="music-content"><div class="spinner"></div></div>
+
+        <!-- Curated Playlists subsection -->
+        <div style="margin-top:32px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div>
+              <div style="font-size:16px;font-weight:700;">Curated Playlists</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Apple Music playlists shown in the app's Music &gt; Playlists tab</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openAddPlaylistModal()">+ Add Playlist</button>
+          </div>
+          <div id="music-playlists-content"><div class="spinner"></div></div>
+        </div>
       </section>
 
       <section id="tab-audio" class="section">
@@ -2345,6 +2357,40 @@ tr.dirty .at-save { display: inline-flex !important; }
     <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-ghost" onclick="closeMusicModal()">Cancel</button>
       <button class="btn btn-primary" onclick="addMusicAlbum()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Playlist Modal ──────────────────────────────── -->
+<div class="modal-backdrop" id="playlist-modal" onclick="if(event.target===this)closePlaylistModal()">
+  <div class="modal" style="max-width:520px;">
+    <h3>Add Apple Music Playlist</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field">
+        <label>Apple Music Playlist ID</label>
+        <input type="text" id="playlist-id-input" placeholder="e.g. pl.f4d106fed2bd41149aaacabb233eb5eb">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Find the ID in the Apple Music URL: music.apple.com/us/playlist/name/<b>pl.xxxxx</b></div>
+      </div>
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="playlist-title-input" placeholder="Playlist name">
+      </div>
+      <div class="field">
+        <label>Curator / Source</label>
+        <input type="text" id="playlist-curator-input" placeholder="e.g. Apple Music, Gospel Outreach">
+      </div>
+      <div class="field">
+        <label>Description (optional)</label>
+        <input type="text" id="playlist-desc-input" placeholder="Short description">
+      </div>
+      <div class="field">
+        <label>Artwork URL (optional)</label>
+        <input type="text" id="playlist-artwork-input" placeholder="https://...">
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closePlaylistModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addPlaylistFromModal()">Add</button>
     </div>
   </div>
 </div>
@@ -4567,6 +4613,7 @@ async function loadMusic() {
       }
     }
     renderMusicTable();
+    loadMusicPlaylists();
   } catch (e) { el.innerHTML = `<div style="color:var(--red);padding:24px;">Error: ${e.message}</div>`; }
 }
 
@@ -4842,6 +4889,99 @@ function clearMusicSearch() {
   document.getElementById('music-search-results').innerHTML = '';
   document.getElementById('music-search-clear').style.display = 'none';
   window._musicSearchResults = null;
+}
+
+// =============================================================
+// MUSIC PLAYLISTS
+// =============================================================
+let _musicPlaylists = [];
+
+async function loadMusicPlaylists() {
+  const el = document.getElementById('music-playlists-content');
+  if (!el) return;
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/music/playlists');
+    const data = await r.json();
+    _musicPlaylists = data.playlists || [];
+    renderMusicPlaylists();
+  } catch (e) { el.innerHTML = `<div style="color:var(--red);padding:24px;">Error: ${e.message}</div>`; }
+}
+
+function renderMusicPlaylists() {
+  const el = document.getElementById('music-playlists-content');
+  if (!_musicPlaylists.length) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted);">No curated playlists yet. Click <b>+ Add Playlist</b> to get started.</div>';
+    return;
+  }
+  const rows = _musicPlaylists.map(p => {
+    const artwork = p.artworkUrl
+      ? `<img src="${escHtml(p.artworkUrl)}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;vertical-align:middle;margin-right:10px;">`
+      : '<div style="width:40px;height:40px;border-radius:6px;background:var(--surface2);display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:10px;font-size:18px;">&#127926;</div>';
+    return `
+    <tr>
+      <td style="padding:10px 12px;">${artwork}<span style="font-weight:600;">${escHtml(p.title || p.playlistId)}</span></td>
+      <td style="padding:10px 12px;color:var(--muted);">${escHtml(p.curatorName || '')}</td>
+      <td style="padding:10px 12px;"><code style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:11px;word-break:break-all;">${escHtml(p.playlistId)}</code></td>
+      <td style="padding:10px 12px;"><a href="https://music.apple.com/us/playlist/${p.playlistId}" target="_blank" style="color:var(--accent2);font-size:12px;">View ↗</a></td>
+      <td style="padding:10px 12px;"><button class="btn btn-danger btn-sm" onclick="deletePlaylist('${escAttr(p.playlistId)}','${escAttr(p.title||p.playlistId)}')">Remove</button></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="border-bottom:1px solid var(--border);">
+        <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--muted);text-transform:uppercase;">Playlist</th>
+        <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--muted);text-transform:uppercase;">Curator</th>
+        <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--muted);text-transform:uppercase;">ID</th>
+        <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--muted);text-transform:uppercase;">Link</th>
+        <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--muted);text-transform:uppercase;"></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function openAddPlaylistModal() {
+  document.getElementById('playlist-id-input').value = '';
+  document.getElementById('playlist-title-input').value = '';
+  document.getElementById('playlist-curator-input').value = '';
+  document.getElementById('playlist-desc-input').value = '';
+  document.getElementById('playlist-artwork-input').value = '';
+  document.getElementById('playlist-modal').classList.add('show');
+}
+
+function closePlaylistModal() {
+  document.getElementById('playlist-modal').classList.remove('show');
+}
+
+async function addPlaylistFromModal() {
+  const playlistId = document.getElementById('playlist-id-input').value.trim();
+  const title = document.getElementById('playlist-title-input').value.trim();
+  const curatorName = document.getElementById('playlist-curator-input').value.trim();
+  const description = document.getElementById('playlist-desc-input').value.trim();
+  const artworkUrl = document.getElementById('playlist-artwork-input').value.trim();
+  if (!playlistId) { toast('Playlist ID is required', 'error'); return; }
+  try {
+    const r = await fetch('/api/music/playlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playlistId, title, curatorName, description, artworkUrl }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast(title ? `"${title}" added` : 'Playlist added');
+    closePlaylistModal();
+    loadMusicPlaylists();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deletePlaylist(playlistId, title) {
+  if (!confirm(`Remove "${title}" from the app?`)) return;
+  try {
+    const r = await fetch(`/api/music/playlist/${playlistId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed');
+    toast('Playlist removed');
+    loadMusicPlaylists();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
 // =============================================================
