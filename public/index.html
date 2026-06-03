@@ -4006,6 +4006,7 @@ function copyText(text, btn) {
 
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escAttr(s) { return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+function escJs(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/`/g,'\\`'); }
 
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el && !el.classList.contains('hidden')) el.classList.remove('open'); });
@@ -5343,7 +5344,7 @@ function renderAudioTable() {
       <td style="padding:10px 12px;white-space:nowrap;">
         ${a.audioUrl ? `<a href="${escAttr(a.audioUrl)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-right:4px;">&#9654; Play</a>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="editAudio('${escAttr(a.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
+        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -5430,7 +5431,9 @@ async function saveAudio() {
   } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
-async function deleteAudio(id, title) {
+async function deleteAudio(id) {
+  const asset = _audioAssets.find(a => a.id === id);
+  const title = asset ? asset.title : id;
   if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
   try {
     const r = await fetch(`/api/audio/${id}`, { method: 'DELETE' });
