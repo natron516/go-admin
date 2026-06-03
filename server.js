@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 22;
+const ADMIN_BUILD = 23;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1397,7 +1397,7 @@ app.get('/api/audio', async (req, res) => {
 app.post('/api/audio', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder } = req.body;
+    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
@@ -1409,8 +1409,11 @@ app.post('/api/audio', async (req, res) => {
       duration: Number(duration) || 0,
       featured: !!featured,
       sortOrder: Number(sortOrder) || 0,
+      mediaType: mediaType || 'audio',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
+    if (seriesId) data.seriesId = seriesId;
+    if (episodeNumber !== undefined && episodeNumber !== null && episodeNumber !== '') data.episodeNumber = Number(episodeNumber);
     const ref = await db.collection('audioAssets').add(data);
     res.json({ id: ref.id, ...data });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1419,7 +1422,7 @@ app.post('/api/audio', async (req, res) => {
 app.patch('/api/audio/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder } = req.body;
+    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
     const update = {};
     if (title !== undefined) update.title = title;
     if (artist !== undefined) update.artist = artist;
@@ -1430,6 +1433,9 @@ app.patch('/api/audio/:id', async (req, res) => {
     if (duration !== undefined) update.duration = Number(duration);
     if (featured !== undefined) update.featured = !!featured;
     if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
+    if (mediaType !== undefined) update.mediaType = mediaType;
+    if (seriesId !== undefined) update.seriesId = seriesId || null;
+    if (episodeNumber !== undefined) update.episodeNumber = (episodeNumber !== null && episodeNumber !== '') ? Number(episodeNumber) : null;
     await db.collection('audioAssets').doc(req.params.id).update(update);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1439,6 +1445,84 @@ app.delete('/api/audio/:id', async (req, res) => {
   try {
     await admin.firestore().collection('audioAssets').doc(req.params.id).delete();
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Series ────────────────────────────────────────────────────────────────────
+
+app.get('/api/series', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('series').orderBy('sortOrder', 'asc').get();
+    const series = [];
+    snap.forEach(doc => series.push({ id: doc.id, ...doc.data() }));
+    res.json({ series });
+  } catch (e) {
+    try {
+      const db = admin.firestore();
+      const snap = await db.collection('series').get();
+      const series = [];
+      snap.forEach(doc => series.push({ id: doc.id, ...doc.data() }));
+      res.json({ series });
+    } catch (e2) { res.status(500).json({ error: e2.message }); }
+  }
+});
+
+app.post('/api/series', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, description, artworkUrl, category, mediaType, enabled, sortOrder } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const data = {
+      title,
+      description: description || '',
+      artworkUrl: artworkUrl || '',
+      category: category || 'sermons',
+      mediaType: mediaType || 'audio',
+      enabled: enabled !== false,
+      sortOrder: Number(sortOrder) || 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const ref = await db.collection('series').add(data);
+    res.json({ id: ref.id, ...data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/series/:id', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const { title, description, artworkUrl, category, mediaType, enabled, sortOrder } = req.body;
+    const update = {};
+    if (title !== undefined) update.title = title;
+    if (description !== undefined) update.description = description;
+    if (artworkUrl !== undefined) update.artworkUrl = artworkUrl;
+    if (category !== undefined) update.category = category;
+    if (mediaType !== undefined) update.mediaType = mediaType;
+    if (enabled !== undefined) update.enabled = !!enabled;
+    if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
+    await db.collection('series').doc(req.params.id).update(update);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/series/:id', async (req, res) => {
+  try {
+    await admin.firestore().collection('series').doc(req.params.id).delete();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/series/:id/episodes', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('audioAssets')
+      .where('seriesId', '==', req.params.id)
+      .get();
+    const episodes = [];
+    snap.forEach(doc => episodes.push({ id: doc.id, ...doc.data() }));
+    // Sort by episodeNumber ascending
+    episodes.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
+    res.json({ episodes });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

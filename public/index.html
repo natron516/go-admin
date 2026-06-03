@@ -1315,6 +1315,15 @@ tr.dirty .at-save { display: inline-flex !important; }
         <span class="nav-label">Articles</span>
       </button>
 
+      <button class="tab" data-label="Series" onclick="navTo('series', this)">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <path d="M9 10l6 2-6 2V10z" fill="currentColor" stroke="none"/>
+          </svg>
+        </span>
+        <span class="nav-label">Series</span>
+      </button>
       <button class="tab" data-label="Podcasts" onclick="navTo('podcasts', this)">
         <span class="nav-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1737,6 +1746,21 @@ tr.dirty .at-save { display: inline-flex !important; }
         <div id="podcasts-content"><div class="spinner"></div></div>
       </section>
 
+      <!-- ── SERIES ──────────────────────────────────────── -->
+      <section id="tab-series" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">Series</div>
+            <div class="page-subtitle">Manage podcast-style series grouping audio &amp; video episodes</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadSeries()">&#8634; Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openSeriesModal()">+ Add Series</button>
+          </div>
+        </div>
+        <div id="series-content"><div class="spinner"></div></div>
+      </section>
+
       <!-- ── AUDIO ──────────────────────────────────────── -->
       <section id="tab-audio" class="section">
         <div class="page-header">
@@ -1948,6 +1972,71 @@ tr.dirty .at-save { display: inline-flex !important; }
   </div>
 </div>
 
+<!-- ── Series Modal ──────────────────────────────────── -->
+<div class="modal-backdrop" id="series-modal" onclick="if(event.target===this)closeSeriesModal()">
+  <div class="modal" style="max-width:540px;">
+    <h3 id="series-modal-title">Add Series</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field">
+        <label>Title *</label>
+        <input type="text" id="series-title" placeholder="Series name">
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="series-description" rows="2" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+      <div class="field">
+        <label>Artwork URL</label>
+        <input type="url" id="series-artwork" placeholder="https://...">
+      </div>
+      <div class="field-group" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="field">
+          <label>Category</label>
+          <select id="series-category">
+            <option value="sermons">Sermons</option>
+            <option value="teaching">Teaching</option>
+            <option value="children">Children's</option>
+            <option value="devotional">Devotional</option>
+            <option value="music">Music</option>
+            <option value="general">General</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Media Type</label>
+          <select id="series-media-type">
+            <option value="audio">Audio</option>
+            <option value="video">Video</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sort Order</label>
+          <input type="number" id="series-sort" value="0" min="0">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="series-enabled" checked style="accent-color:var(--accent);width:15px;height:15px;">
+        <label for="series-enabled" style="font-size:13px;cursor:pointer;">Enabled</label>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeSeriesModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSeries()">Save Series</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Series Episodes Modal ──────────────────────────── -->
+<div class="modal-backdrop" id="series-episodes-modal" onclick="if(event.target===this)document.getElementById('series-episodes-modal').classList.remove('open')">
+  <div class="modal" style="max-width:660px;">
+    <h3 id="series-episodes-title">Episodes</h3>
+    <div id="series-episodes-body" style="max-height:65vh;overflow-y:auto;"><div class="spinner"></div></div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="document.getElementById('series-episodes-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Audio Modal ───────────────────────────────────── -->
 <div class="modal-backdrop" id="audio-modal" onclick="if(event.target===this)closeAudioModal()">
   <div class="modal" style="max-width:540px;">
@@ -1975,7 +2064,26 @@ tr.dirty .at-save { display: inline-flex !important; }
         <label>Cover Image URL</label>
         <input type="url" id="audio-cover" placeholder="https://...">
       </div>
-      <div class="field-group" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="field-group" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <label>Series</label>
+          <select id="audio-series" onchange="document.getElementById('audio-episode-field').style.display=this.value?'block':'none'">
+            <option value="">— None —</option>
+          </select>
+        </div>
+        <div class="field" id="audio-episode-field" style="display:none;">
+          <label>Episode #</label>
+          <input type="number" id="audio-episode" value="" min="1" placeholder="e.g. 1">
+        </div>
+      </div>
+      <div class="field-group" style="grid-template-columns:1fr 1fr 1fr 1fr;">
+        <div class="field">
+          <label>Media Type</label>
+          <select id="audio-media-type">
+            <option value="audio">Audio</option>
+            <option value="video">Video</option>
+          </select>
+        </div>
         <div class="field">
           <label>Category</label>
           <select id="audio-category">
@@ -2497,6 +2605,7 @@ function showTab(name, btn) {
   if (name === 'articles') loadArticles();
   if (name === 'podcasts') loadPodcasts();
   if (name === 'audio')    loadAudio();
+  if (name === 'series')   loadSeries();
 }
 
 // ── Sessions ─────────────────────────────────────────────
@@ -4517,6 +4626,7 @@ function renderAudioTable() {
       </td>
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.artist||'')}</td>
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
+      <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${a.seriesId ? '<span style="color:var(--accent2);font-size:11px;">&#128250; ' + escHtml((_seriesList.find(s=>s.id===a.seriesId)||{}).title||'Series') + (a.episodeNumber ? ' #'+a.episodeNumber : '') + '</span>' : '<span style="color:var(--muted);">—</span>'}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDuration(a.duration)}</td>
       <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
@@ -4533,6 +4643,7 @@ function renderAudioTable() {
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Artist</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Series</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Duration</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
@@ -4543,7 +4654,7 @@ function renderAudioTable() {
     </div>`;
 }
 
-function openAudioModal(audio) {
+async function openAudioModal(audio) {
   _editingAudioId = audio ? audio.id : null;
   document.getElementById('audio-modal-title').textContent = audio ? 'Edit Audio' : 'Add Audio';
   document.getElementById('audio-title').value = audio?.title || '';
@@ -4555,6 +4666,15 @@ function openAudioModal(audio) {
   document.getElementById('audio-duration').value = audio?.duration ?? 0;
   document.getElementById('audio-sort').value = audio?.sortOrder ?? 0;
   document.getElementById('audio-featured').checked = !!audio?.featured;
+  document.getElementById('audio-media-type').value = audio?.mediaType || 'audio';
+  document.getElementById('audio-episode').value = audio?.episodeNumber ?? '';
+  await populateSeriesDropdown(audio?.seriesId || '');
+  const episodeField = document.getElementById('audio-episode-field');
+  if (audio?.seriesId) {
+    episodeField.style.display = 'block';
+  } else {
+    episodeField.style.display = 'none';
+  }
   document.getElementById('audio-modal').classList.add('open');
 }
 
@@ -4571,6 +4691,8 @@ function editAudio(id) {
 async function saveAudio() {
   const title = document.getElementById('audio-title').value.trim();
   if (!title) { toast('Title is required'); return; }
+  const seriesId = document.getElementById('audio-series').value;
+  const episodeNum = document.getElementById('audio-episode').value;
   const payload = {
     title,
     artist: document.getElementById('audio-artist').value.trim(),
@@ -4581,6 +4703,9 @@ async function saveAudio() {
     duration: Number(document.getElementById('audio-duration').value) || 0,
     sortOrder: Number(document.getElementById('audio-sort').value) || 0,
     featured: document.getElementById('audio-featured').checked,
+    mediaType: document.getElementById('audio-media-type').value,
+    seriesId: seriesId || null,
+    episodeNumber: seriesId && episodeNum ? Number(episodeNum) : null,
   };
   try {
     const url = _editingAudioId ? `/api/audio/${_editingAudioId}` : '/api/audio';
@@ -4603,6 +4728,183 @@ async function deleteAudio(id, title) {
     loadAudio();
   } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
+
+// =============================================================
+// SERIES
+// =============================================================
+let _seriesList = [];
+let _editingSeriesId = null;
+
+async function loadSeries() {
+  const el = document.getElementById('series-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch('/api/series');
+    const data = await r.json();
+    _seriesList = data.series || [];
+    renderSeriesTable();
+  } catch (e) {
+    el.innerHTML = '<p style="color:var(--red)">Error: ' + escHtml(e.message) + '</p>';
+  }
+}
+
+function renderSeriesTable() {
+  const el = document.getElementById('series-content');
+  if (!_seriesList.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No series yet. Click <b>+ Add Series</b> to get started.</div>';
+    return;
+  }
+  const rows = _seriesList.map(function(s) {
+    const mediaColor = s.mediaType === 'video' ? 'var(--accent2)' : s.mediaType === 'mixed' ? 'var(--orange)' : 'var(--green)';
+    const mediaLabel = (s.mediaType || 'audio').charAt(0).toUpperCase() + (s.mediaType || 'audio').slice(1);
+    const artImg = s.artworkUrl ? '<img src="' + escHtml(s.artworkUrl) + '" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px;">' : '';
+    return '<tr>' +
+      '<td style="padding:10px 12px;">' + artImg + '<span style="font-weight:600;">' + escHtml(s.title) + '</span></td>' +
+      '<td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">' + escHtml(s.category||'') + '</span></td>' +
+      '<td style="padding:10px 12px;"><span style="background:rgba(0,0,0,.3);color:' + mediaColor + ';padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">' + mediaLabel + '</span></td>' +
+      '<td style="padding:10px 12px;">' + (s.enabled !== false ? '<span style="color:var(--green);">&#10003; Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>') + '</td>' +
+      '<td style="padding:10px 12px;color:var(--muted);font-size:12px;">' + (s.sortOrder || 0) + '</td>' +
+      '<td style="padding:10px 12px;white-space:nowrap;">' +
+        '<button class="btn btn-ghost btn-sm" onclick="viewSeriesEpisodes('' + escAttr(s.id) + '', '' + escAttr(s.title) + '')">Episodes</button> ' +
+        '<button class="btn btn-ghost btn-sm" onclick="editSeries('' + escAttr(s.id) + '')">Edit</button> ' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteSeries('' + escAttr(s.id) + '', '' + escAttr(s.title) + '')">Delete</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  el.innerHTML =
+    '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">' +
+      '<table style="width:100%;border-collapse:collapse;min-width:700px;">' +
+        '<thead>' +
+          '<tr style="background:rgba(0,0,0,.2);">' +
+            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>' +
+            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>' +
+            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Media Type</th>' +
+            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>' +
+            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Order</th>' +
+            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+async function openSeriesModal(series) {
+  _editingSeriesId = series ? series.id : null;
+  document.getElementById('series-modal-title').textContent = series ? 'Edit Series' : 'Add Series';
+  document.getElementById('series-title').value = series ? series.title : '';
+  document.getElementById('series-description').value = series ? (series.description || '') : '';
+  document.getElementById('series-artwork').value = series ? (series.artworkUrl || '') : '';
+  document.getElementById('series-category').value = series ? (series.category || 'sermons') : 'sermons';
+  document.getElementById('series-media-type').value = series ? (series.mediaType || 'audio') : 'audio';
+  document.getElementById('series-sort').value = series ? (series.sortOrder || 0) : 0;
+  document.getElementById('series-enabled').checked = series ? series.enabled !== false : true;
+  document.getElementById('series-modal').classList.add('open');
+}
+
+function closeSeriesModal() {
+  document.getElementById('series-modal').classList.remove('open');
+  _editingSeriesId = null;
+}
+
+function editSeries(id) {
+  const s = _seriesList.find(function(x) { return x.id === id; });
+  if (s) openSeriesModal(s);
+}
+
+async function saveSeries() {
+  const title = document.getElementById('series-title').value.trim();
+  if (!title) { toast('Title is required'); return; }
+  const payload = {
+    title,
+    description: document.getElementById('series-description').value.trim(),
+    artworkUrl: document.getElementById('series-artwork').value.trim(),
+    category: document.getElementById('series-category').value,
+    mediaType: document.getElementById('series-media-type').value,
+    sortOrder: Number(document.getElementById('series-sort').value) || 0,
+    enabled: document.getElementById('series-enabled').checked,
+  };
+  try {
+    const url = _editingSeriesId ? '/api/series/' + _editingSeriesId : '/api/series';
+    const method = _editingSeriesId ? 'PATCH' : 'POST';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast(_editingSeriesId ? 'Series updated' : 'Series created');
+    closeSeriesModal();
+    loadSeries();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function deleteSeries(id, title) {
+  if (!confirm('Delete series "' + title + '"? This cannot be undone.')) return;
+  try {
+    const r = await fetch('/api/series/' + id, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed');
+    toast('Series deleted');
+    loadSeries();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function viewSeriesEpisodes(seriesId, seriesTitle) {
+  document.getElementById('series-episodes-title').textContent = 'Episodes: ' + seriesTitle;
+  const body = document.getElementById('series-episodes-body');
+  body.innerHTML = '<div class="spinner"></div>';
+  document.getElementById('series-episodes-modal').classList.add('open');
+  try {
+    const r = await fetch('/api/series/' + seriesId + '/episodes');
+    const data = await r.json();
+    const episodes = data.episodes || [];
+    if (!episodes.length) {
+      body.innerHTML = '<div style="color:var(--muted);padding:16px;">No episodes in this series yet.</div>';
+      return;
+    }
+    let rows = '';
+    episodes.forEach(function(ep) {
+      rows += '<tr style="border-bottom:1px solid var(--border);">' +
+        '<td style="padding:8px 12px;color:var(--muted);font-size:12px;">' + (ep.episodeNumber !== undefined && ep.episodeNumber !== null ? ep.episodeNumber : '&mdash;') + '</td>' +
+        '<td style="padding:8px 12px;font-weight:500;">' + escHtml(ep.title) + '</td>' +
+        '<td style="padding:8px 12px;"><span style="font-size:11px;color:var(--muted);">' + (ep.mediaType === 'video' ? '&#127916; Video' : '&#127925; Audio') + '</span></td>' +
+        '<td style="padding:8px 12px;color:var(--muted);font-size:12px;">' + fmtDuration(ep.duration) + '</td>' +
+        '</tr>';
+    });
+    body.innerHTML =
+      '<table style="width:100%;border-collapse:collapse;">' +
+        '<thead>' +
+          '<tr style="background:rgba(0,0,0,.2);">' +
+            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">#</th>' +
+            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Title</th>' +
+            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Type</th>' +
+            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Duration</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>';
+  } catch (e) {
+    body.innerHTML = '<p style="color:var(--red);">Error: ' + escHtml(e.message) + '</p>';
+  }
+}
+
+async function populateSeriesDropdown(selectedId) {
+  const sel = document.getElementById('audio-series');
+  sel.innerHTML = '<option value="">&#8212; None &#8212;</option>';
+  try {
+    let series = _seriesList;
+    if (!series.length) {
+      const r = await fetch('/api/series');
+      const data = await r.json();
+      series = data.series || [];
+    }
+    series.forEach(function(s) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.title;
+      if (s.id === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* ignore */ }
+}
+
 </script>
 <div id="build-tag" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:rgba(255,255,255,.25);pointer-events:none;z-index:9999;"></div>
 </body>
