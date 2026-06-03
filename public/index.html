@@ -4760,6 +4760,90 @@ async function deleteMusicAlbum(albumId, title) {
   } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
+// Apple Music search
+async function searchAppleMusic() {
+  const q = document.getElementById('music-search-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('music-search-btn');
+  btn.disabled = true;
+  btn.innerHTML = '...';
+  const resultsEl = document.getElementById('music-search-results');
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = '<div style="padding:12px 16px;color:var(--muted);font-size:12px;">Searching Apple Music...</div>';
+  try {
+    const r = await fetch('/api/music/search?q=' + encodeURIComponent(q));
+    const data = await r.json();
+    const results = data.results || [];
+    if (!results.length) {
+      resultsEl.innerHTML = '<div style="padding:12px 16px;color:var(--muted);font-size:12px;">No results found.</div>';
+      return;
+    }
+    window._musicSearchResults = results;
+    // Check which albums are already added
+    const existingIds = new Set((_musicAlbums || []).map(a => a.albumId));
+    resultsEl.innerHTML = results.map((item, i) => {
+      const isAdded = existingIds.has(item.albumId);
+      const thumb = item.artworkUrl
+        ? '<img style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;background:var(--border);" src="' + escHtml(item.artworkUrl) + '" alt="" onerror="this.style.display=&quot;none&quot;">'
+        : '<div style="width:48px;height:48px;border-radius:6px;background:var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;">&#127925;</div>';
+      const badge = isAdded ? '<span style="background:var(--green);color:#000;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;">ADDED</span>' : '';
+      const year = item.releaseDate ? ' <span style="color:var(--muted);font-size:10px;">' + escHtml(item.releaseDate.slice(0,4)) + '</span>' : '';
+      const tracks = item.trackCount ? ' &middot; ' + item.trackCount + ' tracks' : '';
+      return '<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s;" ' +
+        'onmouseover="this.style.background=\'var(--accent-dim)\'" onmouseout="this.style.background=\'\'" ' +
+        'onclick="addMusicFromSearch(' + i + ')">' +
+        thumb +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(item.title) + year + ' ' + badge + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + escHtml(item.artist) + tracks + '</div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+    document.getElementById('music-search-clear').style.display = '';
+  } catch (e) {
+    resultsEl.innerHTML = '<div style="padding:12px 16px;color:var(--red);font-size:12px;">Error: ' + escHtml(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#128269; Search';
+  }
+}
+
+async function addMusicFromSearch(index) {
+  const item = (window._musicSearchResults || [])[index];
+  if (!item) return;
+  // Check if already added
+  const existingIds = new Set((_musicAlbums || []).map(a => a.albumId));
+  if (existingIds.has(item.albumId)) {
+    toast('Album already in the app', 'error');
+    return;
+  }
+  try {
+    const r = await fetch('/api/music/album', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        albumId: item.albumId,
+        title: item.title,
+        artist: item.artist,
+        type: item.type || 'album',
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    toast('Added: ' + item.title);
+    clearMusicSearch();
+    loadMusic();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+function clearMusicSearch() {
+  document.getElementById('music-search-input').value = '';
+  document.getElementById('music-search-results').style.display = 'none';
+  document.getElementById('music-search-results').innerHTML = '';
+  document.getElementById('music-search-clear').style.display = 'none';
+  window._musicSearchResults = null;
+}
+
 // =============================================================
 // ARTICLES
 // =============================================================
