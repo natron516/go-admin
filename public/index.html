@@ -6057,37 +6057,30 @@ async function uploadAudioFileToMux(file) {
 async function pollMuxUpload(uploadId, assetId, resolve, reject) {
   const statusEl = document.getElementById('audio-upload-status');
   if (statusEl) statusEl.textContent = 'Processing... (Mux is encoding)';
-  // Poll upload to get asset_id, then get playback ID
   let tries = 0;
-  const maxTries = 30;
+  const maxTries = 40;
   const poll = async () => {
     tries++;
     try {
-      const r = await fetch('/api/mux-upload-status/' + uploadId);
+      const r = await fetch('/api/upload-status/' + uploadId);
       if (r.ok) {
         const d = await r.json();
-        const aid = d.asset_id || assetId;
-        if (aid) {
-          // Get asset to find playback ID
-          const ar = await fetch('/api/mux-asset-playback/' + aid);
-          if (ar.ok) {
-            const ad = await ar.json();
-            const pid = ad.playback_id;
-            if (pid) {
-              const streamUrl = 'https://stream.mux.com/' + pid + '.m3u8';
-              if (statusEl) statusEl.textContent = '&#10003; Uploaded! Stream URL filled.';
-              resolve(streamUrl);
-              return;
-            }
-          }
+        if (d.status === 'ready' && d.streamUrl) {
+          if (statusEl) statusEl.textContent = '\u2713 Uploaded! Stream URL filled.';
+          resolve(d.streamUrl);
+          return;
+        } else if (d.status === 'processing') {
+          if (statusEl) statusEl.textContent = 'Processing... (Mux is encoding, attempt ' + tries + '/' + maxTries + ')';
+        } else if (d.status === 'errored') {
+          reject(new Error('Mux encoding failed'));
+          return;
         }
       }
     } catch (e) { /* keep polling */ }
     if (tries < maxTries) {
       setTimeout(poll, 3000);
     } else {
-      // Fallback: return empty, user can fill manually
-      if (statusEl) statusEl.textContent = 'Uploaded! Mux is still processing - URL will be available shortly.';
+      if (statusEl) statusEl.textContent = 'Uploaded but Mux is still processing. Save the record and edit the URL later.';
       resolve('');
     }
   };
