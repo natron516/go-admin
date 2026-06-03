@@ -2095,6 +2095,8 @@ tr.dirty .at-save { display: inline-flex !important; }
       <button class="btn btn-ghost btn-sm series-sort-btn" data-sort="date-desc" onclick="setSeriesEpSort('date-desc')">Newest First</button>
       <button class="btn btn-ghost btn-sm series-sort-btn" data-sort="date-asc" onclick="setSeriesEpSort('date-asc')">Oldest First</button>
       <button class="btn btn-ghost btn-sm series-sort-btn" data-sort="custom" onclick="setSeriesEpSort('custom')">&#8597; Custom Order</button>
+      <span style="flex:1;"></span>
+      <button class="btn btn-primary btn-sm" id="save-episode-order-btn" style="display:none;" onclick="saveCurrentEpOrder()">&#10003; Save This Order</button>
     </div>
     <div id="series-episodes-body" style="max-height:58vh;overflow-y:auto;"><div class="spinner"></div></div>
     <div class="modal-actions" style="margin-top:16px;">
@@ -5007,7 +5009,27 @@ function setSeriesEpSort(mode) {
   document.querySelectorAll('.series-sort-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.sort === mode);
   });
+  // Show save button for any sort mode except default episode order
+  var saveBtn = document.getElementById('save-episode-order-btn');
+  if (saveBtn) saveBtn.style.display = (mode !== 'episode') ? 'inline-flex' : 'none';
   renderSeriesEpisodes();
+}
+
+async function saveCurrentEpOrder() {
+  var sorted = getSortedSeriesEps();
+  var saveBtn = document.getElementById('save-episode-order-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  await batchSaveSeriesEpOrder(sorted);
+  // Update local data with new episode numbers
+  sorted.forEach(function(ep, i) { ep.episodeNumber = i + 1; });
+  _seriesEpData = sorted;
+  _seriesEpSort = 'episode';
+  document.querySelectorAll('.series-sort-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.sort === 'episode');
+  });
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '\u2713 Save This Order'; saveBtn.style.display = 'none'; }
+  renderSeriesEpisodes();
+  if (typeof toast === 'function') toast('Episode order saved');
 }
 
 function getSortedSeriesEps() {
