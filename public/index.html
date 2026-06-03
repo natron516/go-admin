@@ -1126,6 +1126,38 @@ tr.dirty .at-save { display: inline-flex !important; }
   transition: border-color var(--transition), background var(--transition);
 }
 #drop-zone-inline:hover { border-color: var(--accent); background: var(--accent-dim); }
+/* ── Book Search ──────────────────────────────────────── */
+#book-search-bar { margin-bottom: 16px; position: relative; }
+#book-search-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; padding: 9px 12px; outline: none; font-family: inherit; transition: border-color var(--transition); }
+#book-search-input:focus { border-color: var(--accent); }
+#book-search-results { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); z-index: 100; box-shadow: var(--shadow); max-height: 380px; overflow-y: auto; }
+.book-search-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background var(--transition); }
+.book-search-item:last-child { border-bottom: none; }
+.book-search-item:hover { background: var(--accent-dim); }
+.book-search-thumb { width: 40px; height: 56px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: var(--border); }
+.book-search-info { flex: 1; min-width: 0; }
+.book-search-title { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.book-search-author { font-size: 11px; color: var(--muted); margin-top: 2px; }
+/* ── Batch Upload ─────────────────────────────────────── */
+#batch-upload-modal .batch-drop-zone { border: 2px dashed var(--border2); border-radius: var(--radius-sm); padding: 24px; text-align: center; cursor: pointer; transition: border-color var(--transition), background var(--transition); }
+#batch-upload-modal .batch-drop-zone.dragover { border-color: var(--accent); background: var(--accent-dim); }
+.batch-file-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.batch-file-item:last-child { border-bottom: none; }
+.batch-file-title { flex: 1; min-width: 0; }
+.batch-file-title input { width: 100%; background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 4px 8px; outline: none; font-family: inherit; }
+.batch-media-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+.batch-media-badge.audio { background: rgba(34,197,94,.15); color: var(--green); }
+.batch-media-badge.video { background: rgba(99,102,241,.15); color: var(--accent2); }
+.batch-progress-wrap { width: 80px; flex-shrink: 0; }
+.batch-progress-bar { width: 100%; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.batch-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.1s; }
+.batch-status { font-size: 11px; color: var(--muted); flex-shrink: 0; width: 54px; text-align: right; }
+/* ── Audio upload zone ───────────────────────────────────── */
+.audio-upload-zone { border: 2px dashed var(--border2); border-radius: var(--radius-sm); padding: 14px; text-align: center; cursor: pointer; transition: border-color var(--transition), background var(--transition); font-size: 12px; color: var(--muted); }
+.audio-upload-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+.audio-upload-zone.has-file { border-color: var(--green); background: rgba(34,197,94,.07); color: var(--green); }
+.audio-upload-progress { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+.audio-upload-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.1s; width: 0%; }
 </style>
 <!-- Firebase (compat — works with onclick handlers) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -1713,6 +1745,20 @@ tr.dirty .at-save { display: inline-flex !important; }
             <button class="btn btn-primary btn-sm" onclick="openBookModal()">+ Add Book</button>
           </div>
         </div>
+        <!-- Book Search Bar -->
+        <div id="book-search-bar">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:1;">
+              <input type="text" id="book-search-input"
+                placeholder="&#128269; Search books to auto-fill form..."
+                onkeydown="if(event.key==='Enter')searchBooks()"
+                autocomplete="off">
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="searchBooks()" id="book-search-btn">Search</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearBookSearch()" id="book-search-clear" style="display:none;">&#10005; Clear</button>
+          </div>
+          <div id="book-search-results"></div>
+        </div>
         <div id="books-content"><div class="spinner"></div></div>
       </section>
 
@@ -1770,6 +1816,7 @@ tr.dirty .at-save { display: inline-flex !important; }
           </div>
           <div class="page-actions">
             <button class="btn btn-ghost btn-sm" onclick="loadAudio()">&#8634; Refresh</button>
+            <button class="btn btn-ghost btn-sm" onclick="openBatchUploadModal()">&#11014; Batch Upload</button>
             <button class="btn btn-primary btn-sm" onclick="openAudioModal()">+ Add Audio</button>
           </div>
         </div>
@@ -2057,8 +2104,23 @@ tr.dirty .at-save { display: inline-flex !important; }
         <textarea id="audio-description" rows="2" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
       </div>
       <div class="field">
-        <label>Audio URL</label>
-        <input type="url" id="audio-url" placeholder="https://...mp3">
+        <label>Audio / Stream URL</label>
+        <input type="url" id="audio-url" placeholder="https://...mp3 or Mux stream URL">
+      </div>
+      <div class="field">
+        <label>Upload File to Mux <span style="font-size:11px;color:var(--muted);">(auto-fills URL above)</span></label>
+        <div class="audio-upload-zone" id="audio-upload-zone"
+          onclick="document.getElementById('audio-file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('dragover')"
+          ondragleave="this.classList.remove('dragover')"
+          ondrop="handleAudioFileDrop(event)">
+          <span id="audio-upload-zone-text">&#128194; Click or drop audio/video file &middot; MP3, M4A, MP4, MOV, WAV&hellip;</span>
+          <input type="file" id="audio-file-input" accept="audio/*,video/*,.mp3,.m4a,.mp4,.mov,.mkv,.wav,.aac" style="display:none" onchange="handleAudioFileSelect(this.files[0])">
+        </div>
+        <div class="audio-upload-progress" id="audio-upload-progress" style="display:none;">
+          <div class="audio-upload-progress-fill" id="audio-upload-progress-fill"></div>
+        </div>
+        <div id="audio-upload-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
       </div>
       <div class="field">
         <label>Cover Image URL</label>
@@ -2111,6 +2173,45 @@ tr.dirty .at-save { display: inline-flex !important; }
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeAudioModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveAudio()">Save Audio</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Batch Upload Modal ───────────────────────── -->
+<div class="modal-backdrop" id="batch-upload-modal" onclick="if(event.target===this)closeBatchUploadModal()">
+  <div class="modal" style="max-width:660px;">
+    <h3>Batch Upload to Series</h3>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="field">
+        <label>Series *</label>
+        <select id="batch-series-select" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:8px 10px;outline:none;">
+          <option value="">&mdash; Select a series &mdash;</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Files <span style="font-size:11px;color:var(--muted);">(MP3, M4A, WAV, AAC &rarr; Audio &middot; MP4, MOV, MKV &rarr; Video)</span></label>
+        <div class="batch-drop-zone" id="batch-drop-zone"
+          onclick="document.getElementById('batch-file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('dragover')"
+          ondragleave="this.classList.remove('dragover')"
+          ondrop="handleBatchDrop(event)">
+          <div style="font-size:28px;margin-bottom:6px;">&#128194;</div>
+          <div>Click or drop multiple files here</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Audio &amp; video files accepted</div>
+          <input type="file" id="batch-file-input" multiple accept="audio/*,video/*,.mp3,.m4a,.mp4,.mov,.mkv,.wav,.aac" style="display:none" onchange="addBatchFiles(this.files)">
+        </div>
+      </div>
+      <div id="batch-file-list" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Files to Upload</span>
+          <button class="btn btn-ghost btn-sm" onclick="clearBatchFiles()" style="font-size:11px;">Clear All</button>
+        </div>
+        <div id="batch-file-items" style="max-height:280px;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeBatchUploadModal()">Cancel</button>
+      <button class="btn btn-primary" id="batch-upload-btn" onclick="startBatchUpload()">&#11014; Upload All</button>
     </div>
   </div>
 </div>
@@ -4903,6 +5004,483 @@ async function populateSeriesDropdown(selectedId) {
       sel.appendChild(opt);
     });
   } catch (e) { /* ignore */ }
+}
+
+// =============================================================
+// BOOK SEARCH (Google Books API)
+// =============================================================
+let _bookSearchTimeout = null;
+
+async function searchBooks() {
+  const q = document.getElementById('book-search-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('book-search-btn');
+  btn.disabled = true;
+  btn.textContent = '...';
+  const resultsEl = document.getElementById('book-search-results');
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = '<div style="padding:12px 16px;color:var(--muted);font-size:12px;">Searching...</div>';
+  try {
+    const r = await fetch('/api/books/search?q=' + encodeURIComponent(q));
+    const data = await r.json();
+    const results = data.results || [];
+    if (!results.length) {
+      resultsEl.innerHTML = '<div style="padding:12px 16px;color:var(--muted);font-size:12px;">No results found.</div>';
+      return;
+    }
+    window._bookSearchResults = results;
+    resultsEl.innerHTML = results.map((book, i) => {
+      const thumb = book.coverImageUrl
+        ? '<img class="book-search-thumb" src="' + escHtml(book.coverImageUrl) + '" alt="" onerror="this.style.display=&quot;none&quot;">'
+        : '<div class="book-search-thumb" style="display:flex;align-items:center;justify-content:center;font-size:20px;">&#128218;</div>';
+      const author = book.author ? '<div class="book-search-author">' + escHtml(book.author) + '</div>' : '';
+      const year = book.publishedDate ? ' <span style="color:var(--muted);font-size:10px;">' + escHtml(book.publishedDate.slice(0,4)) + '</span>' : '';
+      return '<div class="book-search-item" onclick="prefillBookFromSearch(' + i + ')">' +
+        thumb +
+        '<div class="book-search-info"><div class="book-search-title">' + escHtml(book.title) + year + '</div>' + author + '</div>' +
+        '</div>';
+    }).join('');
+    document.getElementById('book-search-clear').style.display = '';
+  } catch (e) {
+    resultsEl.innerHTML = '<div style="padding:12px 16px;color:var(--red);font-size:12px;">Error: ' + escHtml(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Search';
+  }
+}
+
+function prefillBookFromSearch(indexOrBook) {
+  const book = (typeof indexOrBook === 'number') ? (window._bookSearchResults || [])[indexOrBook] : indexOrBook;
+  if (!book) return;
+  // Close results
+  document.getElementById('book-search-results').style.display = 'none';
+  // Open Add Book modal pre-filled
+  openBookModal({
+    title: book.title || '',
+    author: book.author || '',
+    description: book.description || '',
+    coverImageUrl: book.coverImageUrl || '',
+    amazonUrl: book.amazonUrl || '',
+    kindleUrl: book.kindleUrl || '',
+    audiobookUrl: book.audiobookUrl || '',
+    category: (book.categories && book.categories[0]) ? '' : '',
+    featured: false,
+    sortOrder: 0,
+  });
+}
+
+function clearBookSearch() {
+  document.getElementById('book-search-input').value = '';
+  document.getElementById('book-search-results').style.display = 'none';
+  document.getElementById('book-search-results').innerHTML = '';
+  document.getElementById('book-search-clear').style.display = 'none';
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', function(e) {
+  const bar = document.getElementById('book-search-bar');
+  if (bar && !bar.contains(e.target)) {
+    const r = document.getElementById('book-search-results');
+    if (r) r.style.display = 'none';
+  }
+});
+
+// =============================================================
+// AUDIO FILE UPLOAD (Single — Mux direct upload)
+// =============================================================
+let _audioUploadFile = null;
+
+function handleAudioFileDrop(e) {
+  e.preventDefault();
+  const zone = document.getElementById('audio-upload-zone');
+  zone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleAudioFileSelect(file);
+}
+
+function handleAudioFileSelect(file) {
+  if (!file) return;
+  _audioUploadFile = file;
+  const zone = document.getElementById('audio-upload-zone');
+  zone.classList.add('has-file');
+  document.getElementById('audio-upload-zone-text').textContent = '&#128194; ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
+  document.getElementById('audio-upload-status').textContent = 'Ready to upload. Save to begin upload.';
+  // Auto-fill title if empty
+  const titleEl = document.getElementById('audio-title');
+  if (!titleEl.value.trim()) {
+    titleEl.value = file.name.replace(/\.[^.]+$/, '');
+  }
+  // Detect media type from extension
+  const ext = file.name.split('.').pop().toLowerCase();
+  const isVideo = ['mp4','mov','mkv','avi','webm'].includes(ext);
+  const mediaTypeEl = document.getElementById('audio-media-type');
+  if (mediaTypeEl) mediaTypeEl.value = isVideo ? 'video' : 'audio';
+}
+
+async function uploadAudioFileToMux(file) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Get Mux upload URL
+      const title = document.getElementById('audio-title').value.trim() || file.name.replace(/\.[^.]+$/, '');
+      const resp = await fetch('/api/create-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to get upload URL');
+      const uploadUrl = data.data?.url;
+      if (!uploadUrl) throw new Error('No upload URL received');
+
+      // Upload to Mux with progress
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl);
+
+      const progressEl = document.getElementById('audio-upload-progress');
+      const fillEl = document.getElementById('audio-upload-progress-fill');
+      const statusEl = document.getElementById('audio-upload-status');
+      if (progressEl) progressEl.style.display = 'block';
+
+      xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable && fillEl) {
+          const pct = Math.round(e.loaded / e.total * 100);
+          fillEl.style.width = pct + '%';
+          if (statusEl) statusEl.textContent = 'Uploading... ' + pct + '%';
+        }
+      };
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // Mux processes async; asset ID is in upload object
+          // Poll upload status to get playback ID
+          const uploadId = data.data?.id;
+          pollMuxUpload(uploadId, data.data?.asset_id, resolve, reject);
+        } else {
+          reject(new Error('Upload failed: HTTP ' + xhr.status));
+        }
+      };
+      xhr.onerror = function() { reject(new Error('Network error during upload')); };
+      xhr.send(file);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+async function pollMuxUpload(uploadId, assetId, resolve, reject) {
+  const statusEl = document.getElementById('audio-upload-status');
+  if (statusEl) statusEl.textContent = 'Processing... (Mux is encoding)';
+  // Poll upload to get asset_id, then get playback ID
+  let tries = 0;
+  const maxTries = 30;
+  const poll = async () => {
+    tries++;
+    try {
+      const r = await fetch('/api/mux-upload-status/' + uploadId);
+      if (r.ok) {
+        const d = await r.json();
+        const aid = d.asset_id || assetId;
+        if (aid) {
+          // Get asset to find playback ID
+          const ar = await fetch('/api/mux-asset-playback/' + aid);
+          if (ar.ok) {
+            const ad = await ar.json();
+            const pid = ad.playback_id;
+            if (pid) {
+              const streamUrl = 'https://stream.mux.com/' + pid + '.m3u8';
+              if (statusEl) statusEl.textContent = '&#10003; Uploaded! Stream URL filled.';
+              resolve(streamUrl);
+              return;
+            }
+          }
+        }
+      }
+    } catch (e) { /* keep polling */ }
+    if (tries < maxTries) {
+      setTimeout(poll, 3000);
+    } else {
+      // Fallback: return empty, user can fill manually
+      if (statusEl) statusEl.textContent = 'Uploaded! Mux is still processing - URL will be available shortly.';
+      resolve('');
+    }
+  };
+  setTimeout(poll, 3000);
+}
+
+// Override saveAudio to handle file upload
+const _originalSaveAudio = saveAudio;
+async function saveAudio() {
+  if (_audioUploadFile) {
+    const statusEl = document.getElementById('audio-upload-status');
+    const urlEl = document.getElementById('audio-url');
+    if (!urlEl.value.trim()) {
+      // Need to upload first
+      try {
+        if (statusEl) statusEl.textContent = 'Uploading to Mux...';
+        const streamUrl = await uploadAudioFileToMux(_audioUploadFile);
+        if (streamUrl) urlEl.value = streamUrl;
+        _audioUploadFile = null;
+        // Reset upload zone
+        const zone = document.getElementById('audio-upload-zone');
+        if (zone) { zone.classList.remove('has-file'); }
+        const zoneText = document.getElementById('audio-upload-zone-text');
+        if (zoneText) zoneText.textContent = '&#128194; Click or drop audio/video file · MP3, M4A, MP4, MOV, WAV…';
+        const progressEl = document.getElementById('audio-upload-progress');
+        if (progressEl) progressEl.style.display = 'none';
+      } catch (e) {
+        toast('Upload error: ' + e.message, 'error');
+        return;
+      }
+    }
+  }
+  await _originalSaveAudio();
+}
+
+// Also reset upload state when modal closes
+const _origCloseAudioModal = closeAudioModal;
+function closeAudioModal() {
+  _audioUploadFile = null;
+  const zone = document.getElementById('audio-upload-zone');
+  if (zone) zone.classList.remove('has-file');
+  const zoneText = document.getElementById('audio-upload-zone-text');
+  if (zoneText) zoneText.textContent = '&#128194; Click or drop audio/video file · MP3, M4A, MP4, MOV, WAV…';
+  const progressEl = document.getElementById('audio-upload-progress');
+  if (progressEl) progressEl.style.display = 'none';
+  const statusEl = document.getElementById('audio-upload-status');
+  if (statusEl) statusEl.textContent = '';
+  const fileInput = document.getElementById('audio-file-input');
+  if (fileInput) fileInput.value = '';
+  _origCloseAudioModal();
+}
+
+// =============================================================
+// BATCH UPLOAD
+// =============================================================
+let _batchFiles = []; // Array of { file, title, mediaType, status, progress }
+let _batchUploading = false;
+
+function detectMediaType(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  return ['mp4','mov','mkv','avi','webm'].includes(ext) ? 'video' : 'audio';
+}
+
+function filenameWithoutExt(name) {
+  return name.replace(/\.[^.]+$/, '');
+}
+
+async function openBatchUploadModal() {
+  _batchFiles = [];
+  _batchUploading = false;
+  renderBatchFileList();
+  document.getElementById('batch-file-list').style.display = 'none';
+  // Populate series dropdown
+  const sel = document.getElementById('batch-series-select');
+  sel.innerHTML = '<option value="">&mdash; Select a series &mdash;</option>';
+  try {
+    let series = _seriesList;
+    if (!series.length) {
+      const r = await fetch('/api/series');
+      const d = await r.json();
+      series = d.series || [];
+    }
+    series.forEach(function(s) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.title;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* ignore */ }
+  document.getElementById('batch-upload-modal').classList.add('open');
+}
+
+function closeBatchUploadModal() {
+  if (_batchUploading) {
+    if (!confirm('Upload in progress. Cancel?')) return;
+    _batchUploading = false;
+  }
+  document.getElementById('batch-upload-modal').classList.remove('open');
+  _batchFiles = [];
+}
+
+function handleBatchDrop(e) {
+  e.preventDefault();
+  document.getElementById('batch-drop-zone').classList.remove('dragover');
+  addBatchFiles(e.dataTransfer.files);
+}
+
+function addBatchFiles(fileList) {
+  const existing = new Set(_batchFiles.map(f => f.file.name));
+  for (const file of fileList) {
+    if (!existing.has(file.name)) {
+      _batchFiles.push({
+        file,
+        title: filenameWithoutExt(file.name),
+        mediaType: detectMediaType(file.name),
+        status: 'pending',
+        progress: 0,
+      });
+    }
+  }
+  renderBatchFileList();
+  // Reset file input so same files can be re-added if cleared
+  const inp = document.getElementById('batch-file-input');
+  if (inp) inp.value = '';
+}
+
+function clearBatchFiles() {
+  if (_batchUploading) return;
+  _batchFiles = [];
+  renderBatchFileList();
+}
+
+function renderBatchFileList() {
+  const listEl = document.getElementById('batch-file-list');
+  const itemsEl = document.getElementById('batch-file-items');
+  if (!_batchFiles.length) {
+    listEl.style.display = 'none';
+    return;
+  }
+  listEl.style.display = 'block';
+  itemsEl.innerHTML = _batchFiles.map((item, i) => {
+    const statusColor = { pending: 'var(--muted)', uploading: 'var(--accent)', done: 'var(--green)', error: 'var(--red)' }[item.status] || 'var(--muted)';
+    const statusText = { pending: 'Pending', uploading: item.progress + '%', done: 'Done', error: 'Error' }[item.status] || '';
+    const badge = '<span class="batch-media-badge ' + item.mediaType + '">' + (item.mediaType === 'video' ? 'VIDEO' : 'AUDIO') + '</span>';
+    const disabled = _batchUploading ? 'disabled' : '';
+    return '<div class="batch-file-item" id="batch-item-' + i + '">' +
+      '<div class="batch-file-title"><input type="text" value="' + escAttr(item.title) + '" ' + disabled + ' onchange="_batchFiles[' + i + '].title=this.value" placeholder="Title"></div>' +
+      badge +
+      '<div class="batch-progress-wrap"><div class="batch-progress-bar"><div class="batch-progress-fill" id="batch-pfill-' + i + '" style="width:' + item.progress + '%"></div></div></div>' +
+      '<span class="batch-status" style="color:' + statusColor + ';" id="batch-pstatus-' + i + '">' + statusText + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+async function startBatchUpload() {
+  const seriesId = document.getElementById('batch-series-select').value;
+  if (!seriesId) { toast('Please select a series', 'error'); return; }
+  if (!_batchFiles.length) { toast('No files selected', 'error'); return; }
+  if (_batchUploading) return;
+
+  _batchUploading = true;
+  document.getElementById('batch-upload-btn').disabled = true;
+  document.getElementById('batch-upload-btn').textContent = 'Uploading...';
+
+  // Get current max episode number in series
+  let nextEpisode = 1;
+  try {
+    const r = await fetch('/api/series/' + seriesId + '/episodes');
+    const d = await r.json();
+    const episodes = d.episodes || [];
+    if (episodes.length) {
+      nextEpisode = Math.max(...episodes.map(e => e.episodeNumber || 0)) + 1;
+    }
+  } catch (e) { /* start from 1 */ }
+
+  let episodeCounter = nextEpisode;
+
+  for (let i = 0; i < _batchFiles.length; i++) {
+    const item = _batchFiles[i];
+    if (item.status === 'done') { episodeCounter++; continue; }
+    item.status = 'uploading';
+    item.progress = 0;
+    updateBatchItemUI(i);
+
+    try {
+      // 1. Get Mux upload URL
+      const uploadResp = await fetch('/api/create-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: item.title }),
+      });
+      const uploadData = await uploadResp.json();
+      if (!uploadResp.ok) throw new Error(uploadData.error || 'Failed to get upload URL');
+      const uploadUrl = uploadData.data?.url;
+      const uploadId = uploadData.data?.id;
+      if (!uploadUrl) throw new Error('No upload URL');
+
+      // 2. Upload file via XHR for progress tracking
+      const streamUrl = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable) {
+            const pct = Math.round(e.loaded / e.total * 100);
+            item.progress = pct;
+            updateBatchItemUI(i);
+          }
+        };
+        xhr.onload = function() {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // Build stream URL optimistically using upload ID
+            // The actual playback ID will be available after processing
+            resolve('mux-upload:' + uploadId);
+          } else {
+            reject(new Error('HTTP ' + xhr.status));
+          }
+        };
+        xhr.onerror = function() { reject(new Error('Network error')); };
+        xhr.send(item.file);
+      });
+
+      item.progress = 100;
+      updateBatchItemUI(i);
+
+      // 3. Create audio asset entry in Firestore
+      const audioPayload = {
+        title: item.title,
+        audioUrl: '', // will be filled when Mux finishes processing
+        mediaType: item.mediaType,
+        seriesId: seriesId,
+        episodeNumber: episodeCounter,
+        category: item.mediaType === 'video' ? 'sermons' : 'music',
+        sortOrder: episodeCounter,
+        featured: false,
+        duration: 0,
+        description: '',
+        artist: '',
+        coverImageUrl: '',
+      };
+      const audioResp = await fetch('/api/audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(audioPayload),
+      });
+      if (!audioResp.ok) {
+        const ed = await audioResp.json();
+        throw new Error(ed.error || 'Failed to save audio asset');
+      }
+
+      item.status = 'done';
+      episodeCounter++;
+    } catch (e) {
+      item.status = 'error';
+      item.errorMsg = e.message;
+      console.error('[batch] Item', i, 'error:', e.message);
+    }
+    updateBatchItemUI(i);
+  }
+
+  _batchUploading = false;
+  document.getElementById('batch-upload-btn').disabled = false;
+  document.getElementById('batch-upload-btn').textContent = '&#11014; Upload All';
+
+  const doneCount = _batchFiles.filter(f => f.status === 'done').length;
+  const errCount = _batchFiles.filter(f => f.status === 'error').length;
+  toast(doneCount + ' file(s) uploaded' + (errCount ? ', ' + errCount + ' failed' : ''), errCount ? 'error' : 'success');
+
+  if (doneCount > 0) loadAudio();
+}
+
+function updateBatchItemUI(i) {
+  const item = _batchFiles[i];
+  const fillEl = document.getElementById('batch-pfill-' + i);
+  const statusEl = document.getElementById('batch-pstatus-' + i);
+  if (fillEl) fillEl.style.width = item.progress + '%';
+  if (statusEl) {
+    const statusText = { pending: 'Pending', uploading: item.progress + '%', done: 'Done &#10003;', error: 'Error' }[item.status] || '';
+    const statusColor = { pending: 'var(--muted)', uploading: 'var(--accent)', done: 'var(--green)', error: 'var(--red)' }[item.status] || 'var(--muted)';
+    statusEl.innerHTML = statusText;
+    statusEl.style.color = statusColor;
+  }
 }
 
 </script>

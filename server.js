@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 23;
+const ADMIN_BUILD = 24;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1188,6 +1188,37 @@ app.delete('/api/books/:id', async (req, res) => {
     await admin.firestore().collection('books').doc(req.params.id).delete();
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Book Search (Google Books API proxy) ─────────────────────────────────────
+app.get('/api/books/search', async (req, res) => {
+  const q = req.query.q;
+  if (!q) return res.json({ results: [] });
+  try {
+    const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8`);
+    const data = await r.json();
+    const results = (data.items || []).map(item => {
+      const info = item.volumeInfo || {};
+      const isbn13 = (info.industryIdentifiers || []).find(i => i.type === 'ISBN_13')?.identifier;
+      const isbn10 = (info.industryIdentifiers || []).find(i => i.type === 'ISBN_10')?.identifier;
+      const isbn = isbn13 || isbn10 || '';
+      return {
+        title: info.title || '',
+        author: (info.authors || []).join(', '),
+        description: info.description || '',
+        coverImageUrl: (info.imageLinks?.thumbnail || '').replace('http:', 'https:'),
+        amazonUrl: isbn ? `https://www.amazon.com/dp/${isbn10 || isbn13}` : `https://www.amazon.com/s?k=${encodeURIComponent(info.title || '')}`,
+        kindleUrl: isbn ? `https://www.amazon.com/dp/${isbn10 || isbn13}?binding=kindle` : '',
+        audiobookUrl: isbn ? `https://www.audible.com/search?keywords=${encodeURIComponent(info.title || '')}` : '',
+        pageCount: info.pageCount || 0,
+        publishedDate: info.publishedDate || '',
+        categories: info.categories || [],
+      };
+    });
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Articles ──────────────────────────────────────────────────────────────────
