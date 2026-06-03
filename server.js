@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 28;
+const ADMIN_BUILD = 29;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -1273,15 +1273,33 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
-// Upload PDF for articles — stores as base64 data URL in Firestore
+// Upload PDF for articles — stores in Firebase Storage, returns public URL
 app.post('/api/articles/upload-pdf', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No PDF file' });
-    if (req.file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'PDF too large (max 10MB)' });
-    const base64 = req.file.buffer.toString('base64');
-    const dataUrl = `data:application/pdf;base64,${base64}`;
-    res.json({ pdfUrl: dataUrl, size: req.file.size, name: req.file.originalname });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    if (req.file.size > 20 * 1024 * 1024) return res.status(400).json({ error: 'PDF too large (max 20MB)' });
+    
+    // Upload to Firebase Storage
+    const bucket = admin.storage().bucket('gospel-outreach-tv.firebasestorage.app');
+    const filename = `articles/pdf_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const file = bucket.file(filename);
+    
+    await file.save(req.file.buffer, {
+      metadata: {
+        contentType: 'application/pdf',
+        metadata: { originalName: req.file.originalname },
+      },
+    });
+    
+    // Make publicly accessible
+    await file.makePublic();
+    const pdfUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    
+    res.json({ pdfUrl, size: req.file.size, name: req.file.originalname });
+  } catch (e) {
+    console.error('[pdf-upload] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/articles', async (req, res) => {
