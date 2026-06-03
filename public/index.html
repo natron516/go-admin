@@ -5403,6 +5403,30 @@ function editAudio(id) {
 async function saveAudio() {
   const title = document.getElementById('audio-title').value.trim();
   if (!title) { toast('Title is required'); return; }
+
+  // Handle file upload to Mux if a file was selected
+  if (_audioUploadFile) {
+    const statusEl = document.getElementById('audio-upload-status');
+    const urlEl = document.getElementById('audio-url');
+    if (!urlEl.value.trim()) {
+      try {
+        if (statusEl) statusEl.textContent = 'Uploading to Mux...';
+        const streamUrl = await uploadAudioFileToMux(_audioUploadFile);
+        if (streamUrl) urlEl.value = streamUrl;
+        _audioUploadFile = null;
+        const zone = document.getElementById('audio-upload-zone');
+        if (zone) zone.classList.remove('has-file');
+        const zoneText = document.getElementById('audio-upload-zone-text');
+        if (zoneText) zoneText.innerHTML = '&#128194; Click or drop audio/video file &middot; MP3, M4A, MP4, MOV, WAV&hellip;';
+        const progressEl = document.getElementById('audio-upload-progress');
+        if (progressEl) progressEl.style.display = 'none';
+      } catch (e) {
+        toast('Upload error: ' + e.message, 'error');
+        return;
+      }
+    }
+  }
+
   const seriesId = document.getElementById('audio-series').value;
   const episodeNum = document.getElementById('audio-episode').value;
   const payload = {
@@ -6070,34 +6094,7 @@ async function pollMuxUpload(uploadId, assetId, resolve, reject) {
   setTimeout(poll, 3000);
 }
 
-// Override saveAudio to handle file upload
-const _originalSaveAudio = saveAudio;
-async function saveAudio() {
-  if (_audioUploadFile) {
-    const statusEl = document.getElementById('audio-upload-status');
-    const urlEl = document.getElementById('audio-url');
-    if (!urlEl.value.trim()) {
-      // Need to upload first
-      try {
-        if (statusEl) statusEl.textContent = 'Uploading to Mux...';
-        const streamUrl = await uploadAudioFileToMux(_audioUploadFile);
-        if (streamUrl) urlEl.value = streamUrl;
-        _audioUploadFile = null;
-        // Reset upload zone
-        const zone = document.getElementById('audio-upload-zone');
-        if (zone) { zone.classList.remove('has-file'); }
-        const zoneText = document.getElementById('audio-upload-zone-text');
-        if (zoneText) zoneText.textContent = '&#128194; Click or drop audio/video file · MP3, M4A, MP4, MOV, WAV…';
-        const progressEl = document.getElementById('audio-upload-progress');
-        if (progressEl) progressEl.style.display = 'none';
-      } catch (e) {
-        toast('Upload error: ' + e.message, 'error');
-        return;
-      }
-    }
-  }
-  await _originalSaveAudio();
-}
+// Upload override removed — upload logic merged into saveAudio() directly
 
 // Also reset upload state when modal closes
 const _origCloseAudioModal = closeAudioModal;
