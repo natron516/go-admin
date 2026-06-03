@@ -4318,6 +4318,7 @@ function renderBooksTable() {
     el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No books yet. Click <b>+ Add Book</b> to get started.</div>';
     return;
   }
+  const catOpts = (sel) => ['all','books-for-boys','books-for-girls','theology','books-for-mothers'].map(v => `<option value="${v}"${v===sel?' selected':''}>${v==='all'?'All':v.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>`).join('');
   const rows = _books.map(b => `
     <tr>
       <td style="padding:10px 12px;">
@@ -4325,8 +4326,8 @@ function renderBooksTable() {
         <span style="font-weight:600;">${escHtml(b.title)}</span>
       </td>
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(b.author||'')}</td>
-      <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(b.category||'')}</span></td>
-      <td style="padding:10px 12px;">${b.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
+      <td style="padding:10px 12px;"><select onchange="inlineUpdateBook('${escAttr(b.id)}',{category:this.value})" style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;border:1px solid transparent;cursor:pointer;-webkit-appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%278%27 height=%278%27 viewBox=%270 0 8 8%27%3E%3Cpath fill=%27%236366f1%27 d=%27M4 6L0 2h8z%27/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 4px center;padding-right:16px;">${catOpts(b.category||'all')}</select></td>
+      <td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${b.featured?'checked':''} onchange="inlineUpdateBook('${escAttr(b.id)}',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:${b.featured?'var(--orange)':'var(--muted)'};font-size:13px;">${b.featured?'★ Featured':'—'}</span></label></td>
       <td style="padding:10px 12px;">
         ${b.amazonUrl ? `<a href="${escAttr(b.amazonUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;margin-right:6px;">Amazon</a>` : ''}
         ${b.kindleUrl ? `<a href="${escAttr(b.kindleUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;margin-right:6px;">Kindle</a>` : ''}
@@ -4405,6 +4406,18 @@ async function saveBook() {
     toast(_editingBookId ? 'Book updated' : 'Book added');
     closeBookModal();
     loadBooks();
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function inlineUpdateBook(id, fields) {
+  try {
+    const r = await fetch(`/api/books/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
+    if (!r.ok) throw new Error('Failed');
+    // Update local cache
+    const idx = _books.findIndex(b => b.id === id);
+    if (idx >= 0) Object.assign(_books[idx], fields);
+    renderBooksTable();
+    toast('Book updated');
   } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
