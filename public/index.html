@@ -4765,9 +4765,9 @@ function renderSeriesTable() {
       '<td style="padding:10px 12px;">' + (s.enabled !== false ? '<span style="color:var(--green);">&#10003; Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>') + '</td>' +
       '<td style="padding:10px 12px;color:var(--muted);font-size:12px;">' + (s.sortOrder || 0) + '</td>' +
       '<td style="padding:10px 12px;white-space:nowrap;">' +
-        '<button class="btn btn-ghost btn-sm" onclick="viewSeriesEpisodes('' + escAttr(s.id) + '', '' + escAttr(s.title) + '')">Episodes</button> ' +
-        '<button class="btn btn-ghost btn-sm" onclick="editSeries('' + escAttr(s.id) + '')">Edit</button> ' +
-        '<button class="btn btn-danger btn-sm" onclick="deleteSeries('' + escAttr(s.id) + '', '' + escAttr(s.title) + '')">Delete</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="viewSeriesEpisodes(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Episodes</button> ' +
+        '<button class="btn btn-ghost btn-sm" onclick="editSeries(\'' + escAttr(s.id) + '\')">Edit</button> ' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteSeries(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Delete</button>' +
       '</td>' +
     '</tr>';
   }).join('');
