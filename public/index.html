@@ -5719,10 +5719,32 @@ async function startBatchUpload() {
       item.progress = 100;
       updateBatchItemUI(i);
 
-      // 3. Create audio asset entry in Firestore
+      // 3. Poll Mux until asset is ready and get stream URL
+      item.status = 'uploading';
+      updateBatchItemUI(i, 'Processing...');
+      let streamUrlFinal = '';
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise(r => setTimeout(r, 5000)); // wait 5 seconds
+        try {
+          const statusResp = await fetch('/api/upload-status/' + uploadId);
+          const statusData = await statusResp.json();
+          if (statusData.status === 'ready' && statusData.streamUrl) {
+            streamUrlFinal = statusData.streamUrl;
+            break;
+          } else if (statusData.status === 'errored') {
+            throw new Error('Mux processing failed');
+          }
+          updateBatchItemUI(i, 'Processing... (' + (statusData.status || statusData.assetStatus || 'waiting') + ')');
+        } catch (e) { /* retry */ }
+      }
+      if (!streamUrlFinal) {
+        throw new Error('Mux processing timed out after 5 minutes');
+      }
+
+      // 4. Create audio asset entry in Firestore with stream URL
       const audioPayload = {
         title: item.title,
-        audioUrl: '', // will be filled when Mux finishes processing
+        audioUrl: streamUrlFinal,
         mediaType: item.mediaType,
         seriesId: seriesId,
         episodeNumber: episodeCounter,
@@ -5765,14 +5787,14 @@ async function startBatchUpload() {
   if (doneCount > 0) loadAudio();
 }
 
-function updateBatchItemUI(i) {
+function updateBatchItemUI(i, customStatus) {
   const item = _batchFiles[i];
   const fillEl = document.getElementById('batch-pfill-' + i);
   const statusEl = document.getElementById('batch-pstatus-' + i);
   if (fillEl) fillEl.style.width = item.progress + '%';
   if (statusEl) {
-    const statusText = { pending: 'Pending', uploading: item.progress + '%', done: 'Done &#10003;', error: 'Error' }[item.status] || '';
-    const statusColor = { pending: 'var(--muted)', uploading: 'var(--accent)', done: 'var(--green)', error: 'var(--red)' }[item.status] || 'var(--muted)';
+    const statusText = customStatus || { pending: 'Pending', uploading: item.progress + '%', done: 'Done &#10003;', error: 'Error' }[item.status] || '';
+    const statusColor = customStatus ? 'var(--accent)' : ({ pending: 'var(--muted)', uploading: 'var(--accent)', done: 'var(--green)', error: 'var(--red)' }[item.status] || 'var(--muted)');
     statusEl.innerHTML = statusText;
     statusEl.style.color = statusColor;
   }

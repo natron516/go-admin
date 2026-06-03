@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 27;
+const ADMIN_BUILD = 28;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -246,6 +246,32 @@ app.post('/api/create-upload', async (req, res) => {
       },
     });
     res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Check upload status — returns playback URL when asset is ready
+app.get('/api/upload-status/:uploadId', async (req, res) => {
+  try {
+    const data = await mux('GET', `/video/v1/uploads/${req.params.uploadId}`);
+    const upload = data.data || {};
+    const status = upload.status; // 'waiting', 'asset_created', 'cancelled', 'timed_out', 'errored'
+    const assetId = upload.asset_id;
+    if (status === 'asset_created' && assetId) {
+      // Fetch the asset to get playback ID
+      const assetData = await mux('GET', `/video/v1/assets/${assetId}`);
+      const asset = assetData.data || {};
+      const pid = asset.playback_ids?.[0]?.id;
+      const assetStatus = asset.status; // 'preparing', 'ready', 'errored'
+      if (pid && assetStatus === 'ready') {
+        res.json({ status: 'ready', playbackId: pid, streamUrl: `https://stream.mux.com/${pid}.m3u8`, assetId });
+      } else {
+        res.json({ status: 'processing', assetStatus, assetId });
+      }
+    } else {
+      res.json({ status: status || 'waiting' });
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
