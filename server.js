@@ -8,7 +8,7 @@ const admin = require('firebase-admin');
 // ── Firebase Admin SDK ───────────────────────────────────
 const sa = process.env.FIREBASE_SA ? JSON.parse(process.env.FIREBASE_SA) : null;
 if (sa) {
-  admin.initializeApp({ credential: admin.credential.cert(sa) });
+  admin.initializeApp({ credential: admin.credential.cert(sa), storageBucket: `${FB_PROJECT}.firebasestorage.app` });
   console.log('Firebase Admin SDK initialized');
 } else {
   console.warn('FIREBASE_SA not set — user management disabled');
@@ -1491,7 +1491,7 @@ app.post('/api/articles/upload-pdf', upload.single('pdf'), async (req, res) => {
     if (req.file.size > 20 * 1024 * 1024) return res.status(400).json({ error: 'PDF too large (max 20MB)' });
     
     // Upload to Firebase Storage
-    const bucket = admin.storage().bucket('gospel-outreach-tv.appspot.com');
+    const bucket = admin.storage().bucket();
     const filename = `articles/pdf_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const file = bucket.file(filename);
     
