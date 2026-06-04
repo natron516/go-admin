@@ -3918,8 +3918,8 @@ function closeModal(id) {
 }
 
 // ── Generic Content Notification ────────────────────────
-const contentTypeEmoji = { video: '🎥', podcast: '🎙️', audiobook: '📖', audio: '🎵', series: '📚', article: '📰', music: '🎶' };
-const contentTypeLabel = { video: 'New Video', podcast: 'New Podcast Episode', audiobook: 'New Audiobook', audio: 'New Audio', series: 'New Series', article: 'New Article', music: 'New Music' };
+const contentTypeEmoji = { video: '🎥', podcast: '🎙️', audiobook: '📖', audio: '🎵', series: '📚', article: '📰', music: '🎶', book: '📚' };
+const contentTypeLabel = { video: 'New Video', podcast: 'New Podcast Episode', audiobook: 'New Audiobook', audio: 'New Audio', series: 'New Series', article: 'New Article', music: 'New Music', book: 'New Book' };
 
 async function notifyContent(contentType, contentId, title, imageUrl) {
   const emoji = contentTypeEmoji[contentType] || '🔔';
@@ -4598,6 +4598,7 @@ function renderBooksTable() {
         ${b.audiobookUrl ? `<a href="${escAttr(b.audiobookUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;">Audio</a>` : ''}
       </td>
       <td style="padding:10px 12px;white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="notifyContent('book','${escAttr(b.id)}','${escAttr(b.title)}','${escAttr(b.coverImageUrl||'')}')" id="notify-book-${escAttr(b.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="editBook('${escAttr(b.id)}')">Edit</button>
         <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteBook('${escAttr(b.id)}', '${escAttr(b.title)}')">Delete</button>
       </td>
@@ -4682,6 +4683,28 @@ async function inlineUpdateBook(id, fields) {
     if (idx >= 0) Object.assign(_books[idx], fields);
     renderBooksTable();
     toast('Book updated');
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function inlinePatchPodcast(id, fields) {
+  try {
+    const r = await fetch(`/api/podcasts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
+    if (!r.ok) throw new Error('Failed');
+    const idx = _podcasts.findIndex(p => p.id === id);
+    if (idx >= 0) Object.assign(_podcasts[idx], fields);
+    renderPodcastsTable();
+    toast('Podcast updated');
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function inlinePatchSeries(id, fields) {
+  try {
+    const r = await fetch(`/api/series/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
+    if (!r.ok) throw new Error('Failed');
+    const idx = _seriesList.findIndex(s => s.id === id);
+    if (idx >= 0) Object.assign(_seriesList[idx], fields);
+    renderSeriesTable();
+    toast('Series updated');
   } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
@@ -5294,6 +5317,7 @@ function renderPodcastsTable() {
       </td>
       <td style="padding:10px 12px;max-width:240px;"><span style="font-size:11px;color:var(--muted);word-break:break-all;">${escHtml(p.feedUrl||'')}</span></td>
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(p.category||'')}</span></td>
+      <td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${p.featured?'checked':''} onchange="inlinePatchPodcast('${escAttr(p.id)}',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:${p.featured?'var(--orange)':'var(--muted)'};font-size:13px;">${p.featured?'★ Featured':'—'}</span></label></td>
       <td style="padding:10px 12px;">${p.enabled !== false ? '<span style="color:var(--green);font-weight:600;">Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('podcast','${escAttr(p.id)}','${escAttr(p.title)}','${escAttr(p.artworkUrl||'')}')" id="notify-podcast-${escAttr(p.id)}" title="Notify users">🔔</button>
@@ -5310,6 +5334,7 @@ function renderPodcastsTable() {
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Podcast</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Feed URL</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
           </tr>
@@ -5608,6 +5633,7 @@ function renderSeriesTable() {
       '<td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">' + escHtml(s.category||'') + '</span></td>' +
       '<td style="padding:10px 12px;"><span style="background:rgba(0,0,0,.3);color:' + mediaColor + ';padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">' + mediaLabel + '</span></td>' +
       '<td style="padding:10px 12px;">' + (s.enabled !== false ? '<span style="color:var(--green);">&#10003; Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>') + '</td>' +
+      '<td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ' + (s.featured?'checked':'') + ' onchange="inlinePatchSeries(\'' + escAttr(s.id) + '\',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:' + (s.featured?'var(--orange)':'var(--muted)') + ';font-size:13px;">' + (s.featured?'\u2605 Featured':'\u2014') + '</span></label></td>' +
       '<td style="padding:10px 12px;color:var(--muted);font-size:12px;">' + (s.sortOrder || 0) + '</td>' +
       '<td style="padding:10px 12px;white-space:nowrap;">' +
         '<button class="btn btn-ghost btn-sm" onclick="notifyContent(\'' + escAttr(s.category === 'audiobook' ? 'audiobook' : 'series') + '\',\'' + escAttr(s.id) + '\',\'' + escAttr(s.title) + '\',\'' + escAttr(s.artworkUrl || '') + '\')" id="notify-' + (s.category === 'audiobook' ? 'audiobook' : 'series') + '-' + escAttr(s.id) + '" title="Notify users">🔔</button> ' +
@@ -5626,6 +5652,7 @@ function renderSeriesTable() {
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Media Type</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>' +
+            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Order</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>' +
           '</tr>' +

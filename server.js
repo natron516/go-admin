@@ -1695,7 +1695,7 @@ app.get('/api/podcasts', async (req, res) => {
 app.post('/api/podcasts', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, feedUrl, description, artworkUrl, category, enabled, sortOrder } = req.body;
+    const { title, feedUrl, description, artworkUrl, category, enabled, featured, sortOrder } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     if (!feedUrl) return res.status(400).json({ error: 'feedUrl required' });
     const data = {
@@ -1705,6 +1705,7 @@ app.post('/api/podcasts', async (req, res) => {
       artworkUrl: artworkUrl || '',
       category: category || 'sermons',
       enabled: enabled !== false,
+      featured: !!featured,
       sortOrder: Number(sortOrder) || 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -1716,7 +1717,7 @@ app.post('/api/podcasts', async (req, res) => {
 app.patch('/api/podcasts/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, feedUrl, description, artworkUrl, category, enabled, sortOrder } = req.body;
+    const { title, feedUrl, description, artworkUrl, category, enabled, featured, sortOrder } = req.body;
     const update = {};
     if (title !== undefined) update.title = title;
     if (feedUrl !== undefined) update.feedUrl = feedUrl;
@@ -1724,6 +1725,7 @@ app.patch('/api/podcasts/:id', async (req, res) => {
     if (artworkUrl !== undefined) update.artworkUrl = artworkUrl;
     if (category !== undefined) update.category = category;
     if (enabled !== undefined) update.enabled = !!enabled;
+    if (featured !== undefined) update.featured = !!featured;
     if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
     await db.collection('podcasts').doc(req.params.id).update(update);
     res.json({ ok: true });
@@ -1884,7 +1886,7 @@ app.get('/api/series', async (req, res) => {
 app.post('/api/series', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, description, artworkUrl, category, mediaType, enabled, sortOrder } = req.body;
+    const { title, description, artworkUrl, category, mediaType, enabled, featured, sortOrder } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
@@ -1893,6 +1895,7 @@ app.post('/api/series', async (req, res) => {
       category: category || 'sermons',
       mediaType: mediaType || 'audio',
       enabled: enabled !== false,
+      featured: !!featured,
       sortOrder: Number(sortOrder) || 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -1904,7 +1907,7 @@ app.post('/api/series', async (req, res) => {
 app.patch('/api/series/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, description, artworkUrl, category, mediaType, enabled, sortOrder } = req.body;
+    const { title, description, artworkUrl, category, mediaType, enabled, featured, sortOrder } = req.body;
     const update = {};
     if (title !== undefined) update.title = title;
     if (description !== undefined) update.description = description;
@@ -1912,6 +1915,7 @@ app.patch('/api/series/:id', async (req, res) => {
     if (category !== undefined) update.category = category;
     if (mediaType !== undefined) update.mediaType = mediaType;
     if (enabled !== undefined) update.enabled = !!enabled;
+    if (featured !== undefined) update.featured = !!featured;
     if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
     await db.collection('series').doc(req.params.id).update(update);
     res.json({ ok: true });
