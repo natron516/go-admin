@@ -8,7 +8,7 @@ const admin = require('firebase-admin');
 // ── Firebase Admin SDK ───────────────────────────────────
 const sa = process.env.FIREBASE_SA ? JSON.parse(process.env.FIREBASE_SA) : null;
 if (sa) {
-  admin.initializeApp({ credential: admin.credential.cert(sa), storageBucket: `${FB_PROJECT}.firebasestorage.app` });
+  admin.initializeApp({ credential: admin.credential.cert(sa), storageBucket: 'gospel-outreach-tv.firebasestorage.app' });
   console.log('Firebase Admin SDK initialized');
 } else {
   console.warn('FIREBASE_SA not set — user management disabled');
