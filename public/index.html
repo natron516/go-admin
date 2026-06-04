@@ -2008,6 +2008,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             📷 Upload
             <input type="file" accept="image/*" style="display:none;" onchange="uploadCover(this,'article-cover','article')">
           </label>
+          <button type="button" onclick="generateCover('article-cover','article-title','article')" style="background:#7c4dff;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap;">🎨 Generate</button>
         </div>
         <div id="article-cover-preview" style="margin-top:6px;"></div>
       </div>
@@ -2091,6 +2092,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             📷 Upload
             <input type="file" accept="image/*" style="display:none;" onchange="uploadCover(this,'podcast-artwork','podcast')">
           </label>
+          <button type="button" onclick="generateCover('podcast-artwork','podcast-title','podcast')" style="background:#7c4dff;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap;">🎨 Generate</button>
         </div>
         <div id="podcast-artwork-preview" style="margin-top:6px;"></div>
       </div>
@@ -2154,6 +2156,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             📷 Upload
             <input type="file" accept="image/*" style="display:none;" onchange="uploadCover(this,'series-artwork','series')">
           </label>
+          <button type="button" onclick="generateCover('series-artwork','series-title','series')" style="background:#7c4dff;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap;">🎨 Generate</button>
         </div>
         <div id="series-artwork-preview" style="margin-top:6px;"></div>
       </div>
@@ -2876,6 +2879,28 @@ const CATEGORIES = [
   { value: 'funzone',     label: '🎉 FunZone' },
   { value: 'hidden',      label: '🚫 Hidden (Private)' },
 ];
+
+// Generate AI placeholder cover via /api/generate-cover
+async function generateCover(targetInputId, titleInputId, type) {
+  const title = document.getElementById(titleInputId).value.trim();
+  if (!title) return alert('Enter a title first so the placeholder can include it.');
+  const previewId = targetInputId + '-preview';
+  const previewEl = document.getElementById(previewId);
+  if (previewEl) previewEl.innerHTML = '<span style="color:var(--accent);font-size:13px;">Generating placeholder...</span>';
+  try {
+    const resp = await fetch('/api/generate-cover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, type }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    document.getElementById(targetInputId).value = data.url;
+    if (previewEl) previewEl.innerHTML = `<img src="${data.url}" style="max-height:80px;border-radius:6px;margin-top:4px;"> <span style="color:#4caf50;font-size:12px;">✓ Generated</span>`;
+  } catch (e) {
+    if (previewEl) previewEl.innerHTML = `<span style="color:#f44336;font-size:12px;">Generation failed: ${e.message}</span>`;
+  }
+}
 
 // Upload cover image to Firebase Storage via /api/upload-cover
 async function uploadCover(fileInput, targetInputId, type) {

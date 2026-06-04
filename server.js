@@ -590,6 +590,79 @@ app.post('/api/upload-cover', upload.single('image'), async (req, res) => {
   }
 });
 
+// ── AI Placeholder Cover — generates a styled cover using sharp SVG overlay ────
+app.post('/api/generate-cover', async (req, res) => {
+  try {
+    const { title, type } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+
+    // Pick gradient colors based on type
+    const palettes = {
+      series:  ['#1a1a2e', '#16213e', '#0f3460'],
+      podcast: ['#1b1b2f', '#162447', '#1f4068'],
+      article: ['#2d132c', '#3a1c71', '#d76d77'],
+      audiobook: ['#0d1b2a', '#1b263b', '#415a77'],
+      default: ['#1a1a2e', '#16213e', '#e94560'],
+    };
+    const colors = palettes[type] || palettes.default;
+
+    // Escape XML entities in title
+    const safeTitle = String(title).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    // Word-wrap title (max ~20 chars per line)
+    const words = safeTitle.split(' ');
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      if (cur.length + w.length > 20 && cur) { lines.push(cur.trim()); cur = ''; }
+      cur += w + ' ';
+    }
+    if (cur.trim()) lines.push(cur.trim());
+
+    const fontSize = lines.some(l => l.length > 18) ? 32 : 38;
+    const lineHeight = fontSize * 1.3;
+    const startY = 400 - (lines.length * lineHeight) / 2;
+
+    const textLines = lines.map((line, i) =>
+      `<text x="400" y="${startY + i * lineHeight}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="white" filter="url(#shadow)">${line}</text>`
+    ).join('\n');
+
+    const typeLabel = (type || 'media').charAt(0).toUpperCase() + (type || 'media').slice(1);
+    const icons = { series: '🎥', podcast: '🎧', article: '📰', audiobook: '📚' };
+    const icon = icons[type] || '🎬';
+
+    const svg = `<svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${colors[0]}"/>
+          <stop offset="50%" style="stop-color:${colors[1]}"/>
+          <stop offset="100%" style="stop-color:${colors[2]}"/>
+        </linearGradient>
+        <filter id="shadow"><feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.5)"/></filter>
+      </defs>
+      <rect width="800" height="800" fill="url(#bg)"/>
+      <text x="400" y="180" text-anchor="middle" font-family="Arial" font-size="64">${icon}</text>
+      ${textLines}
+      <text x="400" y="700" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="rgba(255,255,255,0.4)" letter-spacing="4">${typeLabel.toUpperCase()}</text>
+      <rect x="300" y="720" width="200" height="2" fill="rgba(255,255,255,0.15)"/>
+    </svg>`;
+
+    const imgBuffer = await sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toBuffer();
+
+    // Upload to Firebase Storage
+    const bucket = admin.storage().bucket();
+    const filename = `covers/${type || 'gen'}_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
+    const file = bucket.file(filename);
+    await file.save(imgBuffer, { metadata: { contentType: 'image/jpeg' } });
+    await file.makePublic();
+    const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    console.log(`Generated cover: type=${type} title="${title}" url=${url}`);
+    res.json({ url });
+  } catch (e) {
+    console.error('[generate-cover] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── App Feedback ────────────────────────────────
 
 app.get('/api/feedback', async (req, res) => {
