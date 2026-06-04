@@ -2001,8 +2001,15 @@ tr.dirty .at-save { display: inline-flex !important; }
         <input type="text" id="article-excerpt" placeholder="Brief summary shown in listings">
       </div>
       <div class="field">
-        <label>Cover Image URL</label>
-        <input type="url" id="article-cover" placeholder="https://...">
+        <label>Cover Image</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="url" id="article-cover" placeholder="https://... or upload" style="flex:1;">
+          <label style="cursor:pointer;background:var(--accent);color:#fff;padding:6px 14px;border-radius:6px;font-size:13px;white-space:nowrap;">
+            📷 Upload
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadCover(this,'article-cover','article')">
+          </label>
+        </div>
+        <div id="article-cover-preview" style="margin-top:6px;"></div>
       </div>
       <div class="field-group" style="grid-template-columns:1fr 1fr;">
         <div class="field">
@@ -2077,8 +2084,15 @@ tr.dirty .at-save { display: inline-flex !important; }
         <textarea id="podcast-description" rows="2" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
       </div>
       <div class="field">
-        <label>Artwork URL</label>
-        <input type="url" id="podcast-artwork" placeholder="https://...">
+        <label>Artwork</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="url" id="podcast-artwork" placeholder="https://... or upload" style="flex:1;">
+          <label style="cursor:pointer;background:var(--accent);color:#fff;padding:6px 14px;border-radius:6px;font-size:13px;white-space:nowrap;">
+            📷 Upload
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadCover(this,'podcast-artwork','podcast')">
+          </label>
+        </div>
+        <div id="podcast-artwork-preview" style="margin-top:6px;"></div>
       </div>
       <div class="field-group" style="grid-template-columns:1fr 1fr;">
         <div class="field">
@@ -2133,8 +2147,15 @@ tr.dirty .at-save { display: inline-flex !important; }
         <textarea id="series-description" rows="2" style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;width:100%;resize:vertical;font-family:inherit;"></textarea>
       </div>
       <div class="field">
-        <label>Artwork URL</label>
-        <input type="url" id="series-artwork" placeholder="https://...">
+        <label>Artwork</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="url" id="series-artwork" placeholder="https://... or upload" style="flex:1;">
+          <label style="cursor:pointer;background:var(--accent);color:#fff;padding:6px 14px;border-radius:6px;font-size:13px;white-space:nowrap;">
+            📷 Upload
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadCover(this,'series-artwork','series')">
+          </label>
+        </div>
+        <div id="series-artwork-preview" style="margin-top:6px;"></div>
       </div>
       <div class="field-group" style="grid-template-columns:1fr 1fr 1fr;">
         <div class="field">
@@ -2855,6 +2876,27 @@ const CATEGORIES = [
   { value: 'funzone',     label: '🎉 FunZone' },
   { value: 'hidden',      label: '🚫 Hidden (Private)' },
 ];
+
+// Upload cover image to Firebase Storage via /api/upload-cover
+async function uploadCover(fileInput, targetInputId, type) {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const previewId = targetInputId + '-preview';
+  const previewEl = document.getElementById(previewId);
+  if (previewEl) previewEl.innerHTML = '<span style="color:var(--accent);font-size:13px;">Uploading...</span>';
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+    const resp = await fetch(`/api/upload-cover?type=${type}`, { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    document.getElementById(targetInputId).value = data.url;
+    if (previewEl) previewEl.innerHTML = `<img src="${data.url}" style="max-height:80px;border-radius:6px;margin-top:4px;"> <span style="color:#4caf50;font-size:12px;">✓ Uploaded</span>`;
+  } catch (e) {
+    if (previewEl) previewEl.innerHTML = `<span style="color:#f44336;font-size:12px;">Upload failed: ${e.message}</span>`;
+  }
+  fileInput.value = '';
+}
 
 function catOptions(selected = '') {
   const blank  = `<option value="" ${!selected ? 'selected' : ''} disabled>-- not set --</option>`;

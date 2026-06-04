@@ -560,6 +560,36 @@ app.delete('/api/thumbnails/:assetId', async (req, res) => {
   }
 });
 
+// ── Cover Image Upload — Firebase Storage for series/podcast/article covers ────
+// POST /api/upload-cover  (multipart: field "image", query: type=series|podcast|article)
+app.post('/api/upload-cover', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file' });
+    const type = req.query.type || 'general';
+    const bucket = admin.storage().bucket();
+    const ext = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
+    const filename = `covers/${type}_${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const file = bucket.file(filename);
+
+    // Resize to max 800px wide, compress
+    const compressed = await sharp(req.file.buffer)
+      .resize({ width: 800, withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    await file.save(compressed, {
+      metadata: { contentType: 'image/jpeg' },
+    });
+    await file.makePublic();
+    const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    console.log(`Cover uploaded: type=${type} url=${url}`);
+    res.json({ url });
+  } catch (e) {
+    console.error('[cover-upload] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── App Feedback ────────────────────────────────
 
 app.get('/api/feedback', async (req, res) => {
