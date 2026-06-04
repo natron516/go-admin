@@ -3917,6 +3917,41 @@ function closeModal(id) {
   if (m) m.classList.remove('open');
 }
 
+// ── Generic Content Notification ────────────────────────
+const contentTypeEmoji = { video: '🎥', podcast: '🎙️', audiobook: '📖', audio: '🎵', series: '📚', article: '📰', music: '🎶' };
+const contentTypeLabel = { video: 'New Video', podcast: 'New Podcast Episode', audiobook: 'New Audiobook', audio: 'New Audio', series: 'New Series', article: 'New Article', music: 'New Music' };
+
+async function notifyContent(contentType, contentId, title, imageUrl) {
+  const emoji = contentTypeEmoji[contentType] || '🔔';
+  const label = contentTypeLabel[contentType] || 'New Content';
+  if (!confirm(`Send push notification to ALL users?\n\n"${emoji} ${title}"\n\nThis cannot be undone.`)) return;
+  const btn = document.getElementById('notify-' + contentType + '-' + contentId);
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const r = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `${emoji} ${label}`,
+        body: title || 'New content available!',
+        contentType,
+        contentId: contentId || '',
+        thumbnailUrl: imageUrl || '',
+      }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      toast('✅ Push notification sent to all users');
+    } else {
+      toast('❌ Notification failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    toast('❌ Notification failed: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '🔔'; btn.disabled = false; }
+  }
+}
+
 // ── Trim/Clip ───────────────────────────────────────────
 let trimState = { assetId: null, playbackId: null, duration: 0, startTime: 0, endTime: 0 };
 
@@ -5087,6 +5122,7 @@ function renderArticlesTable() {
       <td style="padding:10px 12px;">${a.published ? '<span style="color:var(--green);font-weight:600;">Published</span>' : '<span style="color:var(--muted);">Draft</span>'}</td>
       <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="notifyContent('article','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.imageUrl||'')}')" id="notify-article-${escAttr(a.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewArticle('${escAttr(a.id)}')">Preview</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editArticle('${escAttr(a.id)}')">Edit</button>
         <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteArticle('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
@@ -5260,6 +5296,7 @@ function renderPodcastsTable() {
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(p.category||'')}</span></td>
       <td style="padding:10px 12px;">${p.enabled !== false ? '<span style="color:var(--green);font-weight:600;">Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="notifyContent('podcast','${escAttr(p.id)}','${escAttr(p.title)}','${escAttr(p.artworkUrl||'')}')" id="notify-podcast-${escAttr(p.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewPodcastEpisodes('${escAttr(p.id)}')">Episodes</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editPodcast('${escAttr(p.id)}')">Edit</button>
         <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deletePodcast('${escAttr(p.id)}', '${escAttr(p.title)}')">Delete</button>
@@ -5412,6 +5449,7 @@ function renderAudioTable() {
       <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
         ${a.audioUrl ? `<a href="${escAttr(a.audioUrl)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-right:4px;">&#9654; Play</a>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="notifyContent('audio','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.coverImageUrl||'')}')" id="notify-audio-${escAttr(a.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="editAudio('${escAttr(a.id)}')">Edit</button>
         <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
       </td>
@@ -5572,6 +5610,7 @@ function renderSeriesTable() {
       '<td style="padding:10px 12px;">' + (s.enabled !== false ? '<span style="color:var(--green);">&#10003; Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>') + '</td>' +
       '<td style="padding:10px 12px;color:var(--muted);font-size:12px;">' + (s.sortOrder || 0) + '</td>' +
       '<td style="padding:10px 12px;white-space:nowrap;">' +
+        '<button class="btn btn-ghost btn-sm" onclick="notifyContent(\'' + escAttr(s.category === 'audiobook' ? 'audiobook' : 'series') + '\',\'' + escAttr(s.id) + '\',\'' + escAttr(s.title) + '\',\'' + escAttr(s.artworkUrl || '') + '\')" id="notify-' + (s.category === 'audiobook' ? 'audiobook' : 'series') + '-' + escAttr(s.id) + '" title="Notify users">🔔</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="viewSeriesEpisodes(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Episodes</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="editSeries(\'' + escAttr(s.id) + '\')">Edit</button> ' +
         '<button class="btn btn-danger btn-sm" onclick="deleteSeries(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Delete</button>' +

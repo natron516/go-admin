@@ -1204,11 +1204,14 @@ app.post('/api/notify-direct', async (req, res) => {
 // ── Push Notifications ────────────────────────────────────────────────────────
 
 // Send a push notification to all users subscribed to the "new_video" topic
+// Supports all content types: video, podcast, audiobook, audio, series, article
 app.post('/api/notify', async (req, res) => {
   if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
   try {
-    const { title, body, assetId, playbackId, thumbnailUrl } = req.body;
+    const { title, body, assetId, playbackId, thumbnailUrl, contentType, contentId } = req.body;
     if (!title || !body) return res.status(400).json({ error: 'title and body required' });
+
+    const type = contentType || 'new_video';
 
     const message = {
       topic: 'new_video',
@@ -1217,9 +1220,11 @@ app.post('/api/notify', async (req, res) => {
         body,
       },
       data: {
-        type: 'new_video',
+        type,
         assetId: assetId || '',
         playbackId: playbackId || '',
+        contentId: contentId || '',
+        contentType: type,
       },
       apns: {
         payload: {
@@ -1239,7 +1244,7 @@ app.post('/api/notify', async (req, res) => {
     }
 
     const result = await admin.messaging().send(message);
-    console.log(`[notify] Sent to new_video topic: ${result}`);
+    console.log(`[notify] Sent ${type} notification to new_video topic: ${result}`);
     res.json({ ok: true, messageId: result });
   } catch (e) {
     console.error('[notify] Error:', e.message);
