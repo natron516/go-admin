@@ -4067,7 +4067,7 @@ document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el && !el.classList.contains('hidden')) el.classList.remove('open'); });
 });
 
-function initApp() { loadDashboard(); }
+function initApp() { loadAssets(); }
 
 (async () => {
   if (await checkAuth()) initApp();
