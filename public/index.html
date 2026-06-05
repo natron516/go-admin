@@ -112,11 +112,9 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  justify-content: flex-start;
+  display: block;
 }
+.sidebar-nav > * { margin-bottom: 2px; }
 
 /* Nav items inherit .tab class for JS compatibility */
 .tab {
@@ -1269,7 +1267,7 @@ tr.dirty .at-save { display: inline-flex !important; }
       </button>
     </div>
 
-    <nav class="sidebar-nav" style="justify-content:flex-start;">
+    <nav class="sidebar-nav">
       <!-- ═══ CONTENT ═══ -->
       <div style="padding:8px 10px 4px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;" class="nav-label">Content</div>
 
