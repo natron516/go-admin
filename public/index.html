@@ -1502,7 +1502,11 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="performance">🎭 Performance</option>
             <option value="funzone">🎉 FunZone</option>
             <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="uncategorized">📁 Uncategorized (Series)</option>
           </select>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="asset-hide-series" onchange="filterAssets()" style="accent-color:var(--accent);"> Hide series
+          </label>
           <span class="asset-count" id="asset-count"></span>
         </div>
 
@@ -3564,9 +3568,13 @@ async function loadAssets() {
 function filterAssets() {
   const q   = (document.getElementById('asset-search')?.value || '').toLowerCase();
   const cat = document.getElementById('asset-filter-cat')?.value || '';
+  const hideSeries = document.getElementById('asset-hide-series')?.checked || false;
   const filtered = allAssets.filter(a => {
     const title   = (a.meta?.title || '').toLowerCase();
     const pt      = (a.passthrough || '').trim().toLowerCase();
+    const ptData  = parsePassthrough(a.passthrough);
+    const assetCat2 = (ptData.category || a.passthrough || '').trim().toLowerCase();
+    if (hideSeries && !assetCat2) return false;
     const ptData  = parsePassthrough(a.passthrough);
     const assetCat = (ptData.category || a.passthrough || '').trim().toLowerCase();
     const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
