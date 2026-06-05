@@ -4713,6 +4713,17 @@ async function inlinePatchSeries(id, fields) {
   } catch (e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
+async function inlinePatchArticle(id, fields) {
+  try {
+    const r = await fetch(`/api/articles/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
+    if (!r.ok) throw new Error('Failed');
+    const idx = _articles.findIndex(a => a.id === id);
+    if (idx >= 0) Object.assign(_articles[idx], fields);
+    renderArticlesTable();
+    toast('Article updated');
+  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
 async function deleteBook(id, title) {
   if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
   try {
@@ -5148,7 +5159,7 @@ function renderArticlesTable() {
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.author||'')}</td>
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
       <td style="padding:10px 12px;">${a.published ? '<span style="color:var(--green);font-weight:600;">Published</span>' : '<span style="color:var(--muted);">Draft</span>'}</td>
-      <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
+      <td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${a.featured?'checked':''} onchange="inlinePatchArticle('${escAttr(a.id)}',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:${a.featured?'var(--orange)':'var(--muted)'};font-size:13px;">${a.featured?'★ Featured':'—'}</span></label></td>
       <td style="padding:10px 12px;white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('article','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.imageUrl||'')}')" id="notify-article-${escAttr(a.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewArticle('${escAttr(a.id)}')">Preview</button>
