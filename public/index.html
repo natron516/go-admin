@@ -3545,7 +3545,7 @@ async function loadAssets() {
       fetch('/api/analytics/asset-metrics').catch(() => null)
     ]);
     const json = await assetsRes.json();
-    allAssets = json.data || [];
+    allAssets = (json.data || []).filter(a => (a.tracks || []).some(t => t.type === 'video'));
     assetEdits = {};
     if (metricsRes && metricsRes.ok) {
       const metrics = await metricsRes.json();
