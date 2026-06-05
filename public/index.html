@@ -1950,6 +1950,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="books-for-girls">Books for Girls</option>
             <option value="theology">Theology</option>
             <option value="books-for-mothers">Books for Mothers</option>
+            <option value="hidden">🚫 Hidden (Private)</option>
           </select>
         </div>
         <div class="field">
@@ -2017,6 +2018,7 @@ tr.dirty .at-save { display: inline-flex !important; }
           <label>Category</label>
           <select id="article-category">
             <option value="articles">All</option>
+            <option value="hidden">🚫 Hidden (Private)</option>
           </select>
         </div>
         <div class="field">
@@ -2105,6 +2107,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="children">Children's</option>
             <option value="teaching">Teaching</option>
             <option value="music">Music</option>
+            <option value="hidden">🚫 Hidden (Private)</option>
           </select>
         </div>
         <div class="field">
@@ -2171,6 +2174,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="devotional">Devotional</option>
             <option value="music">Music</option>
             <option value="general">General</option>
+            <option value="hidden">🚫 Hidden (Private)</option>
           </select>
         </div>
         <div class="field">
@@ -2291,6 +2295,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="sermons">Sermons</option>
             <option value="spoken-word">Spoken Word</option>
             <option value="audiobook">Audiobook</option>
+            <option value="hidden">🚫 Hidden (Private)</option>
           </select>
         </div>
         <div class="field">
@@ -4582,7 +4587,7 @@ function renderBooksTable() {
     el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No books yet. Click <b>+ Add Book</b> to get started.</div>';
     return;
   }
-  const catOpts = (sel) => ['all','books-for-boys','books-for-girls','theology','books-for-mothers'].map(v => `<option value="${v}"${v===sel?' selected':''}>${v==='all'?'All':v.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>`).join('');
+  const catOpts = (sel) => ['all','books-for-boys','books-for-girls','theology','books-for-mothers','hidden'].map(v => `<option value="${v}"${v===sel?' selected':''}>${v==='all'?'All':v.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>`).join('');
   const rows = _books.map(b => `
     <tr>
       <td style="padding:10px 12px;">
