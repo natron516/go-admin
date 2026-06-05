@@ -115,6 +115,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  justify-content: flex-start;
 }
 
 /* Nav items inherit .tab class for JS compatibility */
@@ -1268,7 +1269,7 @@ tr.dirty .at-save { display: inline-flex !important; }
       </button>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" style="justify-content:flex-start;">
       <!-- ═══ CONTENT ═══ -->
       <div style="padding:8px 10px 4px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;" class="nav-label">Content</div>
 
@@ -1285,11 +1286,6 @@ tr.dirty .at-save { display: inline-flex !important; }
         <span class="nav-label">Videos</span>
       </button>
 
-      <button class="tab" data-label="Series" onclick="navTo('series', this)">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 10l6 2-6 2V10z" fill="currentColor" stroke="none"/></svg></span>
-        <span class="nav-label">Series</span>
-      </button>
-
       <button class="tab" data-label="Live" onclick="navTo('live', this)">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 000 7M15.5 8.5a5 5 0 010 7M5.5 5.5a9 9 0 000 13M18.5 5.5a9 9 0 010 13" stroke-linecap="round"/></svg></span>
         <span class="nav-label">Live</span>
@@ -1297,6 +1293,11 @@ tr.dirty .at-save { display: inline-flex !important; }
 
       <!-- Listen -->
       <div style="padding:12px 10px 2px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;opacity:.7;" class="nav-label">Listen</div>
+
+      <button class="tab" data-label="Series" onclick="navTo('series', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 10l6 2-6 2V10z" fill="currentColor" stroke="none"/></svg></span>
+        <span class="nav-label">Series</span>
+      </button>
 
       <button class="tab" data-label="Audio" onclick="navTo('audio', this)">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0118 0v6" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
