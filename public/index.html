@@ -3776,10 +3776,10 @@ async function startDownloadMp4(assetId, title) {
       }
     } else if (data.status === 'unavailable') {
       btn.textContent = '⬇️'; btn.disabled = false;
-      toast('No MP4 — this video was uploaded before MP4 was enabled. New uploads will have downloads.');
+      toast(data.message || 'MP4 not available for this asset.');
     } else if (data.status === 'preparing') {
       btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = false;
-      toast('MP4 is still generating. Try again in a minute.');
+      toast(data.message || 'MP4 is generating. Try again in 1-2 minutes.');
     } else {
       btn.textContent = '⬇️'; btn.disabled = false;
       toast(data.message || 'Download not available.');

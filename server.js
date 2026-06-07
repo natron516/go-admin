@@ -338,9 +338,16 @@ app.post('/api/assets/:id/mp4', async (req, res) => {
     const pid = asset.playback_ids?.[0]?.id;
     if (!pid) return res.status(400).json({ error: 'No playback ID' });
 
-    // Check if MP4 is available
+    // If MP4 not enabled, enable it now and return preparing
     if (asset.mp4_support !== 'standard') {
-      return res.json({ status: 'unavailable', message: 'This video was uploaded before MP4 support was enabled. New uploads will have MP4 available automatically.' });
+      try {
+        await mux('PUT', `/video/v1/assets/${req.params.id}/mp4-support`, { mp4_support: 'standard' });
+        console.log(`[mp4] Enabled mp4_support for ${req.params.id}`);
+        return res.json({ status: 'preparing', message: 'MP4 support enabled — generating renditions now. Try again in 1-2 minutes.' });
+      } catch (e) {
+        console.error(`[mp4] Failed to enable mp4_support: ${e.message}`);
+        return res.json({ status: 'unavailable', message: 'Failed to enable MP4 for this asset: ' + e.message });
+      }
     }
 
     const sr = asset.static_renditions;
