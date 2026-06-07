@@ -3573,10 +3573,8 @@ function filterAssets() {
     const title   = (a.meta?.title || '').toLowerCase();
     const pt      = (a.passthrough || '').trim().toLowerCase();
     const ptData  = parsePassthrough(a.passthrough);
-    const assetCat2 = (ptData.category || a.passthrough || '').trim().toLowerCase();
-    if (hideSeries && !assetCat2) return false;
-    const ptData  = parsePassthrough(a.passthrough);
     const assetCat = (ptData.category || a.passthrough || '').trim().toLowerCase();
+    if (hideSeries && !assetCat) return false;
     const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
     const matchCat = !cat || assetCat === cat.toLowerCase();
     return matchQ && matchCat;
