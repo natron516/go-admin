@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 41;
+const ADMIN_BUILD = 42;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -212,23 +212,37 @@ const _mp4Preparing = {}; // { assetId: { title, startedAt } }
 
 app.get('/api/assets', async (req, res) => {
   try {
-    const data = await mux('GET', '/video/v1/assets?limit=100&order_direction=desc');
+    // Paginate through ALL Mux assets
+    let allAssets = [];
+    let page = 1;
+    let cursor = null;
+    while (true) {
+      const url = cursor
+        ? `/video/v1/assets?limit=100&order_direction=desc&page=${page}`
+        : '/video/v1/assets?limit=100&order_direction=desc';
+      const data = await mux('GET', cursor
+        ? `/video/v1/assets?limit=100&order_direction=desc&cursor=${encodeURIComponent(cursor)}`
+        : '/video/v1/assets?limit=100&order_direction=desc');
+      if (data.data) allAssets.push(...data.data);
+      if (data.next_cursor) {
+        cursor = data.next_cursor;
+        page++;
+      } else {
+        break;
+      }
+    }
     // Augment assets with server-tracked MP4 preparation state
-    if (data.data) {
-      const now = Date.now();
-      for (const a of data.data) {
-        // If we know this asset has MP4 in progress, flag it
-        if (_mp4Preparing[a.id]) {
-          // Expire after 10 minutes
-          if (now - _mp4Preparing[a.id].startedAt > 10 * 60 * 1000) {
-            delete _mp4Preparing[a.id];
-          } else {
-            a._mp4Preparing = true;
-          }
+    const now = Date.now();
+    for (const a of allAssets) {
+      if (_mp4Preparing[a.id]) {
+        if (now - _mp4Preparing[a.id].startedAt > 10 * 60 * 1000) {
+          delete _mp4Preparing[a.id];
+        } else {
+          a._mp4Preparing = true;
         }
       }
     }
-    res.json(data);
+    res.json({ data: allAssets });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
