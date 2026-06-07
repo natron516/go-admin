@@ -3759,9 +3759,13 @@ async function createStream() {
 // ── MP4 Download ──────────────────────────────────────────
 // Download state - no client tracking needed, reads from Mux asset data
 
+const _mp4Polls = {}; // track active polling per asset
+
 async function startDownloadMp4(assetId, title) {
   const btn = document.getElementById('dl-' + assetId);
   if (!btn) return;
+  // If already polling, don't restart
+  if (_mp4Polls[assetId]) { toast('MP4 is still generating…'); return; }
   btn.innerHTML = '⏳'; btn.disabled = true;
   try {
     const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
@@ -3778,8 +3782,8 @@ async function startDownloadMp4(assetId, title) {
       btn.textContent = '⬇️'; btn.disabled = false;
       toast(data.message || 'MP4 not available for this asset.');
     } else if (data.status === 'preparing') {
-      btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = false;
-      toast(data.message || 'MP4 is generating. Try again in 1-2 minutes.');
+      toast('Generating MP4… this usually takes 1-2 minutes.');
+      pollMp4Progress(assetId, title);
     } else {
       btn.textContent = '⬇️'; btn.disabled = false;
       toast(data.message || 'Download not available.');
@@ -3788,6 +3792,60 @@ async function startDownloadMp4(assetId, title) {
     btn.textContent = '⬇️'; btn.disabled = false;
     toast('Download error: ' + e.message);
   }
+}
+
+function pollMp4Progress(assetId, title) {
+  const btn = document.getElementById('dl-' + assetId);
+  if (!btn) return;
+  const startTime = Date.now();
+  const estimatedMs = 90000; // ~90s typical
+  let pollCount = 0;
+  const maxPolls = 40; // 40 * 5s = ~3.5 min max
+
+  _mp4Polls[assetId] = true;
+
+  const interval = setInterval(async () => {
+    pollCount++;
+    const elapsed = Date.now() - startTime;
+    const pct = Math.min(95, Math.round((elapsed / estimatedMs) * 100));
+    btn.innerHTML = `<span class="dl-pulse" style="font-size:11px">${pct}%</span>`;
+    btn.disabled = true;
+    btn.title = `Generating MP4… ${pct}%`;
+
+    try {
+      const r = await fetch('/api/assets/' + assetId + '/mp4', { method: 'POST' });
+      if (!r.ok) throw new Error('Server returned ' + r.status);
+      const data = await r.json();
+
+      if (data.status === 'ready' && data.files && data.files.length) {
+        clearInterval(interval);
+        delete _mp4Polls[assetId];
+        btn.textContent = '✅'; btn.disabled = false;
+        btn.title = 'Download MP4';
+        toast('✅ MP4 ready!');
+        if (data.files.length > 1) {
+          openDownloadPicker(data.files, assetId, title);
+        } else {
+          triggerProxyDownload(assetId, data.files[0].name.replace('.mp4',''), title);
+        }
+      } else if (data.status === 'errored') {
+        clearInterval(interval);
+        delete _mp4Polls[assetId];
+        btn.textContent = '❌'; btn.disabled = false;
+        btn.title = 'MP4 generation failed';
+        toast('❌ MP4 generation failed.');
+      } else if (pollCount >= maxPolls) {
+        clearInterval(interval);
+        delete _mp4Polls[assetId];
+        btn.innerHTML = '<span class="dl-pulse">⏳</span>'; btn.disabled = false;
+        btn.title = 'Still generating — click to check again';
+        toast('MP4 is taking longer than expected. Click download to check again.');
+      }
+    } catch (e) {
+      // Network hiccup — keep polling
+      console.warn('MP4 poll error:', e.message);
+    }
+  }, 5000);
 }
 
 // Legacy alias
