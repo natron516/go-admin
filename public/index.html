@@ -3782,6 +3782,9 @@ async function startDownloadMp4(assetId, title) {
       btn.textContent = '⬇️'; btn.disabled = false;
       toast(data.message || 'MP4 not available for this asset.');
     } else if (data.status === 'preparing') {
+      btn.innerHTML = '<span class="dl-pulse" style="font-size:11px">0%</span>';
+      btn.disabled = true;
+      btn.title = 'Generating MP4… 0%';
       toast('Generating MP4… this usually takes 1-2 minutes.');
       pollMp4Progress(assetId, title);
     } else {
