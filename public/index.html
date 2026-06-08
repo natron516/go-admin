@@ -2387,6 +2387,10 @@ tr.dirty .at-save { display: inline-flex !important; }
     <div class="thumb-progress" id="thumb-progress">
       <div class="thumb-progress-fill" id="thumb-progress-fill" style="width:0%"></div>
     </div>
+    <div id="thumb-scale-wrap" style="display:none;margin-bottom:12px;">
+      <label style="font-size:12px;color:var(--muted);">Scale: <span id="thumb-scale-label">100%</span></label>
+      <input type="range" id="thumb-scale" min="50" max="200" value="100" step="5" style="width:100%;margin-top:4px;">
+    </div>
     <p id="thumb-status" style="font-size:12px;color:var(--muted);margin-bottom:12px;"></p>
     <div class="modal-actions">
       <button class="btn btn-danger btn-sm" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove</button>
@@ -2710,6 +2714,10 @@ function openThumbModal(assetId, title, playbackId, currentThumb) {
   document.getElementById('thumb-upload-btn').disabled = true;
   document.getElementById('thumb-status').textContent = '';
   document.getElementById('thumb-progress').style.display = 'none';
+  document.getElementById('thumb-scale-wrap').style.display = 'none';
+  document.getElementById('thumb-scale').value = 100;
+  document.getElementById('thumb-scale-label').textContent = '100%';
+  thumbOriginalImg = null;
   document.getElementById('thumb-progress-fill').style.width = '0%';
   modal.classList.add('open');
 }
@@ -2722,10 +2730,18 @@ thumbDrop.addEventListener('dragleave', () => thumbDrop.classList.remove('drag')
 thumbDrop.addEventListener('drop', e => { e.preventDefault(); thumbDrop.classList.remove('drag'); if (e.dataTransfer.files[0]) setThumbFile(e.dataTransfer.files[0]); });
 thumbFileInput.addEventListener('change', e => { if (e.target.files[0]) setThumbFile(e.target.files[0]); thumbFileInput.value = ''; });
 
+let thumbOriginalImg = null; // store original image for scaling
+
 function setThumbFile(file) {
   thumbSelectedFile = file;
   const reader = new FileReader();
   reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      thumbOriginalImg = img;
+      updateThumbScalePreview();
+    };
+    img.src = e.target.result;
     const preview = document.getElementById('thumb-preview');
     preview.src = e.target.result;
     preview.style.display = 'block';
@@ -2733,6 +2749,58 @@ function setThumbFile(file) {
   reader.readAsDataURL(file);
   document.getElementById('thumb-status').textContent = file.name;
   document.getElementById('thumb-upload-btn').disabled = false;
+  // Show scale slider
+  document.getElementById('thumb-scale-wrap').style.display = 'block';
+  document.getElementById('thumb-scale').value = 100;
+  document.getElementById('thumb-scale-label').textContent = '100%';
+}
+
+document.getElementById('thumb-scale').addEventListener('input', e => {
+  document.getElementById('thumb-scale-label').textContent = e.target.value + '%';
+  updateThumbScalePreview();
+});
+
+function updateThumbScalePreview() {
+  if (!thumbOriginalImg) return;
+  const scale = parseInt(document.getElementById('thumb-scale').value) / 100;
+  const canvas = document.createElement('canvas');
+  // Output at 16:9 aspect ratio, 960px wide
+  const outW = 960, outH = 540;
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, outW, outH);
+  const img = thumbOriginalImg;
+  const scaledW = img.width * scale;
+  const scaledH = img.height * scale;
+  // Center the scaled image
+  const x = (outW - scaledW) / 2;
+  const y = (outH - scaledH) / 2;
+  ctx.drawImage(img, x, y, scaledW, scaledH);
+  document.getElementById('thumb-preview').src = canvas.toDataURL('image/jpeg', 0.92);
+}
+
+function getScaledThumbBlob() {
+  return new Promise(resolve => {
+    if (!thumbOriginalImg) { resolve(thumbSelectedFile); return; }
+    const scale = parseInt(document.getElementById('thumb-scale').value) / 100;
+    if (scale === 1.0) { resolve(thumbSelectedFile); return; }
+    const canvas = document.createElement('canvas');
+    const outW = 960, outH = 540;
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, outW, outH);
+    const img = thumbOriginalImg;
+    const scaledW = img.width * scale;
+    const scaledH = img.height * scale;
+    const x = (outW - scaledW) / 2;
+    const y = (outH - scaledH) / 2;
+    ctx.drawImage(img, x, y, scaledW, scaledH);
+    canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
+  });
 }
 
 async function uploadThumbnail() {
@@ -2746,8 +2814,9 @@ async function uploadThumbnail() {
   fill.style.width = '30%';
   status.textContent = 'Uploading…';
   try {
+    const scaledBlob = await getScaledThumbBlob();
     const formData = new FormData();
-    formData.append('image', thumbSelectedFile);
+    formData.append('image', scaledBlob, thumbSelectedFile.name || 'thumbnail.jpg');
     const resp = await fetch(`/api/thumbnails/upload?assetId=${thumbAssetId}`, {
       method: 'POST',
       body: formData,
