@@ -2981,19 +2981,78 @@ async function uploadCover(fileInput, targetInputId, type) {
   if (!file) return;
   const previewId = targetInputId + '-preview';
   const previewEl = document.getElementById(previewId);
-  if (previewEl) previewEl.innerHTML = '<span style="color:var(--accent);font-size:13px;">Uploading...</span>';
+  if (!previewEl) { fileInput.value = ''; return; }
+
+  // Show preview with scale slider before uploading
+  const reader = new FileReader();
+  reader.onload = e => {
+    const imgSrc = e.target.result;
+    previewEl.innerHTML = `
+      <img id="cover-scale-img-${targetInputId}" src="${imgSrc}" style="max-height:120px;border-radius:6px;margin-top:4px;">
+      <div style="margin-top:8px;">
+        <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
+        <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="uploadCoverScaled('${targetInputId}','${type}')">⬆️ Upload</button>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="document.getElementById('${previewId}').innerHTML=''">Cancel</button>
+    `;
+    // Wire up scale slider live preview
+    const slider = document.getElementById('cover-scale-' + targetInputId);
+    const label = document.getElementById('cover-scale-label-' + targetInputId);
+    const img = document.getElementById('cover-scale-img-' + targetInputId);
+    const origImg = new Image(); origImg.src = imgSrc;
+    slider.addEventListener('input', () => {
+      label.textContent = slider.value + '%';
+      const scale = parseInt(slider.value) / 100;
+      const canvas = document.createElement('canvas');
+      const outW = 960, outH = 540;
+      canvas.width = outW; canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
+      const sw = origImg.width * scale, sh = origImg.height * scale;
+      ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
+      img.src = canvas.toDataURL('image/jpeg', 0.92);
+    });
+    // Store original file + image for upload
+    previewEl._coverFile = file;
+    previewEl._coverImg = origImg;
+  };
+  reader.readAsDataURL(file);
+  fileInput.value = '';
+}
+
+async function uploadCoverScaled(targetInputId, type) {
+  const previewId = targetInputId + '-preview';
+  const previewEl = document.getElementById(previewId);
+  const file = previewEl._coverFile;
+  const origImg = previewEl._coverImg;
+  const slider = document.getElementById('cover-scale-' + targetInputId);
+  const scale = slider ? parseInt(slider.value) / 100 : 1;
+
+  previewEl.innerHTML = '<span style="color:var(--accent);font-size:13px;">Uploading...</span>';
+
   try {
+    let uploadBlob = file;
+    if (scale !== 1 && origImg) {
+      const canvas = document.createElement('canvas');
+      const outW = 960, outH = 540;
+      canvas.width = outW; canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
+      const sw = origImg.width * scale, sh = origImg.height * scale;
+      ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
+      uploadBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+    }
     const fd = new FormData();
-    fd.append('image', file);
+    fd.append('image', uploadBlob, file.name || 'cover.jpg');
     const resp = await fetch(`/api/upload-cover?type=${type}`, { method: 'POST', body: fd });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     document.getElementById(targetInputId).value = data.url;
-    if (previewEl) previewEl.innerHTML = `<img src="${data.url}" style="max-height:80px;border-radius:6px;margin-top:4px;"> <span style="color:#4caf50;font-size:12px;">✓ Uploaded</span>`;
+    previewEl.innerHTML = `<img src="${data.url}" style="max-height:80px;border-radius:6px;margin-top:4px;"> <span style="color:#4caf50;font-size:12px;">✓ Uploaded</span>`;
   } catch (e) {
-    if (previewEl) previewEl.innerHTML = `<span style="color:#f44336;font-size:12px;">Upload failed: ${e.message}</span>`;
+    previewEl.innerHTML = `<span style="color:#f44336;font-size:12px;">Upload failed: ${e.message}</span>`;
   }
-  fileInput.value = '';
 }
 
 function catOptions(selected = '') {
@@ -4262,6 +4321,7 @@ function initApp() { loadAssets(); }
 // ── Users tab ─────────────────────────────────────────
 let allUsers = [];
 let userSort = { field: 'joined', dir: 'desc' };
+let portalEditorMap = {}; // uid -> { username, role }
 
 function setUserSort(field) {
   if (userSort.field === field) {
@@ -4328,6 +4388,13 @@ async function loadUsers() {
     if (d.error) throw new Error(d.error);
     allUsers = d.users || [];
     document.getElementById('user-count').textContent = `${allUsers.length} users`;
+    // Load portal editors
+    try {
+      const er = await fetch('/api/portal-editors');
+      const ed = await er.json();
+      portalEditorMap = {};
+      (ed.editors || []).forEach(e => { portalEditorMap[e.uid] = e; });
+    } catch {}
     updateSortHeaders();
     renderUsers(sortedUsers(allUsers));
   } catch(e) {
@@ -4378,7 +4445,7 @@ function renderUsers(users) {
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
       <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>'} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">${blockBtn}${privateBtn}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" title="Revoke portal editor access" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')" title="Grant portal editor access">✏️ Make Editor</button>`) : ''}</td>
     </tr>`;
   }).join('');
 
@@ -4420,10 +4487,43 @@ function renderUsers(users) {
           ${joined}
         </div>
         <div class="user-card-actions">
-          ${blockBtn}${privateBtn}
+          ${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')">✏️ Make Editor</button>`) : ''}
         </div>
       </div>`;
     }).join('');
+  }
+}
+
+// ── Portal Editor Access ──────────────────────────────
+async function grantEditorAccess(uid, email, displayName) {
+  if (!confirm(`Grant portal editor access to ${displayName || email}?`)) return;
+  try {
+    const r = await fetch('/api/portal-editors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid, email, displayName })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    portalEditorMap[uid] = { uid, username: d.username, role: d.role };
+    alert(`Editor access granted!\n\nUsername: ${d.username}\nPassword: ${d.password}\n\nShare these credentials with them.`);
+    renderUsers(sortedUsers(allUsers));
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function revokeEditorAccess(uid) {
+  const ed = portalEditorMap[uid];
+  if (!confirm(`Revoke portal editor access for ${ed?.username || uid}?`)) return;
+  try {
+    const r = await fetch(`/api/portal-editors/${uid}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    delete portalEditorMap[uid];
+    renderUsers(sortedUsers(allUsers));
+  } catch (e) {
+    alert('Error: ' + e.message);
   }
 }
 

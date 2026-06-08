@@ -1,4 +1,5 @@
-const ADMIN_BUILD = 46;
+const ADMIN_BUILD = 48;
+const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -24,11 +25,42 @@ const ADMIN_PASS    = process.env.ADMIN_PASS     || 'gomedia';
 const EDITOR_USER   = process.env.EDITOR_USER    || 'editor';
 const EDITOR_PASS   = process.env.EDITOR_PASS    || 'goedit';
 
-// Role-based users map
+// Role-based users map (hardcoded + dynamic from Firestore)
 const USERS = {
   [ADMIN_USER]:  { password: ADMIN_PASS,  role: 'admin' },
   [EDITOR_USER]: { password: EDITOR_PASS, role: 'editor' },
 };
+
+// Dynamic portal editors loaded from Firestore
+const portalEditors = {}; // keyed by username (email) -> { password, role, uid, displayName }
+
+function generatePassword() {
+  return crypto.randomBytes(4).toString('hex'); // 8-char hex password
+}
+
+async function loadPortalEditors() {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('portalEditors').get();
+    // Clear and reload
+    Object.keys(portalEditors).forEach(k => delete portalEditors[k]);
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.username && d.password) {
+        portalEditors[d.username] = { password: d.password, role: d.role || 'editor', uid: doc.id, displayName: d.displayName || '' };
+      }
+    });
+    console.log(`Loaded ${Object.keys(portalEditors).length} portal editor(s)`);
+  } catch (e) {
+    console.error('Failed to load portal editors:', e.message);
+  }
+}
+
+function lookupUser(username) {
+  if (USERS[username]) return USERS[username];
+  if (portalEditors[username]) return portalEditors[username];
+  return null;
+}
 
 const MUX_AUTH = Buffer.from(`${MUX_TOKEN_ID}:${MUX_SECRET}`).toString('base64');
 
@@ -74,7 +106,7 @@ const silentAuth = basicAuth({
   challenge: false,
   unauthorizedResponse: () => 'Unauthorized',
   authorizer: (username, password) => {
-    const u = USERS[username];
+    const u = lookupUser(username);
     return u && basicAuth.safeCompare(password, u.password);
   },
   authorizeAsync: false,
@@ -86,7 +118,9 @@ function attachRole(req, res, next) {
   if (authHeader.startsWith('Basic ')) {
     const decoded = Buffer.from(authHeader.slice(6), 'base64').toString();
     const username = decoded.split(':')[0];
-    req.userRole = USERS[username]?.role || 'editor';
+    const u = lookupUser(username);
+    req.userRole = u?.role || 'editor';
+    req.authUsername = username;
   } else {
     req.userRole = 'editor';
   }
@@ -120,7 +154,7 @@ app.use(express.json());
 // Login endpoint for the v2 client-side login overlay
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
-  const u = USERS[username];
+  const u = lookupUser(username);
   if (u && u.password === password) {
     return res.json({ ok: true, role: u.role });
   }
@@ -130,6 +164,75 @@ app.post('/api/login', (req, res) => {
 // GET /api/role — returns the current user's role
 app.get('/api/role', (req, res) => {
   res.json({ role: req.userRole });
+});
+
+// ── Portal Editor Management (admin only) ─────────────────────────────────
+// GET /api/portal-editors — list all portal editors
+app.get('/api/portal-editors', adminOnly, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('portalEditors').get();
+    const editors = [];
+    snap.forEach(doc => {
+      const d = doc.data();
+      editors.push({ uid: doc.id, username: d.username, displayName: d.displayName || '', role: d.role || 'editor', createdAt: d.createdAt || '' });
+    });
+    res.json({ editors });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/portal-editors — grant portal editor access to a user
+app.post('/api/portal-editors', adminOnly, async (req, res) => {
+  try {
+    const { uid, email, displayName } = req.body;
+    if (!uid || !email) return res.status(400).json({ error: 'uid and email required' });
+    // Check if already exists
+    const db = admin.firestore();
+    const existing = await db.collection('portalEditors').doc(uid).get();
+    if (existing.exists) return res.status(409).json({ error: 'User already has portal access' });
+    const password = generatePassword();
+    const data = { username: email.toLowerCase(), password, role: 'editor', displayName: displayName || '', createdAt: new Date().toISOString() };
+    await db.collection('portalEditors').doc(uid).set(data);
+    // Update in-memory cache
+    portalEditors[data.username] = { password, role: 'editor', uid, displayName: data.displayName };
+    res.json({ ok: true, username: data.username, password, role: 'editor' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/portal-editors/:uid — reset password
+app.patch('/api/portal-editors/:uid', adminOnly, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const doc = await db.collection('portalEditors').doc(req.params.uid).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const password = generatePassword();
+    await db.collection('portalEditors').doc(req.params.uid).update({ password });
+    const d = doc.data();
+    if (portalEditors[d.username]) portalEditors[d.username].password = password;
+    res.json({ ok: true, username: d.username, password });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/portal-editors/:uid — revoke portal access
+app.delete('/api/portal-editors/:uid', adminOnly, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const doc = await db.collection('portalEditors').doc(req.params.uid).get();
+    if (doc.exists) {
+      const d = doc.data();
+      delete portalEditors[d.username];
+    }
+    await db.collection('portalEditors').doc(req.params.uid).delete();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Mux Webhook ───────────────────────────────────────────────────────────────
@@ -2009,6 +2112,9 @@ app.get('/api/series/:id/episodes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.listen(PORT, () => console.log(`GO Admin running on :${PORT}`));
+app.listen(PORT, async () => {
+  console.log(`GO Admin running on :${PORT}`);
+  if (sa) await loadPortalEditors();
+});
 // Railway redeploy trigger 1780454656
 // deploy 1780466198
