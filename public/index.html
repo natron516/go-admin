@@ -2402,6 +2402,7 @@ tr.dirty .at-save { display: inline-flex !important; }
     <p id="thumb-status" style="font-size:12px;color:var(--muted);margin-bottom:12px;"></p>
     <div class="modal-actions">
       <button class="btn btn-danger btn-sm admin-only" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove</button>
+      <button class="btn btn-ghost btn-sm" id="thumb-rescale-btn" onclick="rescaleExistingThumb()" style="display:none">🔍 Rescale</button>
       <button class="btn btn-ghost" onclick="document.getElementById('thumb-modal').classList.remove('open')">Cancel</button>
       <button class="btn btn-primary" id="thumb-upload-btn" onclick="uploadThumbnail()" disabled>⬆️ Upload</button>
     </div>
@@ -2761,6 +2762,7 @@ function openThumbModal(assetId, title, playbackId, currentThumb) {
   if (showUrl) { preview.src = showUrl; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
   document.getElementById('thumb-remove-btn').style.display = currentThumb ? 'inline-flex' : 'none';
+  document.getElementById('thumb-rescale-btn').style.display = showUrl ? 'inline-flex' : 'none';
   document.getElementById('thumb-upload-btn').disabled = true;
   document.getElementById('thumb-status').textContent = '';
   document.getElementById('thumb-progress').style.display = 'none';
@@ -2809,6 +2811,36 @@ document.getElementById('thumb-scale').addEventListener('input', e => {
   document.getElementById('thumb-scale-label').textContent = e.target.value + '%';
   updateThumbScalePreview();
 });
+
+function rescaleExistingThumb() {
+  const preview = document.getElementById('thumb-preview');
+  const src = preview.src;
+  if (!src) return;
+  // Load the existing thumbnail image into the scale editor
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    thumbOriginalImg = img;
+    document.getElementById('thumb-scale-wrap').style.display = 'block';
+    document.getElementById('thumb-scale').value = 100;
+    document.getElementById('thumb-scale-label').textContent = '100%';
+    document.getElementById('thumb-upload-btn').disabled = false;
+    document.getElementById('thumb-rescale-btn').style.display = 'none';
+    // Create a fake File so uploadThumbnail works
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width; canvas.height = img.height;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    canvas.toBlob(blob => {
+      thumbSelectedFile = new File([blob], 'thumbnail.jpg', { type: 'image/jpeg' });
+    }, 'image/jpeg', 0.95);
+    document.getElementById('thumb-status').textContent = 'Adjust scale and click Upload';
+  };
+  img.onerror = () => {
+    // CORS may block — fetch through proxy
+    toast('Could not load image for rescaling. Try uploading a new image instead.');
+  };
+  img.src = src;
+}
 
 function updateThumbScalePreview() {
   if (!thumbOriginalImg) return;
@@ -3019,6 +3051,51 @@ async function uploadCover(fileInput, targetInputId, type) {
   };
   reader.readAsDataURL(file);
   fileInput.value = '';
+}
+
+function rescaleCover(existingUrl, targetInputId, type) {
+  const previewId = targetInputId + '-preview';
+  const previewEl = document.getElementById(previewId);
+  if (!previewEl) return;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    previewEl.innerHTML = `
+      <img id="cover-scale-img-${targetInputId}" src="${existingUrl}" style="max-height:120px;border-radius:6px;margin-top:4px;">
+      <div style="margin-top:8px;">
+        <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
+        <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="uploadCoverScaled('${targetInputId}','${type}')">⬆️ Upload Rescaled</button>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="document.getElementById('${previewId}').innerHTML=''">Cancel</button>
+    `;
+    const origImg = img;
+    const slider = document.getElementById('cover-scale-' + targetInputId);
+    const label = document.getElementById('cover-scale-label-' + targetInputId);
+    const prevImg = document.getElementById('cover-scale-img-' + targetInputId);
+    slider.addEventListener('input', () => {
+      label.textContent = slider.value + '%';
+      const scale = parseInt(slider.value) / 100;
+      const canvas = document.createElement('canvas');
+      const outW = 960, outH = 540;
+      canvas.width = outW; canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
+      const sw = origImg.width * scale, sh = origImg.height * scale;
+      ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
+      prevImg.src = canvas.toDataURL('image/jpeg', 0.92);
+    });
+    // Store for upload
+    previewEl._coverImg = origImg;
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width; canvas.height = img.height;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    canvas.toBlob(blob => {
+      previewEl._coverFile = new File([blob], 'cover.jpg', { type: 'image/jpeg' });
+    }, 'image/jpeg', 0.95);
+  };
+  img.onerror = () => toast('Could not load image for rescaling. Try uploading a new file.');
+  img.src = existingUrl;
 }
 
 async function uploadCoverScaled(targetInputId, type) {
@@ -5617,6 +5694,14 @@ function openPodcastModal(podcast) {
   document.getElementById('podcast-category').value = podcast?.category || 'sermons';
   document.getElementById('podcast-sort').value = podcast?.sortOrder ?? 0;
   document.getElementById('podcast-enabled').checked = podcast?.enabled !== false;
+  // Show existing artwork with rescale option
+  const podArtPreview = document.getElementById('podcast-artwork-preview');
+  const podArtUrl = podcast?.artworkUrl || '';
+  if (podArtUrl) {
+    podArtPreview.innerHTML = `<img src="${podArtUrl}" style="max-height:80px;border-radius:6px;margin-top:4px;"> <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="rescaleCover('${podArtUrl}','podcast-artwork','podcast')">🔍 Rescale</button>`;
+  } else {
+    podArtPreview.innerHTML = '';
+  }
   document.getElementById('podcast-modal').classList.add('open');
 }
 
@@ -5935,6 +6020,14 @@ async function openSeriesModal(series) {
   document.getElementById('series-media-type').value = series ? (series.mediaType || 'audio') : 'audio';
   document.getElementById('series-sort').value = series ? (series.sortOrder || 0) : 0;
   document.getElementById('series-enabled').checked = series ? series.enabled !== false : true;
+  // Show existing artwork with rescale option
+  const artPreview = document.getElementById('series-artwork-preview');
+  const artUrl = series ? (series.artworkUrl || '') : '';
+  if (artUrl) {
+    artPreview.innerHTML = `<img src="${artUrl}" style="max-height:80px;border-radius:6px;margin-top:4px;"> <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="rescaleCover('${artUrl}','series-artwork','series')">🔍 Rescale</button>`;
+  } else {
+    artPreview.innerHTML = '';
+  }
   document.getElementById('series-modal').classList.add('open');
 }
 
