@@ -2839,8 +2839,9 @@ async function rescaleExistingThumb() {
   }
 }
 
-// Draws the image into a 16:9 crop frame (like the app) with cover-fit + scale
-function drawCropCanvas(img, scale, outW, outH) {
+// Draws the image into a crop frame (like the app) with cover-fit + scale
+// shape: 'rect' (default 16:9) or 'circle' (1:1 circular)
+function drawCropCanvas(img, scale, outW, outH, shape) {
   const canvas = document.createElement('canvas');
   canvas.width = outW;
   canvas.height = outH;
@@ -2864,7 +2865,17 @@ function drawCropCanvas(img, scale, outW, outH) {
   const drawH = baseH * scale;
   const x = (outW - drawW) / 2;
   const y = (outH - drawH) / 2;
-  ctx.drawImage(img, x, y, drawW, drawH);
+  if (shape === 'circle') {
+    // Clip to circle before drawing
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(outW / 2, outH / 2, Math.min(outW, outH) / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(img, x, y, drawW, drawH);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, x, y, drawW, drawH);
+  }
   return canvas;
 }
 
@@ -3008,6 +3019,13 @@ async function generateCover(targetInputId, titleInputId, type) {
 }
 
 // Upload cover image to Firebase Storage via /api/upload-cover
+function getCropShape(type) {
+  return (type === 'series' || type === 'podcast') ? 'circle' : 'rect';
+}
+function getCropSize(type) {
+  return (type === 'series' || type === 'podcast') ? { w: 600, h: 600 } : { w: 960, h: 540 };
+}
+
 async function uploadCover(fileInput, targetInputId, type) {
   const file = fileInput.files[0];
   if (!file) return;
@@ -3019,8 +3037,9 @@ async function uploadCover(fileInput, targetInputId, type) {
   const reader = new FileReader();
   reader.onload = e => {
     const imgSrc = e.target.result;
+    const _isCircle = getCropShape(type) === 'circle';
     previewEl.innerHTML = `
-      <img id="cover-scale-img-${targetInputId}" src="${imgSrc}" style="max-height:120px;border-radius:6px;margin-top:4px;">
+      <img id="cover-scale-img-${targetInputId}" src="${imgSrc}" style="max-height:150px;${_isCircle ? 'border-radius:50%;aspect-ratio:1;' : 'border-radius:6px;aspect-ratio:16/9;'}object-fit:cover;margin-top:4px;">
       <div style="margin-top:8px;">
         <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
         <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
@@ -3033,15 +3052,19 @@ async function uploadCover(fileInput, targetInputId, type) {
     const label = document.getElementById('cover-scale-label-' + targetInputId);
     const img = document.getElementById('cover-scale-img-' + targetInputId);
     const origImg = new Image(); origImg.src = imgSrc;
+    const cropShape = getCropShape(type);
+    const cropSize = getCropSize(type);
     slider.addEventListener('input', () => {
       label.textContent = slider.value + '%';
       const scale = parseInt(slider.value) / 100;
-      const canvas = drawCropCanvas(origImg, scale, 960, 540);
-      img.src = canvas.toDataURL('image/jpeg', 0.92);
+      const canvas = drawCropCanvas(origImg, scale, cropSize.w, cropSize.h, cropShape);
+      img.src = canvas.toDataURL('image/png', 0.92);
     });
     // Store original file + image for upload
     previewEl._coverFile = file;
     previewEl._coverImg = origImg;
+    previewEl._cropShape = cropShape;
+    previewEl._cropSize = cropSize;
   };
   reader.readAsDataURL(file);
   fileInput.value = '';
@@ -3058,9 +3081,14 @@ async function rescaleCover(existingUrl, targetInputId, type) {
     const blob = await resp.blob();
     const objectUrl = URL.createObjectURL(blob);
     const img = new Image();
+    const cropShape = getCropShape(type);
+    const cropSize = getCropSize(type);
+    const isCircle = cropShape === 'circle';
     img.onload = () => {
+      // Show initial preview in correct shape
+      const initCanvas = drawCropCanvas(img, 1, cropSize.w, cropSize.h, cropShape);
       previewEl.innerHTML = `
-        <img id="cover-scale-img-${targetInputId}" src="${objectUrl}" style="max-height:120px;border-radius:6px;margin-top:4px;">
+        <img id="cover-scale-img-${targetInputId}" src="${initCanvas.toDataURL('image/png')}" style="max-height:150px;${isCircle ? 'border-radius:50%;aspect-ratio:1;' : 'border-radius:6px;aspect-ratio:16/9;'}margin-top:4px;">
         <div style="margin-top:8px;">
           <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
           <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
@@ -3075,11 +3103,13 @@ async function rescaleCover(existingUrl, targetInputId, type) {
       slider.addEventListener('input', () => {
         label.textContent = slider.value + '%';
         const scale = parseInt(slider.value) / 100;
-        const canvas = drawCropCanvas(origImg, scale, 960, 540);
-        prevImg.src = canvas.toDataURL('image/jpeg', 0.92);
+        const canvas = drawCropCanvas(origImg, scale, cropSize.w, cropSize.h, cropShape);
+        prevImg.src = canvas.toDataURL('image/png');
       });
       previewEl._coverImg = origImg;
-      previewEl._coverFile = new File([blob], 'cover.jpg', { type: 'image/jpeg' });
+      previewEl._coverFile = new File([blob], 'cover.png', { type: 'image/png' });
+      previewEl._cropShape = cropShape;
+      previewEl._cropSize = cropSize;
     };
     img.src = objectUrl;
   } catch (e) {
@@ -3100,8 +3130,11 @@ async function uploadCoverScaled(targetInputId, type) {
   try {
     let uploadBlob = file;
     if (origImg) {
-      const canvas = drawCropCanvas(origImg, scale, 960, 540);
-      uploadBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+      const shape = previewEl._cropShape || 'rect';
+      const size = previewEl._cropSize || { w: 960, h: 540 };
+      const fmt = shape === 'circle' ? 'image/png' : 'image/jpeg';
+      const canvas = drawCropCanvas(origImg, scale, size.w, size.h, shape);
+      uploadBlob = await new Promise(r => canvas.toBlob(r, fmt, 0.92));
     }
     const fd = new FormData();
     fd.append('image', uploadBlob, file.name || 'cover.jpg');
