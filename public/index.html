@@ -5825,13 +5825,51 @@ function fmtDuration(secs) {
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 
+let _audioSortCol = 'title', _audioSortAsc = true;
+
+function getAudioDate(a) {
+  if (!a.createdAt) return 0;
+  if (a.createdAt._seconds) return a.createdAt._seconds * 1000;
+  if (typeof a.createdAt === 'string') return new Date(a.createdAt).getTime();
+  return 0;
+}
+
+function fmtDate(a) {
+  const ms = getAudioDate(a);
+  if (!ms) return '\u2014';
+  return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function sortAudio(col) {
+  if (_audioSortCol === col) { _audioSortAsc = !_audioSortAsc; }
+  else { _audioSortCol = col; _audioSortAsc = true; }
+  renderAudioTable();
+}
+
 function renderAudioTable() {
   const el = document.getElementById('audio-content');
   if (!_audioAssets.length) {
     el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No audio assets yet. Click <b>+ Add Audio</b> to get started.</div>';
     return;
   }
-  const rows = _audioAssets.map(a => `
+  const sorted = [..._audioAssets].sort((a, b) => {
+    let va, vb;
+    switch (_audioSortCol) {
+      case 'title': va = (a.title||'').toLowerCase(); vb = (b.title||'').toLowerCase(); break;
+      case 'artist': va = (a.artist||'').toLowerCase(); vb = (b.artist||'').toLowerCase(); break;
+      case 'category': va = (a.category||'').toLowerCase(); vb = (b.category||'').toLowerCase(); break;
+      case 'series': va = ((_seriesList.find(s=>s.id===a.seriesId)||{}).title||'').toLowerCase(); vb = ((_seriesList.find(s=>s.id===b.seriesId)||{}).title||'').toLowerCase(); break;
+      case 'date': va = getAudioDate(a); vb = getAudioDate(b); break;
+      default: va = (a.title||'').toLowerCase(); vb = (b.title||'').toLowerCase();
+    }
+    if (va < vb) return _audioSortAsc ? -1 : 1;
+    if (va > vb) return _audioSortAsc ? 1 : -1;
+    return 0;
+  });
+  const arrow = col => _audioSortCol === col ? (_audioSortAsc ? ' \u25B2' : ' \u25BC') : '';
+  const thStyle = `padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;`;
+  const thStyleNoSort = `padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);`;
+  const rows = sorted.map(a => `
     <tr>
       <td style="padding:10px 12px;">
         ${a.coverImageUrl ? `<img src="${escHtml(a.coverImageUrl)}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px;">` : ''}
@@ -5839,28 +5877,30 @@ function renderAudioTable() {
       </td>
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.artist||'')}</td>
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
-      <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${a.seriesId ? '<span style="color:var(--accent2);font-size:11px;">&#128250; ' + escHtml((_seriesList.find(s=>s.id===a.seriesId)||{}).title||'Series') + (a.episodeNumber ? ' #'+a.episodeNumber : '') + '</span>' : '<span style="color:var(--muted);">—</span>'}</td>
+      <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${a.seriesId ? '<span style="color:var(--accent2);font-size:11px;">&#128250; ' + escHtml((_seriesList.find(s=>s.id===a.seriesId)||{}).title||'Series') + (a.episodeNumber ? ' #'+a.episodeNumber : '') + '</span>' : '<span style="color:var(--muted);">\u2014</span>'}</td>
+      <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDate(a)}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDuration(a.duration)}</td>
       <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
         ${a.audioUrl ? `<a href="${escAttr(a.audioUrl)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-right:4px;">&#9654; Play</a>` : ''}
-        <button class="btn btn-ghost btn-sm" onclick="notifyContent('audio','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.coverImageUrl||'')}')" id="notify-audio-${escAttr(a.id)}" title="Notify users">🔔</button>
+        <button class="btn btn-ghost btn-sm" onclick="notifyContent('audio','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.coverImageUrl||'')}')" id="notify-audio-${escAttr(a.id)}" title="Notify users">\ud83d\udd14</button>
         <button class="btn btn-ghost btn-sm" onclick="editAudio('${escAttr(a.id)}')">Edit</button>
         <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
     <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);">
-      <table style="width:100%;border-collapse:collapse;min-width:700px;">
+      <table style="width:100%;border-collapse:collapse;min-width:800px;">
         <thead>
           <tr style="background:rgba(0,0,0,.2);">
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Artist</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Series</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Duration</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
+            <th style="${thStyle}" onclick="sortAudio('title')">Title${arrow('title')}</th>
+            <th style="${thStyle}" onclick="sortAudio('artist')">Artist${arrow('artist')}</th>
+            <th style="${thStyle}" onclick="sortAudio('category')">Category${arrow('category')}</th>
+            <th style="${thStyle}" onclick="sortAudio('series')">Series${arrow('series')}</th>
+            <th style="${thStyle}" onclick="sortAudio('date')">Uploaded${arrow('date')}</th>
+            <th style="${thStyleNoSort}">Duration</th>
+            <th style="${thStyleNoSort}">Featured</th>
+            <th style="${thStyleNoSort}">Actions</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
