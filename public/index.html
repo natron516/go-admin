@@ -5736,6 +5736,12 @@ async function savePodcast() {
   const feedUrl = document.getElementById('podcast-feed').value.trim();
   if (!title) { toast('Title is required'); return; }
   if (!feedUrl) { toast('Feed URL is required'); return; }
+  // Auto-upload pending artwork if user forgot to click Upload
+  const podArtPreview = document.getElementById('podcast-artwork-preview');
+  if (podArtPreview && podArtPreview._coverFile && podArtPreview._coverImg) {
+    toast('Uploading artwork...');
+    await uploadCoverScaled('podcast-artwork', 'podcast');
+  }
   const payload = {
     title,
     feedUrl,
@@ -6060,6 +6066,12 @@ function editSeries(id) {
 async function saveSeries() {
   const title = document.getElementById('series-title').value.trim();
   if (!title) { toast('Title is required'); return; }
+  // Auto-upload pending artwork if user forgot to click Upload
+  const artPreview = document.getElementById('series-artwork-preview');
+  if (artPreview && artPreview._coverFile && artPreview._coverImg) {
+    toast('Uploading artwork...');
+    await uploadCoverScaled('series-artwork', 'series');
+  }
   const payload = {
     title,
     description: document.getElementById('series-description').value.trim(),
