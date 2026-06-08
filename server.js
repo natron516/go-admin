@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 43;
+const ADMIN_BUILD = 44;
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const multer = require('multer');
@@ -21,6 +21,14 @@ const MUX_TOKEN_ID  = process.env.MUX_TOKEN_ID  || '25cd1f0d-e6d4-445b-a106-e9cc
 const MUX_SECRET    = process.env.MUX_SECRET     || 'AcQYv3xI4uyhDIOmgAfaP+rAX9ei6bXzpT95dcAc74ALgOAl04BLg6o9PYwGh/iljlF4FTYz2VM';
 const ADMIN_USER    = process.env.ADMIN_USER     || 'admin';
 const ADMIN_PASS    = process.env.ADMIN_PASS     || 'gomedia';
+const EDITOR_USER   = process.env.EDITOR_USER    || 'editor';
+const EDITOR_PASS   = process.env.EDITOR_PASS    || 'goedit';
+
+// Role-based users map
+const USERS = {
+  [ADMIN_USER]:  { password: ADMIN_PASS,  role: 'admin' },
+  [EDITOR_USER]: { password: EDITOR_PASS, role: 'editor' },
+};
 
 const MUX_AUTH = Buffer.from(`${MUX_TOKEN_ID}:${MUX_SECRET}`).toString('base64');
 
@@ -61,7 +69,36 @@ async function fsDelete(collection, docId) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // HTML/static pages served publicly — login handled client-side.
 // Only /api/* routes require auth (silent, no browser popup).
-const silentAuth = basicAuth({ users: { [ADMIN_USER]: ADMIN_PASS }, challenge: false, unauthorizedResponse: () => 'Unauthorized' });
+const silentAuth = basicAuth({
+  users: { [ADMIN_USER]: ADMIN_PASS, [EDITOR_USER]: EDITOR_PASS },
+  challenge: false,
+  unauthorizedResponse: () => 'Unauthorized',
+  authorizer: (username, password) => {
+    const u = USERS[username];
+    return u && basicAuth.safeCompare(password, u.password);
+  },
+  authorizeAsync: false,
+});
+
+// Attach role to request after auth
+function attachRole(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Basic ')) {
+    const decoded = Buffer.from(authHeader.slice(6), 'base64').toString();
+    const username = decoded.split(':')[0];
+    req.userRole = USERS[username]?.role || 'editor';
+  } else {
+    req.userRole = 'editor';
+  }
+  next();
+}
+app.use(attachRole);
+
+// Middleware: block editors from destructive actions
+function adminOnly(req, res, next) {
+  if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  next();
+}
 app.use((req, res, next) => {
   // Public routes
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
@@ -83,10 +120,16 @@ app.use(express.json());
 // Login endpoint for the v2 client-side login overlay
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
-  if (username === ADMIN_USER && password === ADMIN_PASS) {
-    return res.json({ ok: true });
+  const u = USERS[username];
+  if (u && u.password === password) {
+    return res.json({ ok: true, role: u.role });
   }
   res.status(401).json({ error: 'Invalid credentials' });
+});
+
+// GET /api/role — returns the current user's role
+app.get('/api/role', (req, res) => {
+  res.json({ role: req.userRole });
 });
 
 // ── Mux Webhook ───────────────────────────────────────────────────────────────
@@ -458,7 +501,7 @@ app.post('/api/assets/:id/clip', async (req, res) => {
 });
 
 // Delete an asset
-app.delete('/api/assets/:id', async (req, res) => {
+app.delete('/api/assets/:id', adminOnly, async (req, res) => {
   try {
     await fetch(`https://api.mux.com/video/v1/assets/${req.params.id}`, {
       method: 'DELETE',
@@ -574,7 +617,7 @@ app.get('/api/thumbnails/:assetId', async (req, res) => {
 });
 
 // DELETE /api/thumbnails/:assetId
-app.delete('/api/thumbnails/:assetId', async (req, res) => {
+app.delete('/api/thumbnails/:assetId', adminOnly, async (req, res) => {
   try {
     await fsDelete('thumbnails', req.params.assetId);
     res.json({ ok: true });
@@ -710,7 +753,7 @@ app.patch('/api/feedback/:id/read', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/feedback/:id', async (req, res) => {
+app.delete('/api/feedback/:id', adminOnly, async (req, res) => {
   try {
     await admin.firestore().collection('feedback').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -990,7 +1033,7 @@ app.get('/api/debug/sessions', async (req, res) => {
 });
 
 // Block (disable) or unblock (enable) a user
-app.patch('/api/users/:uid/block', async (req, res) => {
+app.patch('/api/users/:uid/block', adminOnly, async (req, res) => {
   if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
   try {
     const { blocked } = req.body; // true = block, false = unblock
@@ -1022,7 +1065,7 @@ app.patch('/api/users/:uid/private-access', async (req, res) => {
 });
 
 // Delete a user account
-app.delete('/api/users/:uid', async (req, res) => {
+app.delete('/api/users/:uid', adminOnly, async (req, res) => {
   if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
   try {
     await admin.auth().deleteUser(req.params.uid);
@@ -1340,7 +1383,7 @@ app.patch('/api/books/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/books/:id', async (req, res) => {
+app.delete('/api/books/:id', adminOnly, async (req, res) => {
   try {
     await admin.firestore().collection('books').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -1412,7 +1455,7 @@ app.post('/api/music/album', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/music/album/:albumId', async (req, res) => {
+app.delete('/api/music/album/:albumId', adminOnly, async (req, res) => {
   try {
     const db = admin.firestore();
     const ref = db.collection('config').doc('music');
@@ -1508,7 +1551,7 @@ app.post('/api/music/playlist', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/music/playlist/:playlistId', async (req, res) => {
+app.delete('/api/music/playlist/:playlistId', adminOnly, async (req, res) => {
   try {
     const db = admin.firestore();
     const ref = db.collection('config').doc('music');
@@ -1688,7 +1731,7 @@ app.patch('/api/articles/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/articles/:id', async (req, res) => {
+app.delete('/api/articles/:id', adminOnly, async (req, res) => {
   try {
     await admin.firestore().collection('articles').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -1755,7 +1798,7 @@ app.patch('/api/podcasts/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/podcasts/:id', async (req, res) => {
+app.delete('/api/podcasts/:id', adminOnly, async (req, res) => {
   try {
     await admin.firestore().collection('podcasts').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -1879,7 +1922,7 @@ app.patch('/api/audio/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/audio/:id', async (req, res) => {
+app.delete('/api/audio/:id', adminOnly, async (req, res) => {
   try {
     await admin.firestore().collection('audioAssets').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -1945,7 +1988,7 @@ app.patch('/api/series/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/series/:id', async (req, res) => {
+app.delete('/api/series/:id', adminOnly, async (req, res) => {
   try {
     await admin.firestore().collection('series').doc(req.params.id).delete();
     res.json({ ok: true });

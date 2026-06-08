@@ -251,6 +251,13 @@ main {
 .section { display: none; }
 .section.active { display: block; }
 
+/* ── Role-based UI ─────────────────────────────────────── */
+body.role-editor .admin-only,
+body.role-editor [data-admin-only] { display: none !important; }
+.role-badge { font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; margin-left: 8px; }
+.role-badge.admin { background: rgba(99,102,241,.2); color: var(--accent2); }
+.role-badge.editor { background: rgba(245,158,11,.2); color: var(--orange); }
+
 /* ── Page headers ────────────────────────────────────── */
 .page-header {
   display: flex;
@@ -1260,6 +1267,7 @@ tr.dirty .at-save { display: inline-flex !important; }
       <span class="logo-icon">🎬</span>
       <span class="logo-text">GO Admin</span>
       <span class="logo-text" style="font-size:10px;color:var(--muted);margin-left:4px;" id="admin-build"></span>
+      <span class="role-badge" id="role-badge"></span>
       <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 18l-6-6 6-6"/>
@@ -1334,7 +1342,7 @@ tr.dirty .at-save { display: inline-flex !important; }
         <span class="nav-label">Dashboard</span>
       </button>
 
-      <button class="tab" data-label="Users" onclick="navTo('users', this)">
+      <button class="tab admin-only" data-label="Users" onclick="navTo('users', this)">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" stroke-linecap="round"/></svg></span>
         <span class="nav-label">Users</span>
       </button>
@@ -2393,7 +2401,7 @@ tr.dirty .at-save { display: inline-flex !important; }
     </div>
     <p id="thumb-status" style="font-size:12px;color:var(--muted);margin-bottom:12px;"></p>
     <div class="modal-actions">
-      <button class="btn btn-danger btn-sm" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove</button>
+      <button class="btn btn-danger btn-sm admin-only" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove</button>
       <button class="btn btn-ghost" onclick="document.getElementById('thumb-modal').classList.remove('open')">Cancel</button>
       <button class="btn btn-primary" id="thumb-upload-btn" onclick="uploadThumbnail()" disabled>⬆️ Upload</button>
     </div>
@@ -2551,6 +2559,24 @@ async function loadDashboard() {
 // ── Login ──────────────────────────────────────────────────────────────
 // Override global fetch to include basic auth header on all /api/ requests
 let _authHeader = null;
+let _userRole = 'editor'; // default to editor (least privilege)
+function isAdmin() { return _userRole === 'admin'; }
+
+// Apply role-based UI: hide delete buttons and user management for editors
+function applyRoleUI() {
+  document.querySelectorAll('[data-admin-only]').forEach(el => {
+    el.style.display = isAdmin() ? '' : 'none';
+  });
+  // Add a CSS class to body for role-based styling
+  document.body.classList.toggle('role-admin', isAdmin());
+  document.body.classList.toggle('role-editor', !isAdmin());
+  // Role badge
+  const badge = document.getElementById('role-badge');
+  if (badge) {
+    badge.textContent = _userRole;
+    badge.className = 'role-badge ' + _userRole;
+  }
+}
 const _origFetch = window.fetch;
 window.fetch = function(url, opts = {}) {
   if (typeof url === 'string' && url.startsWith('/api/')) {
@@ -2571,15 +2597,31 @@ async function checkAuth() {
     _authHeader = saved;
     try {
       const r = await fetch('/api/assets');
-      if (r.ok) { document.getElementById('login-overlay').classList.add('hidden'); return true; }
+      if (r.ok) {
+        document.getElementById('login-overlay').classList.add('hidden');
+        // Restore role
+        const savedRole = sessionStorage.getItem('go_admin_role');
+        if (savedRole) { _userRole = savedRole; }
+        else {
+          try { const rr = await fetch('/api/role'); const rd = await rr.json(); _userRole = rd.role || 'editor'; sessionStorage.setItem('go_admin_role', _userRole); } catch {}
+        }
+        applyRoleUI();
+        return true;
+      }
     } catch {}
     _authHeader = null;
     sessionStorage.removeItem('go_admin_auth');
+    sessionStorage.removeItem('go_admin_role');
   }
   // 2. Check if browser has cached basic auth (from browser popup)
   try {
     const r = await _origFetch('/api/assets', { credentials: 'include' });
-    if (r.ok) { document.getElementById('login-overlay').classList.add('hidden'); return true; }
+    if (r.ok) {
+      document.getElementById('login-overlay').classList.add('hidden');
+      try { const rr = await fetch('/api/role'); const rd = await rr.json(); _userRole = rd.role || 'editor'; } catch {}
+      applyRoleUI();
+      return true;
+    }
   } catch {}
   // 3. Not authenticated — show login overlay
   document.getElementById('login-overlay').classList.remove('hidden');
@@ -2597,6 +2639,14 @@ async function doLogin() {
     if (r.ok) {
       sessionStorage.setItem('go_admin_auth', _authHeader);
       document.getElementById('login-overlay').classList.add('hidden');
+      // Fetch role
+      try {
+        const roleRes = await fetch('/api/role');
+        const roleData = await roleRes.json();
+        _userRole = roleData.role || 'editor';
+      } catch { _userRole = 'editor'; }
+      sessionStorage.setItem('go_admin_role', _userRole);
+      applyRoleUI();
       initApp();
     } else {
       _authHeader = null;
@@ -3325,7 +3375,7 @@ async function loadFeedback() {
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;">
             ${!f.read ? `<button class="btn btn-ghost btn-sm" onclick="markFeedbackRead('${f.id}')">Mark read</button>` : '<span style="font-size:12px;color:var(--muted);">Read</span>'}
-            <button class="btn btn-danger btn-sm" onclick="deleteFeedback('${f.id}')">Delete</button>
+            <button class="btn btn-danger btn-sm admin-only" onclick="deleteFeedback('${f.id}')">Delete</button>
           </div>
         </div>`;
     }).join('');
@@ -3453,7 +3503,7 @@ function renderFileList() {
         <div><div style="font-size:13px;font-weight:600;">${escHtml(item.file.name)}</div><div style="font-size:11px;color:var(--muted);">${formatSize(item.file.size)}</div></div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="status-${item.uid}">${utBadge(item)}</span>
-          <button class="btn btn-danger btn-sm" onclick="removeFile('${item.uid}')" ${dis?'disabled':''} style="padding:4px 8px;">✕</button>
+          <button class="btn btn-danger btn-sm admin-only" onclick="removeFile('${item.uid}')" ${dis?'disabled':''} style="padding:4px 8px;">✕</button>
         </div>
       </div>
       <div style="margin-bottom:6px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Title</label><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"></div>
@@ -3725,7 +3775,7 @@ function assetRowHtml(a) {
               <button class="btn btn-ghost btn-sm ${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'dl-ready' : ''}" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' ? 'Download MP4' : 'No MP4 available'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '✅' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
               ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
               ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
-              <span id="del-${a.id}"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
+              <span id="del-${a.id}" class="admin-only"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
             </div>
           </div>
         </div>
@@ -4687,7 +4737,7 @@ function renderBooksTable() {
       <td style="padding:10px 12px;white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('book','${escAttr(b.id)}','${escAttr(b.title)}','${escAttr(b.coverImageUrl||'')}')" id="notify-book-${escAttr(b.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="editBook('${escAttr(b.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteBook('${escAttr(b.id)}', '${escAttr(b.title)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteBook('${escAttr(b.id)}', '${escAttr(b.title)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -4972,7 +5022,7 @@ function renderMusicTable() {
       <td style="padding:10px 12px;"><code style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:12px;">${escHtml(a.albumId)}</code></td>
       <td style="padding:10px 12px;"><select onchange="updateMusicAlbum('${escAttr(a.albumId)}',{type:this.value})" style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:12px;border:1px solid transparent;cursor:pointer;">${typeOpts(a.type||'album')}</select></td>
       <td style="padding:10px 12px;"><a href="https://music.apple.com/us/album/${a.albumId}" target="_blank" style="color:var(--accent2);font-size:12px;">View ↗</a></td>
-      <td style="padding:10px 12px;"><button class="btn btn-danger btn-sm" onclick="deleteMusicAlbum('${escAttr(a.albumId)}','${escAttr(a.title||a.albumId)}')">Remove</button></td>
+      <td style="padding:10px 12px;"><button class="btn btn-danger btn-sm admin-only" onclick="deleteMusicAlbum('${escAttr(a.albumId)}','${escAttr(a.title||a.albumId)}')">Remove</button></td>
     </tr>`;
   }).join('');
   el.innerHTML = `
@@ -5165,7 +5215,7 @@ function renderMusicPlaylists() {
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(p.curatorName || '')}</td>
       <td style="padding:10px 12px;"><code style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:11px;word-break:break-all;">${escHtml(p.playlistId)}</code></td>
       <td style="padding:10px 12px;"><a href="https://music.apple.com/us/playlist/${p.playlistId}" target="_blank" style="color:var(--accent2);font-size:12px;">View ↗</a></td>
-      <td style="padding:10px 12px;"><button class="btn btn-danger btn-sm" onclick="deletePlaylist('${escAttr(p.playlistId)}','${escAttr(p.title||p.playlistId)}')">Remove</button></td>
+      <td style="padding:10px 12px;"><button class="btn btn-danger btn-sm admin-only" onclick="deletePlaylist('${escAttr(p.playlistId)}','${escAttr(p.title||p.playlistId)}')">Remove</button></td>
     </tr>`;
   }).join('');
   el.innerHTML = `
@@ -5261,7 +5311,7 @@ function renderArticlesTable() {
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('article','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.imageUrl||'')}')" id="notify-article-${escAttr(a.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewArticle('${escAttr(a.id)}')">Preview</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editArticle('${escAttr(a.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteArticle('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteArticle('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -5436,7 +5486,7 @@ function renderPodcastsTable() {
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('podcast','${escAttr(p.id)}','${escAttr(p.title)}','${escAttr(p.artworkUrl||'')}')" id="notify-podcast-${escAttr(p.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewPodcastEpisodes('${escAttr(p.id)}')">Episodes</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editPodcast('${escAttr(p.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deletePodcast('${escAttr(p.id)}', '${escAttr(p.title)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deletePodcast('${escAttr(p.id)}', '${escAttr(p.title)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -5589,7 +5639,7 @@ function renderAudioTable() {
         ${a.audioUrl ? `<a href="${escAttr(a.audioUrl)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-right:4px;">&#9654; Play</a>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('audio','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.coverImageUrl||'')}')" id="notify-audio-${escAttr(a.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="editAudio('${escAttr(a.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -5752,7 +5802,7 @@ function renderSeriesTable() {
         '<button class="btn btn-ghost btn-sm" onclick="notifyContent(\'' + escAttr(s.category === 'audiobook' ? 'audiobook' : 'series') + '\',\'' + escAttr(s.id) + '\',\'' + escAttr(s.title) + '\',\'' + escAttr(s.artworkUrl || '') + '\')" id="notify-' + (s.category === 'audiobook' ? 'audiobook' : 'series') + '-' + escAttr(s.id) + '" title="Notify users">🔔</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="viewSeriesEpisodes(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Episodes</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="editSeries(\'' + escAttr(s.id) + '\')">Edit</button> ' +
-        '<button class="btn btn-danger btn-sm" onclick="deleteSeries(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Delete</button>' +
+        '<button class="btn btn-danger btn-sm admin-only" onclick="deleteSeries(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Delete</button>' +
       '</td>' +
     '</tr>';
   }).join('');
@@ -5937,7 +5987,7 @@ function renderSeriesEpisodes() {
       '<td style="' + tdStyle + 'color:var(--muted);font-size:12px;white-space:nowrap;">' + fmtDuration(ep.duration) + '</td>' +
       '<td style="' + tdStyle + 'color:var(--muted);font-size:12px;white-space:nowrap;">' + fmtDateShort(ep.createdAt) + '</td>' +
       '<td style="' + tdStyle + '">' +
-        '<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="deleteSeriesEpisode(\'' + escAttr(ep.id) + '\', \'' + escAttr(ep.title) + '\')">&times;</button>' +
+        '<button class="btn btn-danger btn-sm admin-only" style="font-size:11px;padding:3px 8px;" onclick="deleteSeriesEpisode(\'' + escAttr(ep.id) + '\', \'' + escAttr(ep.title) + '\')">&times;</button>' +
       '</td>' +
       '</tr>';
   });
