@@ -2812,34 +2812,31 @@ document.getElementById('thumb-scale').addEventListener('input', e => {
   updateThumbScalePreview();
 });
 
-function rescaleExistingThumb() {
+async function rescaleExistingThumb() {
   const preview = document.getElementById('thumb-preview');
   const src = preview.src;
   if (!src) return;
-  // Load the existing thumbnail image into the scale editor
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = () => {
-    thumbOriginalImg = img;
-    document.getElementById('thumb-scale-wrap').style.display = 'block';
-    document.getElementById('thumb-scale').value = 100;
-    document.getElementById('thumb-scale-label').textContent = '100%';
-    document.getElementById('thumb-upload-btn').disabled = false;
-    document.getElementById('thumb-rescale-btn').style.display = 'none';
-    // Create a fake File so uploadThumbnail works
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width; canvas.height = img.height;
-    canvas.getContext('2d').drawImage(img, 0, 0);
-    canvas.toBlob(blob => {
+  try {
+    // Fetch through proxy to avoid CORS
+    const proxyUrl = '/api/image-proxy?url=' + encodeURIComponent(src);
+    const resp = await fetch(proxyUrl);
+    const blob = await resp.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      thumbOriginalImg = img;
+      document.getElementById('thumb-scale-wrap').style.display = 'block';
+      document.getElementById('thumb-scale').value = 100;
+      document.getElementById('thumb-scale-label').textContent = '100%';
+      document.getElementById('thumb-upload-btn').disabled = false;
+      document.getElementById('thumb-rescale-btn').style.display = 'none';
       thumbSelectedFile = new File([blob], 'thumbnail.jpg', { type: 'image/jpeg' });
-    }, 'image/jpeg', 0.95);
-    document.getElementById('thumb-status').textContent = 'Adjust scale and click Upload';
-  };
-  img.onerror = () => {
-    // CORS may block — fetch through proxy
-    toast('Could not load image for rescaling. Try uploading a new image instead.');
-  };
-  img.src = src;
+      document.getElementById('thumb-status').textContent = 'Adjust scale and click Upload';
+    };
+    img.src = objectUrl;
+  } catch (e) {
+    toast('Could not load image for rescaling: ' + e.message);
+  }
 }
 
 function updateThumbScalePreview() {
@@ -3053,49 +3050,50 @@ async function uploadCover(fileInput, targetInputId, type) {
   fileInput.value = '';
 }
 
-function rescaleCover(existingUrl, targetInputId, type) {
+async function rescaleCover(existingUrl, targetInputId, type) {
   const previewId = targetInputId + '-preview';
   const previewEl = document.getElementById(previewId);
   if (!previewEl) return;
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = () => {
-    previewEl.innerHTML = `
-      <img id="cover-scale-img-${targetInputId}" src="${existingUrl}" style="max-height:120px;border-radius:6px;margin-top:4px;">
-      <div style="margin-top:8px;">
-        <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
-        <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
-      </div>
-      <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="uploadCoverScaled('${targetInputId}','${type}')">⬆️ Upload Rescaled</button>
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="document.getElementById('${previewId}').innerHTML=''">Cancel</button>
-    `;
-    const origImg = img;
-    const slider = document.getElementById('cover-scale-' + targetInputId);
-    const label = document.getElementById('cover-scale-label-' + targetInputId);
-    const prevImg = document.getElementById('cover-scale-img-' + targetInputId);
-    slider.addEventListener('input', () => {
-      label.textContent = slider.value + '%';
-      const scale = parseInt(slider.value) / 100;
-      const canvas = document.createElement('canvas');
-      const outW = 960, outH = 540;
-      canvas.width = outW; canvas.height = outH;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
-      const sw = origImg.width * scale, sh = origImg.height * scale;
-      ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
-      prevImg.src = canvas.toDataURL('image/jpeg', 0.92);
-    });
-    // Store for upload
-    previewEl._coverImg = origImg;
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width; canvas.height = img.height;
-    canvas.getContext('2d').drawImage(img, 0, 0);
-    canvas.toBlob(blob => {
+  previewEl.innerHTML = '<span style="color:var(--accent);font-size:13px;">Loading image...</span>';
+  try {
+    const proxyUrl = '/api/image-proxy?url=' + encodeURIComponent(existingUrl);
+    const resp = await fetch(proxyUrl);
+    const blob = await resp.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      previewEl.innerHTML = `
+        <img id="cover-scale-img-${targetInputId}" src="${objectUrl}" style="max-height:120px;border-radius:6px;margin-top:4px;">
+        <div style="margin-top:8px;">
+          <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
+          <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="uploadCoverScaled('${targetInputId}','${type}')">⬆️ Upload Rescaled</button>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="document.getElementById('${previewId}').innerHTML=''">Cancel</button>
+      `;
+      const origImg = img;
+      const slider = document.getElementById('cover-scale-' + targetInputId);
+      const label = document.getElementById('cover-scale-label-' + targetInputId);
+      const prevImg = document.getElementById('cover-scale-img-' + targetInputId);
+      slider.addEventListener('input', () => {
+        label.textContent = slider.value + '%';
+        const scale = parseInt(slider.value) / 100;
+        const canvas = document.createElement('canvas');
+        const outW = 960, outH = 540;
+        canvas.width = outW; canvas.height = outH;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
+        const sw = origImg.width * scale, sh = origImg.height * scale;
+        ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
+        prevImg.src = canvas.toDataURL('image/jpeg', 0.92);
+      });
+      previewEl._coverImg = origImg;
       previewEl._coverFile = new File([blob], 'cover.jpg', { type: 'image/jpeg' });
-    }, 'image/jpeg', 0.95);
-  };
-  img.onerror = () => toast('Could not load image for rescaling. Try uploading a new file.');
-  img.src = existingUrl;
+    };
+    img.src = objectUrl;
+  } catch (e) {
+    previewEl.innerHTML = `<span style="color:#f44336;font-size:12px;">Failed to load: ${e.message}</span>`;
+  }
 }
 
 async function uploadCoverScaled(targetInputId, type) {

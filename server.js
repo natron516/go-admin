@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 49;
+const ADMIN_BUILD = 50;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -716,6 +716,25 @@ app.get('/api/thumbnails/:assetId', async (req, res) => {
     res.send(Buffer.from(base64, 'base64'));
   } catch (e) {
     res.status(500).send('Error');
+  }
+});
+
+// Proxy external image for CORS-safe canvas use
+app.get('/api/image-proxy', async (req, res) => {
+  try {
+    const url = req.query.url;
+    if (!url) return res.status(400).json({ error: 'url required' });
+    const https = require('https');
+    const http = require('http');
+    const mod = url.startsWith('https') ? https : http;
+    mod.get(url, (upstream) => {
+      if (upstream.statusCode !== 200) return res.status(upstream.statusCode).send('Upstream error');
+      res.set('Content-Type', upstream.headers['content-type'] || 'image/jpeg');
+      res.set('Cache-Control', 'no-store');
+      upstream.pipe(res);
+    }).on('error', (e) => res.status(502).json({ error: e.message }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
