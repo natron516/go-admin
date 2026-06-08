@@ -920,7 +920,7 @@ tr.dirty .at-save { display: inline-flex !important; }
 .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
 
 /* ── Thumbnail modal ─────────────────────────────────── */
-.thumb-modal-img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; background: #0a0a0a; display: block; margin-bottom: 16px; }
+.thumb-modal-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: #0a0a0a; display: block; margin-bottom: 16px; }
 .thumb-drop {
   border: 2px dashed var(--border2);
   border-radius: 10px;
@@ -2839,24 +2839,39 @@ async function rescaleExistingThumb() {
   }
 }
 
-function updateThumbScalePreview() {
-  if (!thumbOriginalImg) return;
-  const scale = parseInt(document.getElementById('thumb-scale').value) / 100;
+// Draws the image into a 16:9 crop frame (like the app) with cover-fit + scale
+function drawCropCanvas(img, scale, outW, outH) {
   const canvas = document.createElement('canvas');
-  // Output at 16:9 aspect ratio, 960px wide
-  const outW = 960, outH = 540;
   canvas.width = outW;
   canvas.height = outH;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, outW, outH);
-  const img = thumbOriginalImg;
-  const scaledW = img.width * scale;
-  const scaledH = img.height * scale;
-  // Center the scaled image
-  const x = (outW - scaledW) / 2;
-  const y = (outH - scaledH) / 2;
-  ctx.drawImage(img, x, y, scaledW, scaledH);
+  // Cover-fit: scale image to fill the frame, then apply user scale on top
+  const frameRatio = outW / outH;
+  const imgRatio = img.width / img.height;
+  let baseW, baseH;
+  if (imgRatio > frameRatio) {
+    // Image is wider — fit by height
+    baseH = outH;
+    baseW = img.width * (outH / img.height);
+  } else {
+    // Image is taller — fit by width
+    baseW = outW;
+    baseH = img.height * (outW / img.width);
+  }
+  const drawW = baseW * scale;
+  const drawH = baseH * scale;
+  const x = (outW - drawW) / 2;
+  const y = (outH - drawH) / 2;
+  ctx.drawImage(img, x, y, drawW, drawH);
+  return canvas;
+}
+
+function updateThumbScalePreview() {
+  if (!thumbOriginalImg) return;
+  const scale = parseInt(document.getElementById('thumb-scale').value) / 100;
+  const canvas = drawCropCanvas(thumbOriginalImg, scale, 960, 540);
   document.getElementById('thumb-preview').src = canvas.toDataURL('image/jpeg', 0.92);
 }
 
@@ -2865,19 +2880,7 @@ function getScaledThumbBlob() {
     if (!thumbOriginalImg) { resolve(thumbSelectedFile); return; }
     const scale = parseInt(document.getElementById('thumb-scale').value) / 100;
     if (scale === 1.0) { resolve(thumbSelectedFile); return; }
-    const canvas = document.createElement('canvas');
-    const outW = 960, outH = 540;
-    canvas.width = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, outW, outH);
-    const img = thumbOriginalImg;
-    const scaledW = img.width * scale;
-    const scaledH = img.height * scale;
-    const x = (outW - scaledW) / 2;
-    const y = (outH - scaledH) / 2;
-    ctx.drawImage(img, x, y, scaledW, scaledH);
+    const canvas = drawCropCanvas(thumbOriginalImg, scale, 960, 540);
     canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
   });
 }
@@ -3033,13 +3036,7 @@ async function uploadCover(fileInput, targetInputId, type) {
     slider.addEventListener('input', () => {
       label.textContent = slider.value + '%';
       const scale = parseInt(slider.value) / 100;
-      const canvas = document.createElement('canvas');
-      const outW = 960, outH = 540;
-      canvas.width = outW; canvas.height = outH;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
-      const sw = origImg.width * scale, sh = origImg.height * scale;
-      ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
+      const canvas = drawCropCanvas(origImg, scale, 960, 540);
       img.src = canvas.toDataURL('image/jpeg', 0.92);
     });
     // Store original file + image for upload
@@ -3078,13 +3075,7 @@ async function rescaleCover(existingUrl, targetInputId, type) {
       slider.addEventListener('input', () => {
         label.textContent = slider.value + '%';
         const scale = parseInt(slider.value) / 100;
-        const canvas = document.createElement('canvas');
-        const outW = 960, outH = 540;
-        canvas.width = outW; canvas.height = outH;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
-        const sw = origImg.width * scale, sh = origImg.height * scale;
-        ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
+        const canvas = drawCropCanvas(origImg, scale, 960, 540);
         prevImg.src = canvas.toDataURL('image/jpeg', 0.92);
       });
       previewEl._coverImg = origImg;
@@ -3108,14 +3099,8 @@ async function uploadCoverScaled(targetInputId, type) {
 
   try {
     let uploadBlob = file;
-    if (scale !== 1 && origImg) {
-      const canvas = document.createElement('canvas');
-      const outW = 960, outH = 540;
-      canvas.width = outW; canvas.height = outH;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
-      const sw = origImg.width * scale, sh = origImg.height * scale;
-      ctx.drawImage(origImg, (outW - sw) / 2, (outH - sh) / 2, sw, sh);
+    if (origImg) {
+      const canvas = drawCropCanvas(origImg, scale, 960, 540);
       uploadBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
     }
     const fd = new FormData();
