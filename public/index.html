@@ -1511,6 +1511,14 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="funzone">🎉 FunZone</option>
             <option value="hidden">🚫 Hidden (Private)</option>
             <option value="uncategorized">📁 Uncategorized (Series)</option>
+            <optgroup label="─ Exclude ─">
+              <option value="!hidden">🚫 Exclude Hidden</option>
+              <option value="!sermon">📖 Exclude Sermon</option>
+              <option value="!children">⭐ Exclude Children's</option>
+              <option value="!music">🎵 Exclude Music</option>
+              <option value="!performance">🎭 Exclude Performance</option>
+              <option value="!funzone">🎉 Exclude FunZone</option>
+            </optgroup>
           </select>
           <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;">
             <input type="checkbox" id="asset-hide-series" onchange="filterAssets()" style="accent-color:var(--accent);"> Hide series
@@ -3847,7 +3855,15 @@ function filterAssets() {
     const assetCat = (ptData.category || a.passthrough || '').trim().toLowerCase();
     if (hideSeries && !assetCat) return false;
     const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
-    const matchCat = !cat || assetCat === cat.toLowerCase();
+    let matchCat;
+    if (!cat) {
+      matchCat = true;
+    } else if (cat.startsWith('!')) {
+      // Exclude mode: show everything EXCEPT this category
+      matchCat = assetCat !== cat.slice(1).toLowerCase();
+    } else {
+      matchCat = assetCat === cat.toLowerCase();
+    }
     return matchQ && matchCat;
   });
   const countEl = document.getElementById('asset-count');
