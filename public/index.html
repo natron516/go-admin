@@ -2271,7 +2271,7 @@ tr.dirty .at-save { display: inline-flex !important; }
     </div>
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeAudioModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveAudio()">Save Audio</button>
+      <button class="btn btn-primary" id="save-audio-btn" onclick="saveAudio()">Save Audio</button>
     </div>
   </div>
 </div>
@@ -5943,31 +5943,11 @@ function editAudio(id) {
 }
 
 async function saveAudio() {
-  const title = document.getElementById('audio-title').value.trim();
-  if (!title) { toast('Title is required'); return; }
+  const btn = document.getElementById('save-audio-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
-  // Handle file upload to Mux if a file was selected
-  if (_audioUploadFile) {
-    const statusEl = document.getElementById('audio-upload-status');
-    const urlEl = document.getElementById('audio-url');
-    if (!urlEl.value.trim()) {
-      try {
-        if (statusEl) statusEl.textContent = 'Uploading to Mux...';
-        const streamUrl = await uploadAudioFileToMux(_audioUploadFile);
-        if (streamUrl) urlEl.value = streamUrl;
-        _audioUploadFile = null;
-        const zone = document.getElementById('audio-upload-zone');
-        if (zone) zone.classList.remove('has-file');
-        const zoneText = document.getElementById('audio-upload-zone-text');
-        if (zoneText) zoneText.innerHTML = '&#128194; Click or drop audio/video file &middot; MP3, M4A, MP4, MOV, WAV&hellip;';
-        const progressEl = document.getElementById('audio-upload-progress');
-        if (progressEl) progressEl.style.display = 'none';
-      } catch (e) {
-        toast('Upload error: ' + e.message, 'error');
-        return;
-      }
-    }
-  }
+  const title = document.getElementById('audio-title').value.trim();
+  if (!title) { toast('Title is required'); if (btn) { btn.disabled = false; btn.textContent = 'Save Audio'; } return; }
 
   const seriesId = document.getElementById('audio-series').value;
   const episodeNum = document.getElementById('audio-episode').value;
@@ -5994,7 +5974,11 @@ async function saveAudio() {
     toast(_editingAudioId ? 'Audio updated' : 'Audio added');
     closeAudioModal();
     loadAudio();
-  } catch (e) { toast(`Error: ${e.message}`, 'error'); }
+  } catch (e) {
+    toast(`Error: ${e.message}`, 'error');
+    const btn = document.getElementById('save-audio-btn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Audio'; }
+  }
 }
 
 async function deleteAudio(id) {
@@ -6536,6 +6520,20 @@ document.addEventListener('click', function(e) {
 // AUDIO FILE UPLOAD (Single — Mux direct upload)
 // =============================================================
 let _audioUploadFile = null;
+let _audioUploading = false;
+let _audioUploadedUrl = null;
+
+function _updateSaveAudioBtn() {
+  const btn = document.getElementById('save-audio-btn');
+  if (!btn) return;
+  if (_audioUploading) {
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Save Audio';
+  }
+}
 
 function handleAudioFileDrop(e) {
   e.preventDefault();
@@ -6548,10 +6546,10 @@ function handleAudioFileDrop(e) {
 function handleAudioFileSelect(file) {
   if (!file) return;
   _audioUploadFile = file;
+  _audioUploadedUrl = null;
   const zone = document.getElementById('audio-upload-zone');
   zone.classList.add('has-file');
   document.getElementById('audio-upload-zone-text').textContent = '&#128194; ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
-  document.getElementById('audio-upload-status').textContent = 'Ready to upload. Save to begin upload.';
   // Auto-fill title if empty
   const titleEl = document.getElementById('audio-title');
   if (!titleEl.value.trim()) {
@@ -6562,6 +6560,25 @@ function handleAudioFileSelect(file) {
   const isVideo = ['mp4','mov','mkv','avi','webm'].includes(ext);
   const mediaTypeEl = document.getElementById('audio-media-type');
   if (mediaTypeEl) mediaTypeEl.value = isVideo ? 'video' : 'audio';
+
+  // Auto-start upload immediately
+  _audioUploading = true;
+  _updateSaveAudioBtn();
+  document.getElementById('audio-upload-status').textContent = 'Uploading to Mux...';
+  uploadAudioFileToMux(file).then(streamUrl => {
+    _audioUploadedUrl = streamUrl;
+    _audioUploading = false;
+    _audioUploadFile = null;
+    _updateSaveAudioBtn();
+    if (streamUrl) {
+      document.getElementById('audio-url').value = streamUrl;
+    }
+  }).catch(e => {
+    _audioUploading = false;
+    _updateSaveAudioBtn();
+    toast('Upload error: ' + e.message, 'error');
+    document.getElementById('audio-upload-status').textContent = 'Upload failed — try again.';
+  });
 }
 
 async function uploadAudioFileToMux(file) {
@@ -6652,6 +6669,8 @@ async function pollMuxUpload(uploadId, assetId, resolve, reject) {
 const _origCloseAudioModal = closeAudioModal;
 function closeAudioModal() {
   _audioUploadFile = null;
+  _audioUploading = false;
+  _audioUploadedUrl = null;
   const zone = document.getElementById('audio-upload-zone');
   if (zone) zone.classList.remove('has-file');
   const zoneText = document.getElementById('audio-upload-zone-text');
@@ -6662,6 +6681,8 @@ function closeAudioModal() {
   if (statusEl) statusEl.textContent = '';
   const fileInput = document.getElementById('audio-file-input');
   if (fileInput) fileInput.value = '';
+  const saveBtn = document.getElementById('save-audio-btn');
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Audio'; }
   _origCloseAudioModal();
 }
 
