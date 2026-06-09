@@ -2131,6 +2131,23 @@ app.get('/api/series/:id/episodes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Featured Videos Config ─────────────────────────────
+app.get('/api/config/featured', async (req, res) => {
+  try {
+    const doc = await db.collection('config').doc('featured').get();
+    res.json({ ids: doc.exists ? (doc.data().ids || []) : [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/config/featured', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });
+    await db.collection('config').doc('featured').set({ ids });
+    res.json({ ok: true, count: ids.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, async () => {
   console.log(`GO Admin running on :${PORT}`);
   if (sa) await loadPortalEditors();
