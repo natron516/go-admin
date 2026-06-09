@@ -548,6 +548,33 @@ body.role-editor [data-admin-only] { display: none !important; }
 
 /* ── Assets toolbar ──────────────────────────────────── */
 .assets-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.exclude-dropdown { position: relative; }
+.exclude-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+.exclude-menu.open { display: block; }
+.exclude-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.exclude-menu label:hover { background: var(--accent-dim); }
+.exclude-menu input { accent-color: var(--accent); }
 .assets-toolbar input {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1511,15 +1538,19 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="funzone">🎉 FunZone</option>
             <option value="hidden">🚫 Hidden (Private)</option>
             <option value="uncategorized">📁 Uncategorized (Series)</option>
-            <optgroup label="─ Exclude ─">
-              <option value="!hidden">🚫 Exclude Hidden</option>
-              <option value="!sermon">📖 Exclude Sermon</option>
-              <option value="!children">⭐ Exclude Children's</option>
-              <option value="!music">🎵 Exclude Music</option>
-              <option value="!performance">🎭 Exclude Performance</option>
-              <option value="!funzone">🎉 Exclude FunZone</option>
-            </optgroup>
           </select>
+          <div class="exclude-dropdown" id="exclude-dropdown">
+            <button class="btn btn-ghost btn-sm" id="exclude-btn" onclick="toggleExcludeMenu(event)">🚫 Exclude ▾</button>
+            <div class="exclude-menu" id="exclude-menu">
+              <label><input type="checkbox" value="hidden" onchange="filterAssets()"> 🚫 Hidden (Private)</label>
+              <label><input type="checkbox" value="sermon" onchange="filterAssets()"> 📖 Sermon</label>
+              <label><input type="checkbox" value="children" onchange="filterAssets()"> ⭐ Children's</label>
+              <label><input type="checkbox" value="music" onchange="filterAssets()"> 🎵 Music</label>
+              <label><input type="checkbox" value="performance" onchange="filterAssets()"> 🎭 Performance</label>
+              <label><input type="checkbox" value="funzone" onchange="filterAssets()"> 🎉 FunZone</label>
+              <label><input type="checkbox" value="uncategorized" onchange="filterAssets()"> 📁 Uncategorized</label>
+            </div>
+          </div>
           <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;">
             <input type="checkbox" id="asset-hide-series" onchange="filterAssets()" style="accent-color:var(--accent);"> Hide series
           </label>
@@ -3844,26 +3875,42 @@ async function loadAssets() {
   } catch { document.getElementById('assets-content').innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>Failed to load</p></div>'; }
 }
 
+function toggleExcludeMenu(e) {
+  e.stopPropagation();
+  document.getElementById('exclude-menu').classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('exclude-menu');
+  if (menu && menu.classList.contains('open') && !e.target.closest('.exclude-dropdown')) {
+    menu.classList.remove('open');
+  }
+});
+
+function getExcludedCats() {
+  return [...document.querySelectorAll('#exclude-menu input:checked')].map(cb => cb.value);
+}
+
 function filterAssets() {
   const q   = (document.getElementById('asset-search')?.value || '').toLowerCase();
   const cat = document.getElementById('asset-filter-cat')?.value || '';
   const hideSeries = document.getElementById('asset-hide-series')?.checked || false;
+  const excluded = getExcludedCats();
+  // Update exclude button label with count
+  const exBtn = document.getElementById('exclude-btn');
+  if (exBtn) exBtn.textContent = excluded.length ? `🚫 Exclude (${excluded.length}) ▾` : '🚫 Exclude ▾';
   const filtered = allAssets.filter(a => {
     const title   = (a.meta?.title || '').toLowerCase();
     const pt      = (a.passthrough || '').trim().toLowerCase();
     const ptData  = parsePassthrough(a.passthrough);
     const assetCat = (ptData.category || a.passthrough || '').trim().toLowerCase();
     if (hideSeries && !assetCat) return false;
-    const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
-    let matchCat;
-    if (!cat) {
-      matchCat = true;
-    } else if (cat.startsWith('!')) {
-      // Exclude mode: show everything EXCEPT this category
-      matchCat = assetCat !== cat.slice(1).toLowerCase();
-    } else {
-      matchCat = assetCat === cat.toLowerCase();
+    // Multi-exclude: hide any checked categories ('uncategorized' = empty category)
+    if (excluded.length) {
+      const effectiveCat = assetCat || 'uncategorized';
+      if (excluded.includes(effectiveCat)) return false;
     }
+    const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
+    const matchCat = !cat || assetCat === cat.toLowerCase();
     return matchQ && matchCat;
   });
   const countEl = document.getElementById('asset-count');
