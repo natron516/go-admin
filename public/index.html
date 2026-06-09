@@ -859,10 +859,10 @@ tr.dirty .at-save { display: inline-flex !important; }
   font-size: 12px;
   padding: 2px 5px;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--transition);
+  opacity: .85;
+  transition: opacity var(--transition), background var(--transition);
 }
-.at-thumb-wrap:hover .at-cam-btn { opacity: 1; }
+.at-thumb-wrap:hover .at-cam-btn { opacity: 1; background: var(--accent); }
 .thumb-custom-badge {
   position: absolute;
   top: 3px;
