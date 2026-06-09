@@ -2134,6 +2134,7 @@ app.get('/api/series/:id/episodes', async (req, res) => {
 // ── Featured Videos Config ─────────────────────────────
 app.get('/api/config/featured', async (req, res) => {
   try {
+    const db = admin.firestore();
     const doc = await db.collection('config').doc('featured').get();
     res.json({ ids: doc.exists ? (doc.data().ids || []) : [] });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2141,6 +2142,7 @@ app.get('/api/config/featured', async (req, res) => {
 
 app.put('/api/config/featured', async (req, res) => {
   try {
+    const db = admin.firestore();
     const { ids } = req.body;
     if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });
     await db.collection('config').doc('featured').set({ ids });
