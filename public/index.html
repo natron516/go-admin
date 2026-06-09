@@ -5998,6 +5998,22 @@ async function openAudioModal(audio) {
 function closeAudioModal() {
   document.getElementById('audio-modal').classList.remove('open');
   _editingAudioId = null;
+  // Reset upload state
+  _audioUploadFile = null;
+  _audioUploading = false;
+  _audioUploadedUrl = null;
+  const zone = document.getElementById('audio-upload-zone');
+  if (zone) zone.classList.remove('has-file');
+  const zoneText = document.getElementById('audio-upload-zone-text');
+  if (zoneText) zoneText.textContent = '\u{1F4C2} Click or drop audio/video file · MP3, M4A, MP4, MOV, WAV…';
+  const progressEl = document.getElementById('audio-upload-progress');
+  if (progressEl) progressEl.style.display = 'none';
+  const statusEl = document.getElementById('audio-upload-status');
+  if (statusEl) statusEl.textContent = '';
+  const fileInput = document.getElementById('audio-file-input');
+  if (fileInput) fileInput.value = '';
+  const saveBtn = document.getElementById('save-audio-btn');
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Audio'; }
 }
 
 function editAudio(id) {
@@ -6727,27 +6743,9 @@ async function pollMuxUpload(uploadId, assetId, resolve, reject) {
 }
 
 // Upload override removed — upload logic merged into saveAudio() directly
-
-// Also reset upload state when modal closes
-const _origCloseAudioModal = closeAudioModal;
-function closeAudioModal() {
-  _audioUploadFile = null;
-  _audioUploading = false;
-  _audioUploadedUrl = null;
-  const zone = document.getElementById('audio-upload-zone');
-  if (zone) zone.classList.remove('has-file');
-  const zoneText = document.getElementById('audio-upload-zone-text');
-  if (zoneText) zoneText.textContent = '&#128194; Click or drop audio/video file · MP3, M4A, MP4, MOV, WAV…';
-  const progressEl = document.getElementById('audio-upload-progress');
-  if (progressEl) progressEl.style.display = 'none';
-  const statusEl = document.getElementById('audio-upload-status');
-  if (statusEl) statusEl.textContent = '';
-  const fileInput = document.getElementById('audio-file-input');
-  if (fileInput) fileInput.value = '';
-  const saveBtn = document.getElementById('save-audio-btn');
-  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Audio'; }
-  _origCloseAudioModal();
-}
+// closeAudioModal override removed — hoisting made _origCloseAudioModal capture
+// the override itself (infinite recursion → Cancel button dead). Reset logic
+// now lives directly in closeAudioModal().
 
 // =============================================================
 // BATCH UPLOAD
