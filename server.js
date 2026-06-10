@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 56;
+const ADMIN_BUILD = 57;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -328,9 +328,21 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
   res.sendStatus(200);
 });
 
-// Kick off Mux subtitle generation for an asset if it has audio and no text track yet
+// Live stream IDs whose recordings are sermons (auto-transcription scope)
+const SERMON_STREAM_IDS = new Set([
+  'ECgSydhoD601OoMqVmiNvfH6y0100m8uENxk6KKJV4NSZQ',
+]);
+
+function isSermonAsset(asset) {
+  if (asset.live_stream_id && SERMON_STREAM_IDS.has(asset.live_stream_id)) return true;
+  const pt = parsePassthrough(asset.passthrough);
+  return (pt.category || '').toLowerCase().trim() === 'sermon';
+}
+
+// Kick off Mux subtitle generation for a SERMON asset if it has audio and no text track yet
 async function autoTranscribe(asset) {
   const assetId = asset.id;
+  if (!isSermonAsset(asset)) return; // sermons only
   const tracks = asset.tracks || [];
   if (tracks.some(t => t.type === 'text')) return; // already has/generating captions
   const audioTrack = tracks.find(t => t.type === 'audio');
@@ -355,7 +367,9 @@ async function mux(method, path, body) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return res.json();
+  const text = await res.text();
+  if (!text) return {}; // e.g. 204 No Content on DELETE
+  try { return JSON.parse(text); } catch { return { raw: text }; }
 }
 
 // Parse passthrough: supports plain string ("sermon") or JSON string
@@ -560,7 +574,7 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
   }
 });
 
-// Backfill: start transcription for ALL ready assets that don't have captions yet
+// Backfill: start transcription for ready SERMON assets that don't have captions yet
 app.post('/api/transcripts/backfill', async (req, res) => {
   try {
     let cursor = null, started = 0, skipped = 0, failed = 0;
@@ -570,6 +584,7 @@ app.post('/api/transcripts/backfill', async (req, res) => {
         : '/video/v1/assets?limit=100');
       for (const asset of data.data || []) {
         if (asset.status !== 'ready') { skipped++; continue; }
+        if (!isSermonAsset(asset)) { skipped++; continue; }
         const tracks = asset.tracks || [];
         if (tracks.some(t => t.type === 'text')) { skipped++; continue; }
         const audioTrack = tracks.find(t => t.type === 'audio');
@@ -587,6 +602,36 @@ app.post('/api/transcripts/backfill', async (req, res) => {
       if (data.next_cursor) cursor = data.next_cursor; else break;
     }
     res.json({ started, skipped, failed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cleanup: delete generated caption tracks from NON-sermon assets
+app.post('/api/transcripts/cleanup-non-sermons', async (req, res) => {
+  try {
+    let cursor = null, removed = 0, kept = 0, failed = 0;
+    while (true) {
+      const data = await mux('GET', cursor
+        ? `/video/v1/assets?limit=100&cursor=${encodeURIComponent(cursor)}`
+        : '/video/v1/assets?limit=100');
+      for (const asset of data.data || []) {
+        const textTracks = (asset.tracks || []).filter(t => t.type === 'text');
+        if (!textTracks.length) continue;
+        if (isSermonAsset(asset)) { kept += textTracks.length; continue; }
+        for (const tt of textTracks) {
+          try {
+            await mux('DELETE', `/video/v1/assets/${asset.id}/tracks/${tt.id}`);
+            removed++;
+          } catch (e) {
+            console.error(`[cleanup] ${asset.id}/${tt.id}: ${e.message}`);
+            failed++;
+          }
+        }
+      }
+      if (data.next_cursor) cursor = data.next_cursor; else break;
+    }
+    res.json({ removed, kept, failed });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
