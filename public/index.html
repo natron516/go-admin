@@ -2495,6 +2495,18 @@ tr.dirty .at-save { display: inline-flex !important; }
   </div>
 </div>
 
+<div class="modal-backdrop" id="transcript-modal" onclick="if(event.target===this)closeTranscriptModal()">
+  <div class="modal" style="max-width:720px;">
+    <h3 id="transcript-modal-title">📜 Transcript</h3>
+    <div id="transcript-body" style="max-height:60vh;overflow-y:auto;white-space:pre-wrap;line-height:1.6;font-size:14px;background:rgba(0,0,0,0.2);border-radius:8px;padding:16px;margin-top:12px;"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-ghost" onclick="closeTranscriptModal()">Close</button>
+      <button class="btn btn-ghost" id="transcript-copy-btn" onclick="copyTranscript()" style="display:none;">📋 Copy</button>
+      <a class="btn btn-primary" id="transcript-dl-btn" href="#" style="display:none;">⬇️ Download .txt</a>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <!-- ================================================================
@@ -3990,6 +4002,7 @@ function assetRowHtml(a) {
               <button class="btn btn-ghost btn-sm ${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'dl-ready' : ''}" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' ? 'Download MP4' : 'No MP4 available'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '✅' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
               ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
               ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
+              ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTranscript('${a.id}','${escAttr(title)}')" title="Transcript" id="tr-${a.id}">📜</button>` : ''}
               <span id="del-${a.id}" class="admin-only"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
             </div>
           </div>
@@ -4306,6 +4319,64 @@ async function notifyContent(contentType, contentId, title, imageUrl) {
 
 // ── Trim/Clip ───────────────────────────────────────────
 let trimState = { assetId: null, playbackId: null, duration: 0, startTime: 0, endTime: 0 };
+
+// ── Transcripts ───────────────────────────
+const _transcriptPolls = {};
+let _transcriptText = '';
+
+async function openTranscript(assetId, title) {
+  const modal = document.getElementById('transcript-modal');
+  const body = document.getElementById('transcript-body');
+  document.getElementById('transcript-modal-title').textContent = `📜 Transcript: ${title || 'Video'}`;
+  document.getElementById('transcript-copy-btn').style.display = 'none';
+  document.getElementById('transcript-dl-btn').style.display = 'none';
+  body.textContent = 'Checking transcript status…';
+  modal.classList.add('open');
+  await fetchTranscript(assetId);
+}
+
+async function fetchTranscript(assetId) {
+  const body = document.getElementById('transcript-body');
+  try {
+    const r = await fetch('/api/assets/' + assetId + '/transcript', { method: 'POST' });
+    const data = await r.json();
+    if (data.status === 'ready') {
+      if (_transcriptPolls[assetId]) { clearInterval(_transcriptPolls[assetId]); delete _transcriptPolls[assetId]; }
+      _transcriptText = data.text || '';
+      body.textContent = _transcriptText || '(Transcript is empty)';
+      document.getElementById('transcript-copy-btn').style.display = '';
+      const dl = document.getElementById('transcript-dl-btn');
+      dl.href = '/api/assets/' + assetId + '/transcript.txt';
+      dl.style.display = '';
+    } else if (data.status === 'preparing') {
+      body.textContent = '⏳ ' + (data.message || 'Transcription in progress…') + '\n\nThis window updates automatically — long sermons can take several minutes.';
+      if (!_transcriptPolls[assetId]) {
+        _transcriptPolls[assetId] = setInterval(() => {
+          if (!document.getElementById('transcript-modal').classList.contains('open')) {
+            clearInterval(_transcriptPolls[assetId]);
+            delete _transcriptPolls[assetId];
+            return;
+          }
+          fetchTranscript(assetId);
+        }, 15000);
+      }
+    } else {
+      if (_transcriptPolls[assetId]) { clearInterval(_transcriptPolls[assetId]); delete _transcriptPolls[assetId]; }
+      body.textContent = '❌ ' + (data.message || data.error || 'Transcript unavailable.');
+    }
+  } catch (e) {
+    body.textContent = '❌ Error: ' + e.message;
+  }
+}
+
+function closeTranscriptModal() {
+  document.getElementById('transcript-modal').classList.remove('open');
+  Object.keys(_transcriptPolls).forEach(k => { clearInterval(_transcriptPolls[k]); delete _transcriptPolls[k]; });
+}
+
+function copyTranscript() {
+  navigator.clipboard.writeText(_transcriptText).then(() => toast('Transcript copied 📋'), () => toast('Copy failed'));
+}
 
 function openTrimModal(assetId, playbackId, title, duration) {
   trimState = { assetId, playbackId, duration, startTime: 0, endTime: duration };

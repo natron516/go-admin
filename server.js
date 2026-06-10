@@ -477,6 +477,87 @@ app.patch('/api/assets/:id/thumbnail', async (req, res) => {
   }
 });
 
+// ── Transcripts ───────────────────────────────────────────────────────────────
+// Get or generate a transcript for an asset using Mux auto-generated captions.
+// POST returns { status: 'ready', text } | { status: 'preparing' } | { status: 'errored'|'unavailable', message }
+app.post('/api/assets/:id/transcript', async (req, res) => {
+  try {
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const asset = current.data;
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+
+    const pid = asset.playback_ids?.[0]?.id;
+    if (!pid) return res.status(400).json({ error: 'No playback ID' });
+
+    const tracks = asset.tracks || [];
+    const textTrack = tracks.find(t => t.type === 'text' && t.text_type === 'subtitles');
+
+    // No captions yet — kick off Mux auto-caption generation on the audio track
+    if (!textTrack) {
+      const audioTrack = tracks.find(t => t.type === 'audio');
+      if (!audioTrack) return res.json({ status: 'unavailable', message: 'No audio track on this asset.' });
+      try {
+        await mux('POST', `/video/v1/assets/${req.params.id}/tracks/${audioTrack.id}/generate-subtitles`, {
+          generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+        });
+        console.log(`[transcript] Started caption generation for ${req.params.id}`);
+        return res.json({ status: 'preparing', message: 'Transcription started — this takes a few minutes for long videos.' });
+      } catch (e) {
+        console.error(`[transcript] generate-subtitles failed: ${e.message}`);
+        return res.json({ status: 'errored', message: 'Could not start transcription: ' + e.message });
+      }
+    }
+
+    if (textTrack.status === 'preparing') {
+      return res.json({ status: 'preparing', message: 'Transcription in progress…' });
+    }
+    if (textTrack.status === 'errored') {
+      return res.json({ status: 'errored', message: 'Transcription failed for this asset.' });
+    }
+
+    // Ready — fetch plain-text transcript from Mux (fall back to VTT and strip cues)
+    const txtUrl = `https://stream.mux.com/${pid}/text/${textTrack.id}.txt`;
+    let r = await fetch(txtUrl);
+    let text;
+    if (r.ok) {
+      text = await r.text();
+    } else {
+      const vttRes = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+      if (!vttRes.ok) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
+      const vtt = await vttRes.text();
+      text = vtt
+        .split('\n')
+        .filter(line => !/^WEBVTT/.test(line) && !/-->/.test(line) && !/^\d+$/.test(line.trim()) && !/^(NOTE|STYLE|REGION)/.test(line))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+    res.json({ status: 'ready', text, trackId: textTrack.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Download transcript as a .txt attachment
+app.get('/api/assets/:id/transcript.txt', async (req, res) => {
+  try {
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const asset = current.data;
+    const pid = asset?.playback_ids?.[0]?.id;
+    const textTrack = (asset?.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
+    if (!pid || !textTrack) return res.status(404).send('Transcript not ready');
+    const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.txt`);
+    if (!r.ok) return res.status(502).send('Failed to fetch transcript');
+    const text = await r.text();
+    const title = (asset.meta?.title || 'transcript').replace(/[^a-z0-9 \-_]/gi, '').trim() || 'transcript';
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="${title}.txt"`);
+    res.send(text);
+  } catch (e) {
+    res.status(500).send(e.message);
+  }
+});
+
 // Debug: raw passthrough for all assets
 app.get('/api/debug/passthrough', async (req, res) => {
   try {
