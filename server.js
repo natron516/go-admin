@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 55;
+const ADMIN_BUILD = 56;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -316,8 +316,30 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     }
   }
 
+  // Auto-transcribe every asset when it becomes ready (live recordings AND uploads)
+  if (event.type === 'video.asset.ready') {
+    try {
+      await autoTranscribe(event.data);
+    } catch (err) {
+      console.error('[webhook] Auto-transcribe failed:', err.message);
+    }
+  }
+
   res.sendStatus(200);
 });
+
+// Kick off Mux subtitle generation for an asset if it has audio and no text track yet
+async function autoTranscribe(asset) {
+  const assetId = asset.id;
+  const tracks = asset.tracks || [];
+  if (tracks.some(t => t.type === 'text')) return; // already has/generating captions
+  const audioTrack = tracks.find(t => t.type === 'audio');
+  if (!audioTrack) return;
+  await mux('POST', `/video/v1/assets/${assetId}/tracks/${audioTrack.id}/generate-subtitles`, {
+    generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+  });
+  console.log(`[transcript] Auto-started transcription for ${assetId}`);
+}
 app.get('/api/build', (req, res) => res.json({ build: ADMIN_BUILD }));
 app.use(express.static('public', { maxAge: 0, etag: false, setHeaders: (res, path) => {
   if (path.endsWith('.html')) res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -533,6 +555,38 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
         .trim();
     }
     res.json({ status: 'ready', text, trackId: textTrack.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Backfill: start transcription for ALL ready assets that don't have captions yet
+app.post('/api/transcripts/backfill', async (req, res) => {
+  try {
+    let cursor = null, started = 0, skipped = 0, failed = 0;
+    while (true) {
+      const data = await mux('GET', cursor
+        ? `/video/v1/assets?limit=100&cursor=${encodeURIComponent(cursor)}`
+        : '/video/v1/assets?limit=100');
+      for (const asset of data.data || []) {
+        if (asset.status !== 'ready') { skipped++; continue; }
+        const tracks = asset.tracks || [];
+        if (tracks.some(t => t.type === 'text')) { skipped++; continue; }
+        const audioTrack = tracks.find(t => t.type === 'audio');
+        if (!audioTrack) { skipped++; continue; }
+        try {
+          await mux('POST', `/video/v1/assets/${asset.id}/tracks/${audioTrack.id}/generate-subtitles`, {
+            generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+          });
+          started++;
+        } catch (e) {
+          console.error(`[backfill] ${asset.id}: ${e.message}`);
+          failed++;
+        }
+      }
+      if (data.next_cursor) cursor = data.next_cursor; else break;
+    }
+    res.json({ started, skipped, failed });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
