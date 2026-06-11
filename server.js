@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 63;
+const ADMIN_BUILD = 64;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -662,9 +662,28 @@ function detectSermonStart(cues) {
     const uniq = new Set(texts.map(t => t.toLowerCase())).size / texts.length;
     return words >= 80 && avg >= 6 && uniq >= 0.7;
   };
+  // Moderate speech — used to walk the start back so we don't clip the sermon opening
+  // (scripture reading / soft-spoken intros can dip below the strict threshold)
+  const semiSpeechy = (b) => {
+    const texts = (buckets[b] || []).filter(Boolean);
+    if (!texts.length) return false;
+    const words = texts.reduce((n, t) => n + t.split(/\s+/).length, 0);
+    const avg = words / texts.length;
+    const uniq = new Set(texts.map(t => t.toLowerCase())).size / texts.length;
+    return words >= 30 && avg >= 5 && uniq >= 0.7;
+  };
   const maxB = Math.max(...Object.keys(buckets).map(Number), 0);
   for (let b = 0; b <= maxB - 2; b++) {
-    if (speechy(b) && speechy(b + 1) && speechy(b + 2)) return b * 60;
+    if (speechy(b) && speechy(b + 1) && speechy(b + 2)) {
+      // Lock-on found; walk back over any contiguous semi-speechy lead-in (up to 10 min)
+      let s = b;
+      let gap = 0;
+      for (let k = b - 1; k >= 0 && b - k <= 10; k--) {
+        if (semiSpeechy(k)) { s = k; gap = 0; }
+        else if (++gap > 1) break; // allow a single quiet minute inside the lead-in
+      }
+      return s * 60;
+    }
   }
   return 0; // detection failed — keep everything
 }
@@ -702,17 +721,30 @@ function reflowSentences(text) {
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ');
-  // Split into sentences on . ! ? followed by space + capital/quote/digit (keeps honorifics intact reasonably well)
-  const sentences = joined.match(/[^.!?]*[.!?]+(?:["')\]]+)?(?:\s|$)/g) || [joined];
+  // Split into sentences on . ! ? — but transcripts sometimes lack punctuation for long
+  // stretches, so any "sentence" longer than ~60 words gets force-chunked by word count.
+  const rawSentences = joined.match(/[^.!?]*[.!?]+(?:["')\]]+)?(?:\s|$)/g) || [];
+  const matchedLen = rawSentences.join('').length;
+  if (joined.length - matchedLen > 5) rawSentences.push(joined.slice(matchedLen)); // unpunctuated tail
+  const sentences = [];
+  for (const s of rawSentences) {
+    const words = s.trim().split(/\s+/).filter(Boolean);
+    if (words.length <= 60) {
+      if (words.length) sentences.push(words.join(' '));
+    } else {
+      for (let i = 0; i < words.length; i += 50) sentences.push(words.slice(i, i + 50).join(' '));
+    }
+  }
   const paras = [];
   let cur = [];
-  for (const s of sentences) {
-    const t = s.trim();
-    if (!t) continue;
+  let curWords = 0;
+  for (const t of sentences) {
     cur.push(t);
-    if (cur.length >= 4) {
+    curWords += t.split(/\s+/).length;
+    if (cur.length >= 4 || curWords >= 120) {
       paras.push(cur.join(' '));
       cur = [];
+      curWords = 0;
     }
   }
   if (cur.length) paras.push(cur.join(' '));
