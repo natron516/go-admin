@@ -1643,14 +1643,16 @@ app.patch('/api/users/:uid/block', adminOnly, async (req, res) => {
 });
 
 // Approve a pending registration (clears pendingApproval — app unlocks in real time)
+// Pass {"approved": false} to revert a user back to pending (for testing).
 app.patch('/api/users/:uid/approve', adminOnly, async (req, res) => {
   if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
   try {
+    const approved = req.body && req.body.approved === false ? false : true;
     await admin.firestore().collection('users').doc(req.params.uid).set(
-      { pendingApproval: false, approved: true, approvedAt: new Date().toISOString() },
+      { pendingApproval: !approved, approved, approvedAt: approved ? new Date().toISOString() : null },
       { merge: true }
     );
-    res.json({ ok: true, uid: req.params.uid, approved: true });
+    res.json({ ok: true, uid: req.params.uid, approved });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
