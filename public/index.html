@@ -2495,6 +2495,22 @@ tr.dirty .at-save { display: inline-flex !important; }
   </div>
 </div>
 
+<div class="modal-backdrop" id="refs-modal" onclick="if(event.target===this)closeRefsModal()">
+  <div class="modal" style="max-width:760px;">
+    <h3 id="refs-modal-title">📖 Scripture References</h3>
+    <div style="display:flex;gap:16px;margin-top:12px;">
+      <div id="refs-list" style="flex:0 0 270px;max-height:56vh;overflow-y:auto;"></div>
+      <div style="flex:1;min-width:0;">
+        <video id="refs-video" controls playsinline style="width:100%;border-radius:10px;background:#000;aspect-ratio:16/9;"></video>
+        <div id="refs-now" style="margin-top:8px;color:var(--muted);font-size:13px;"></div>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-ghost" onclick="closeRefsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="transcript-modal" onclick="if(event.target===this)closeTranscriptModal()">
   <div class="modal" style="max-width:720px;">
     <h3 id="transcript-modal-title">📜 Transcript</h3>
@@ -4006,7 +4022,8 @@ function assetRowHtml(a) {
                 const tt = (a.tracks || []).find(t => t.type === 'text');
                 const trReady = tt && tt.status === 'ready';
                 const trPrep = tt && tt.status === 'preparing';
-                return `<button class="btn btn-ghost btn-sm ${trReady ? 'dl-ready' : ''}" onclick="openTranscript('${a.id}','${escAttr(title)}')" title="${trReady ? 'View transcript' : trPrep ? 'Transcribing…' : 'Generate transcript'}" id="tr-${a.id}">${trPrep ? '<span class=dl-pulse>📜</span>' : '📜'}</button>`;
+                return `<button class="btn btn-ghost btn-sm ${trReady ? 'dl-ready' : ''}" onclick="openTranscript('${a.id}','${escAttr(title)}')" title="${trReady ? 'View transcript' : trPrep ? 'Transcribing…' : 'Generate transcript'}" id="tr-${a.id}">${trPrep ? '<span class=dl-pulse>📜</span>' : '📜'}</button>` +
+                  (trReady && pid ? `<button class="btn btn-ghost btn-sm" onclick="openScriptureRefs('${a.id}','${camPid}','${escAttr(title)}')" title="Scripture references">📖</button>` : '');
               })() : ''}
               <span id="del-${a.id}" class="admin-only"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
             </div>
@@ -4381,6 +4398,60 @@ function closeTranscriptModal() {
 
 function copyTranscript() {
   navigator.clipboard.writeText(_transcriptText).then(() => toast('Transcript copied 📋'), () => toast('Copy failed'));
+}
+
+// ── Scripture References ─────────────────────────
+let _refsHls = null;
+
+async function openScriptureRefs(assetId, playbackId, title) {
+  document.getElementById('refs-modal-title').textContent = `📖 Scripture References: ${title || 'Sermon'}`;
+  const list = document.getElementById('refs-list');
+  list.innerHTML = '<div style="color:var(--muted);padding:12px;">Scanning transcript…</div>';
+  document.getElementById('refs-now').textContent = '';
+  document.getElementById('refs-modal').classList.add('open');
+  // Set up the player (HLS via native or hls.js already used elsewhere — use native src for Safari, fallback basic)
+  const video = document.getElementById('refs-video');
+  video.src = `https://stream.mux.com/${playbackId}.m3u8`;
+  try {
+    const r = await fetch('/api/assets/' + assetId + '/scripture-refs');
+    const data = await r.json();
+    if (data.status === 'no-transcript') {
+      list.innerHTML = '<div style="color:var(--muted);padding:12px;">No transcript yet — generate one first with the 📜 button.</div>';
+      return;
+    }
+    if (!data.refs || !data.refs.length) {
+      list.innerHTML = '<div style="color:var(--muted);padding:12px;">No scripture references detected in this sermon.</div>';
+      return;
+    }
+    list.innerHTML = data.refs.map(ref => `
+      <div class="ref-row" onclick="jumpToRef(${ref.timestamp}, '${escAttr(ref.reference)}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border);">
+        <span style="font-weight:600;">${ref.reference}</span>
+        <span style="color:var(--accent2);font-variant-numeric:tabular-nums;font-size:13px;">${fmtRefTime(ref.timestamp)}</span>
+      </div>`).join('');
+  } catch (e) {
+    list.innerHTML = '<div style="color:var(--red);padding:12px;">Error: ' + e.message + '</div>';
+  }
+}
+
+function fmtRefTime(secs) {
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = Math.floor(secs % 60);
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+}
+
+function jumpToRef(secs, refName) {
+  const video = document.getElementById('refs-video');
+  // Start 5s early for context
+  const t = Math.max(0, secs - 5);
+  const doSeek = () => { video.currentTime = t; video.play().catch(() => {}); };
+  if (video.readyState >= 1) doSeek();
+  else video.addEventListener('loadedmetadata', doSeek, { once: true });
+  document.getElementById('refs-now').textContent = `▶ ${refName} @ ${fmtRefTime(secs)}`;
+}
+
+function closeRefsModal() {
+  document.getElementById('refs-modal').classList.remove('open');
+  const video = document.getElementById('refs-video');
+  video.pause(); video.removeAttribute('src'); video.load();
 }
 
 function openTrimModal(assetId, playbackId, title, duration) {

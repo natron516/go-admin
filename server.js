@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 57;
+const ADMIN_BUILD = 58;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -654,6 +654,125 @@ app.get('/api/assets/:id/transcript.txt', async (req, res) => {
     res.send(text);
   } catch (e) {
     res.status(500).send(e.message);
+  }
+});
+
+// ── Scripture Reference Extraction ───────────────────────────────────────────
+const BIBLE_BOOKS = '(?:Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|(?:1st|2nd|First|Second|1|2|I|II) Samuel|(?:1st|2nd|First|Second|1|2|I|II) Kings|(?:1st|2nd|First|Second|1|2|I|II) Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song of Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts|Romans|(?:1st|2nd|First|Second|1|2|I|II) Corinthians|Galatians|Ephesians|Philippians|Colossians|(?:1st|2nd|First|Second|1|2|I|II) Thessalonians|(?:1st|2nd|First|Second|1|2|I|II) Timothy|Titus|Philemon|Hebrews|James|(?:1st|2nd|First|Second|1|2|I|II) Peter|(?:1st|2nd|3rd|First|Second|Third|1|2|3|I|II|III) John|Jude|Revelation)';
+const SCRIPTURE_RE = new RegExp('\\b(' + BIBLE_BOOKS + ')\\s+(?:chapter\\s+)?(\\d{1,3})(?:\\s*[:,]\\s*|\\s+(?:and\\s+)?verses?\\s+)(\\d{1,3})(?:\\s*[-\u2013]\\s*(\\d{1,3}))?', 'gi');
+
+// Normalize spoken book names: "First Peter"/"1st Peter"/"I Peter" → "1 Peter"
+function normalizeBook(book) {
+  return book
+    .replace(/^(?:First|1st|I)\s+/i, '1 ')
+    .replace(/^(?:Second|2nd|II)\s+/i, '2 ')
+    .replace(/^(?:Third|3rd|III)\s+/i, '3 ')
+    .replace(/^Psalm$/i, 'Psalms')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/ Of /g, ' of ');
+}
+
+// Parse a Mux VTT transcript into [{start, text}] cues
+function parseVtt(vtt) {
+  const cues = [];
+  for (const block of vtt.split(/\n\n+/)) {
+    const lines = block.trim().split('\n').filter(Boolean);
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/(\d+):(\d+):([\d.]+)\s*-->/);
+      if (m) {
+        const start = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
+        cues.push({ start, text: lines.slice(i + 1).join(' ') });
+        break;
+      }
+    }
+  }
+  return cues;
+}
+
+// Extract scripture references with timestamps from an asset's transcript
+async function extractScriptureRefs(asset) {
+  const pid = asset.playback_ids?.[0]?.id;
+  const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
+  if (!pid || !textTrack) return null; // transcript not ready
+  const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+  if (!r.ok) throw new Error('VTT fetch failed: ' + r.status);
+  const cues = parseVtt(await r.text());
+  // Scan cues in overlapping pairs so refs split across cue boundaries are caught
+  const refs = [];
+  const seen = new Set();
+  for (let i = 0; i < cues.length; i++) {
+    const text = cues[i].text + ' ' + (cues[i + 1]?.text || '');
+    SCRIPTURE_RE.lastIndex = 0;
+    let m;
+    while ((m = SCRIPTURE_RE.exec(cues[i].text + ' ' + (i + 1 < cues.length ? cues[i + 1].text : ''))) !== null) {
+      // Only attribute to this cue if the match starts within this cue's text
+      if (m.index >= cues[i].text.length) continue;
+      const book = normalizeBook(m[1]);
+      const chapter = +m[2], verse = +m[3], verseEnd = m[4] ? +m[4] : null;
+      const refStr = `${book} ${chapter}:${verse}` + (verseEnd ? `-${verseEnd}` : '');
+      // De-dupe identical refs within 60s
+      const key = refStr + '|' + Math.floor(cues[i].start / 60);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      refs.push({ reference: refStr, book, chapter, verse, verseEnd, timestamp: Math.round(cues[i].start), spoken: m[0] });
+    }
+  }
+  return refs;
+}
+
+// Get scripture references for one asset (with caching in server memory)
+const _refsCache = {}; // assetId -> { refs, at }
+app.get('/api/assets/:id/scripture-refs', async (req, res) => {
+  try {
+    const cached = _refsCache[req.params.id];
+    if (cached && Date.now() - cached.at < 60 * 60 * 1000) return res.json({ status: 'ready', refs: cached.refs });
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    if (!current.data) return res.status(404).json({ error: 'Asset not found' });
+    const refs = await extractScriptureRefs(current.data);
+    if (refs === null) return res.json({ status: 'no-transcript', refs: [] });
+    _refsCache[req.params.id] = { refs, at: Date.now() };
+    res.json({ status: 'ready', refs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Export ALL sermons' scripture references (for the Bible app)
+// Returns [{ assetId, playbackId, title, date, refs: [{reference, book, chapter, verse, timestamp}] }]
+app.get('/api/scripture-index', async (req, res) => {
+  try {
+    let cursor = null;
+    const out = [];
+    while (true) {
+      const data = await mux('GET', cursor
+        ? `/video/v1/assets?limit=100&cursor=${encodeURIComponent(cursor)}`
+        : '/video/v1/assets?limit=100');
+      for (const asset of data.data || []) {
+        if (asset.status !== 'ready' || !isSermonAsset(asset)) continue;
+        try {
+          const cached = _refsCache[asset.id];
+          const refs = (cached && Date.now() - cached.at < 60 * 60 * 1000)
+            ? cached.refs
+            : await extractScriptureRefs(asset);
+          if (refs === null) continue;
+          _refsCache[asset.id] = { refs, at: Date.now() };
+          out.push({
+            assetId: asset.id,
+            playbackId: asset.playback_ids?.[0]?.id || null,
+            title: asset.meta?.title || 'Untitled',
+            date: asset.created_at ? new Date(asset.created_at * 1000).toISOString().slice(0, 10) : null,
+            duration: asset.duration || null,
+            refs,
+          });
+        } catch (e) {
+          console.error(`[scripture-index] ${asset.id}: ${e.message}`);
+        }
+      }
+      if (data.next_cursor) cursor = data.next_cursor; else break;
+    }
+    res.json({ sermons: out, generatedAt: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
