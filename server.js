@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 60;
+const ADMIN_BUILD = 61;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -551,23 +551,11 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
       return res.json({ status: 'errored', message: 'Transcription failed for this asset.' });
     }
 
-    // Ready — fetch plain-text transcript from Mux (fall back to VTT and strip cues)
-    const txtUrl = `https://stream.mux.com/${pid}/text/${textTrack.id}.txt`;
-    let r = await fetch(txtUrl);
-    let text;
-    if (r.ok) {
-      text = (await buildRefsHeader(asset)) + cleanTranscript(await r.text());
-    } else {
-      const vttRes = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
-      if (!vttRes.ok) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
-      const vtt = await vttRes.text();
-      text = cleanTranscript(vtt
-        .split('\n')
-        .filter(line => !/^WEBVTT/.test(line) && !/-->/.test(line) && !/^\d+$/.test(line.trim()) && !/^(NOTE|STYLE|REGION)/.test(line))
-        .join('\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim());
-    }
+    // Ready — build cleaned transcript (music + singing removed) with refs header
+    const clean = await buildCleanTranscript(asset);
+    if (!clean) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
+    const note = clean.sermonStart > 0 ? `(Pre-sermon music/singing removed — sermon begins ~${fmtTimestamp(clean.sermonStart)} in the recording)\n\n` : '';
+    const text = (await buildRefsHeader(asset)) + note + clean.text;
     res.json({ status: 'ready', text, trackId: textTrack.id });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -655,6 +643,55 @@ async function fetchKjvText(ref) {
   }
 }
 
+// Detect where continuous preaching begins in a VTT cue list.
+// Singing/music sections have sparse, short, repetitive cues; preaching is dense
+// (>=80 words/min), long sentences (>=6 words/cue), and non-repetitive (>=70% unique cues).
+// Returns the start time (s) of the first run of 3 consecutive "speechy" minutes, or 0 if not found.
+function detectSermonStart(cues) {
+  const buckets = {};
+  for (const c of cues) {
+    const text = c.text.replace(/[♪♫]/g, '').replace(/[\[\(][^\]\)]*[\]\)]/g, '').trim();
+    const b = Math.floor(c.start / 60);
+    (buckets[b] = buckets[b] || []).push(text);
+  }
+  const speechy = (b) => {
+    const texts = (buckets[b] || []).filter(Boolean);
+    if (!texts.length) return false;
+    const words = texts.reduce((n, t) => n + t.split(/\s+/).length, 0);
+    const avg = words / texts.length;
+    const uniq = new Set(texts.map(t => t.toLowerCase())).size / texts.length;
+    return words >= 80 && avg >= 6 && uniq >= 0.7;
+  };
+  const maxB = Math.max(...Object.keys(buckets).map(Number), 0);
+  for (let b = 0; b <= maxB - 2; b++) {
+    if (speechy(b) && speechy(b + 1) && speechy(b + 2)) return b * 60;
+  }
+  return 0; // detection failed — keep everything
+}
+
+// Build a cleaned transcript (music stripped, singing portion removed) from an asset's VTT.
+// Returns { text, sermonStart } or null if no transcript ready.
+async function buildCleanTranscript(asset) {
+  const pid = asset.playback_ids?.[0]?.id;
+  const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
+  if (!pid || !textTrack) return null;
+  const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+  if (!r.ok) throw new Error('VTT fetch failed: ' + r.status);
+  const cues = parseVtt(await r.text());
+  const sermonStart = detectSermonStart(cues);
+  // De-duplicate consecutive identical cues (Mux VTT often repeats lines)
+  const parts = [];
+  let prev = null;
+  for (const c of cues) {
+    if (c.start < sermonStart) continue;
+    const t = c.text.trim();
+    if (!t || t === prev) continue;
+    parts.push(t);
+    prev = t;
+  }
+  return { text: cleanTranscript(parts.join('\n')), sermonStart };
+}
+
 // Strip music/non-speech noise from a transcript: ♪ lines, [MUSIC PLAYING], (Applause), [BLANK_AUDIO], etc.
 function cleanTranscript(text) {
   return text
@@ -708,14 +745,14 @@ app.get('/api/assets/:id/transcript.txt', async (req, res) => {
     const pid = asset?.playback_ids?.[0]?.id;
     const textTrack = (asset?.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
     if (!pid || !textTrack) return res.status(404).send('Transcript not ready');
-    const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.txt`);
-    if (!r.ok) return res.status(502).send('Failed to fetch transcript');
-    const text = await r.text();
+    const clean = await buildCleanTranscript(asset);
+    if (!clean) return res.status(404).send('Transcript not ready');
     const header = await buildRefsHeader(asset);
+    const note = clean.sermonStart > 0 ? `(Pre-sermon music/singing removed — sermon begins ~${fmtTimestamp(clean.sermonStart)} in the recording)\n\n` : '';
     const title = (asset.meta?.title || 'transcript').replace(/[^a-z0-9 \-_]/gi, '').trim() || 'transcript';
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Content-Disposition', `attachment; filename="${title}.txt"`);
-    res.send(header + cleanTranscript(text));
+    res.send(header + note + clean.text);
   } catch (e) {
     res.status(500).send(e.message);
   }
