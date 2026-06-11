@@ -4804,6 +4804,9 @@ function renderUsers(users) {
     const privateBtn = u.privateAccess
       ? `<button class="btn btn-ghost btn-sm" onclick="setUserPrivateAccess('${u.uid}',false)" title="Revoke private content access">🔓 Revoke Private</button>`
       : `<button class="btn btn-primary btn-sm" onclick="setUserPrivateAccess('${u.uid}',true)" title="Grant private content access">🔒 Grant Private</button>`;
+    const approveBtn = u.pendingApproval && !u.disabled
+      ? `<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="approveUser('${u.uid}')" title="Approve this registration">✅ Approve</button>`
+      : '';
     return `<tr class="${u.disabled?'blocked':''}">
       <td><div style="display:flex;align-items:center;gap:8px">${avatar}<div><div class="user-name">${escHtml(u.displayName||'(no name)')}</div><div class="user-email">${escHtml(u.email||'no email')}</div></div></div></td>
       <td><span class="user-provider">${providerLabel}</span></td>
@@ -4813,8 +4816,8 @@ function renderUsers(users) {
       <td style="font-size:13px;color:var(--text)">${u.appMinutes ? (u.appMinutes >= 60 ? Math.floor(u.appMinutes/60) + 'h ' + (u.appMinutes%60) + 'm' : u.appMinutes + ' min') + ' <span style="font-size:11px;color:var(--muted)">(' + u.sessionCount + ' sessions)</span>' : '—'}</td>
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
-      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>'} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" title="Revoke portal editor access" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')" title="Grant portal editor access">✏️ Make Editor</button>`) : ''}</td>
+      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" title="Revoke portal editor access" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')" title="Grant portal editor access">✏️ Make Editor</button>`) : ''}</td>
     </tr>`;
   }).join('');
 
@@ -4828,7 +4831,9 @@ function renderUsers(users) {
       const platformBadges = pp.map(p => `<span style="color:${colorOf(p)}">${p}</span>`).join('');
       const statusBadge = u.disabled
         ? '<span class="user-blocked-badge">🚫 Blocked</span>'
-        : '<span style="font-size:11px;color:var(--green);font-weight:600">✓ Active</span>';
+        : (u.pendingApproval
+          ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>'
+          : '<span style="font-size:11px;color:var(--green);font-weight:600">✓ Active</span>');
       const privateBadge = u.privateAccess ? ' <span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px">🔒 Private</span>' : '';
       const blockBtn = u.disabled
         ? `<button class="btn btn-ghost btn-sm" onclick="setUserBlocked('${u.uid}',false)">✅ Unblock</button>`
@@ -4836,6 +4841,9 @@ function renderUsers(users) {
       const privateBtn = u.privateAccess
         ? `<button class="btn btn-ghost btn-sm" onclick="setUserPrivateAccess('${u.uid}',false)">🔓 Revoke Private</button>`
         : `<button class="btn btn-primary btn-sm" onclick="setUserPrivateAccess('${u.uid}',true)">🔒 Grant Private</button>`;
+      const approveBtn = u.pendingApproval && !u.disabled
+        ? `<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="approveUser('${u.uid}')">✅ Approve</button>`
+        : '';
       const watchInfo = u.minutesWatched ? `<span>🎬 ${u.minutesWatched} min</span>` : '';
       const appInfo = u.appMinutes ? `<span>📱 ${u.appMinutes >= 60 ? Math.floor(u.appMinutes/60) + 'h ' + (u.appMinutes%60) + 'm' : u.appMinutes + 'm'}</span>` : '';
       const joined = u.createdAt ? `<span>Joined ${fmtDt(u.createdAt)}</span>` : '';
@@ -4856,7 +4864,7 @@ function renderUsers(users) {
           ${joined}
         </div>
         <div class="user-card-actions">
-          ${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')">✏️ Make Editor</button>`) : ''}
+          ${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')">✏️ Make Editor</button>`) : ''}
         </div>
       </div>`;
     }).join('');
@@ -4915,6 +4923,25 @@ async function savePin() {
     toast(`🔒 PIN updated to ${pin}`);
   } catch(e) {
     if (status) status.textContent = 'Save failed: ' + e.message;
+    toast('Failed: ' + e.message);
+  }
+}
+
+async function approveUser(uid) {
+  try {
+    const r = await fetch(`/api/users/${uid}/approve`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: true }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const u = allUsers.find(x => x.uid === uid);
+    if (u) u.pendingApproval = false;
+    const q = document.getElementById('user-search')?.value || '';
+    filterUsers(q);
+    toast('✅ User approved');
+  } catch (e) {
     toast('Failed: ' + e.message);
   }
 }

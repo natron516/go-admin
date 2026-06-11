@@ -1568,13 +1568,15 @@ app.get('/api/users', async (req, res) => {
       console.warn('Mux watch time lookup failed:', e.message);
     }
 
-    // Look up privateAccess from Firestore users collection
+    // Look up privateAccess + pendingApproval from Firestore users collection
     const privateMap = {};
+    const pendingMap = {};
     try {
       const privateSnap = await admin.firestore().collection('users').get();
       privateSnap.forEach(doc => {
         const d = doc.data();
         if (d.privateAccess) privateMap[doc.id] = true;
+        if (d.pendingApproval) pendingMap[doc.id] = true;
       });
     } catch (e) {
       console.warn('Private access lookup failed:', e.message);
@@ -1584,6 +1586,7 @@ app.get('/api/users', async (req, res) => {
       u.platforms = platformsMap[u.uid] ? [...platformsMap[u.uid]] : [];
       u.minutesWatched = watchMap[u.uid] || 0;
       u.privateAccess = !!privateMap[u.uid];
+      u.pendingApproval = !!pendingMap[u.uid];
       u.appVersion = appVersionMap[u.uid] || null;
       u.appMinutes = Math.round((sessionTimeMap[u.uid] || 0) / 60);
       u.sessionCount = sessionCountMap[u.uid] || 0;
