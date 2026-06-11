@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 59;
+const ADMIN_BUILD = 60;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -556,17 +556,17 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
     let r = await fetch(txtUrl);
     let text;
     if (r.ok) {
-      text = (await buildRefsHeader(asset)) + await r.text();
+      text = (await buildRefsHeader(asset)) + cleanTranscript(await r.text());
     } else {
       const vttRes = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
       if (!vttRes.ok) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
       const vtt = await vttRes.text();
-      text = vtt
+      text = cleanTranscript(vtt
         .split('\n')
         .filter(line => !/^WEBVTT/.test(line) && !/-->/.test(line) && !/^\d+$/.test(line.trim()) && !/^(NOTE|STYLE|REGION)/.test(line))
         .join('\n')
         .replace(/\n{3,}/g, '\n\n')
-        .trim();
+        .trim());
     }
     res.json({ status: 'ready', text, trackId: textTrack.id });
   } catch (e) {
@@ -655,6 +655,23 @@ async function fetchKjvText(ref) {
   }
 }
 
+// Strip music/non-speech noise from a transcript: ♪ lines, [MUSIC PLAYING], (Applause), [BLANK_AUDIO], etc.
+function cleanTranscript(text) {
+  return text
+    .split('\n')
+    .filter(line => {
+      const t = line.trim();
+      if (!t) return true; // keep blank lines for now, collapsed below
+      if (/^[\s♪♫\*\-~]+$/.test(t)) return false;                      // music-note-only lines
+      if (/^[\[\(]\s*(music|applause|laughter|blank[_ ]?audio|singing|instrumental|inaudible|silence)[^\]\)]*[\]\)]$/i.test(t)) return false; // [MUSIC PLAYING], (Applause)...
+      return true;
+    })
+    .join('\n')
+    .replace(/[♪♫]/g, '')           // stray notes inside lines
+    .replace(/\n{3,}/g, '\n\n')     // collapse runs of blank lines
+    .replace(/^\s+/, '');           // trim leading whitespace/newlines
+}
+
 function fmtTimestamp(secs) {
   const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = Math.floor(secs % 60);
   return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0');
@@ -698,7 +715,7 @@ app.get('/api/assets/:id/transcript.txt', async (req, res) => {
     const title = (asset.meta?.title || 'transcript').replace(/[^a-z0-9 \-_]/gi, '').trim() || 'transcript';
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Content-Disposition', `attachment; filename="${title}.txt"`);
-    res.send(header + text);
+    res.send(header + cleanTranscript(text));
   } catch (e) {
     res.status(500).send(e.message);
   }
