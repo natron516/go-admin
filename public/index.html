@@ -2514,7 +2514,13 @@ tr.dirty .at-save { display: inline-flex !important; }
 <div class="modal-backdrop" id="transcript-modal" onclick="if(event.target===this)closeTranscriptModal()">
   <div class="modal" style="max-width:720px;">
     <h3 id="transcript-modal-title">📜 Transcript</h3>
-    <div id="transcript-body" style="max-height:60vh;overflow-y:auto;white-space:pre-wrap;line-height:1.6;font-size:14px;background:rgba(0,0,0,0.2);border-radius:8px;padding:16px;margin-top:12px;"></div>
+    <div id="transcript-search-bar" style="display:none;align-items:center;gap:8px;margin-top:12px;">
+      <input type="text" id="transcript-search" placeholder="🔍 Search transcript…" oninput="transcriptSearch()" onkeydown="if(event.key==='Enter'){event.shiftKey?transcriptPrev():transcriptNext();}" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:14px;outline:none;">
+      <span id="transcript-search-count" style="color:var(--muted);font-size:13px;min-width:54px;text-align:center;font-variant-numeric:tabular-nums;"></span>
+      <button class="btn btn-ghost btn-sm" onclick="transcriptPrev()" title="Previous match (Shift+Enter)">▲</button>
+      <button class="btn btn-ghost btn-sm" onclick="transcriptNext()" title="Next match (Enter)">▼</button>
+    </div>
+    <div id="transcript-body" style="max-height:56vh;overflow-y:auto;white-space:pre-wrap;line-height:1.6;font-size:14px;background:rgba(0,0,0,0.2);border-radius:8px;padding:16px;margin-top:10px;"></div>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn btn-ghost" onclick="closeTranscriptModal()">Close</button>
       <button class="btn btn-ghost" id="transcript-copy-btn" onclick="copyTranscript()" style="display:none;">📋 Copy</button>
@@ -4352,6 +4358,9 @@ async function openTranscript(assetId, title) {
   document.getElementById('transcript-modal-title').textContent = `📜 Transcript: ${title || 'Video'}`;
   document.getElementById('transcript-copy-btn').style.display = 'none';
   document.getElementById('transcript-dl-btn').style.display = 'none';
+  document.getElementById('transcript-search-bar').style.display = 'none';
+  document.getElementById('transcript-search').value = '';
+  document.getElementById('transcript-search-count').textContent = '';
   body.textContent = 'Checking transcript status…';
   modal.classList.add('open');
   await fetchTranscript(assetId);
@@ -4366,6 +4375,7 @@ async function fetchTranscript(assetId) {
       if (_transcriptPolls[assetId]) { clearInterval(_transcriptPolls[assetId]); delete _transcriptPolls[assetId]; }
       _transcriptText = data.text || '';
       body.textContent = _transcriptText || '(Transcript is empty)';
+      if (_transcriptText) document.getElementById('transcript-search-bar').style.display = 'flex';
       document.getElementById('transcript-copy-btn').style.display = '';
       const dl = document.getElementById('transcript-dl-btn');
       dl.href = '/api/assets/' + assetId + '/transcript.txt';
@@ -4398,6 +4408,62 @@ function closeTranscriptModal() {
 
 function copyTranscript() {
   navigator.clipboard.writeText(_transcriptText).then(() => toast('Transcript copied 📋'), () => toast('Copy failed'));
+}
+
+// ── Transcript word search ───────────────────────
+let _searchMatches = [];
+let _searchIdx = -1;
+
+function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function transcriptSearch() {
+  const q = document.getElementById('transcript-search').value.trim();
+  const body = document.getElementById('transcript-body');
+  _searchMatches = []; _searchIdx = -1;
+  if (!q) {
+    body.textContent = _transcriptText;
+    document.getElementById('transcript-search-count').textContent = '';
+    return;
+  }
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  let html = '';
+  let last = 0;
+  let m;
+  let i = 0;
+  while ((m = re.exec(_transcriptText)) !== null) {
+    html += escHtml(_transcriptText.slice(last, m.index));
+    html += `<mark id="tsm-${i}" style="background:#f59e0b55;color:inherit;border-radius:3px;padding:0 1px;">${escHtml(m[0])}</mark>`;
+    last = m.index + m[0].length;
+    i++;
+    if (i > 2000) break; // safety
+  }
+  html += escHtml(_transcriptText.slice(last));
+  body.innerHTML = html;
+  _searchMatches = Array.from({ length: i }, (_, k) => 'tsm-' + k);
+  if (i > 0) { _searchIdx = 0; focusMatch(); }
+  else document.getElementById('transcript-search-count').textContent = '0/0';
+}
+
+function focusMatch() {
+  _searchMatches.forEach((id, k) => {
+    const el = document.getElementById(id);
+    if (el) el.style.background = k === _searchIdx ? '#f59e0b' : '#f59e0b55';
+  });
+  const el = document.getElementById(_searchMatches[_searchIdx]);
+  if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  document.getElementById('transcript-search-count').textContent = (_searchIdx + 1) + '/' + _searchMatches.length;
+}
+
+function transcriptNext() {
+  if (!_searchMatches.length) return;
+  _searchIdx = (_searchIdx + 1) % _searchMatches.length;
+  focusMatch();
+}
+
+function transcriptPrev() {
+  if (!_searchMatches.length) return;
+  _searchIdx = (_searchIdx - 1 + _searchMatches.length) % _searchMatches.length;
+  focusMatch();
 }
 
 // ── Scripture References ─────────────────────────
