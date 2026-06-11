@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 61;
+const ADMIN_BUILD = 62;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -689,7 +689,34 @@ async function buildCleanTranscript(asset) {
     parts.push(t);
     prev = t;
   }
-  return { text: cleanTranscript(parts.join('\n')), sermonStart };
+  return { text: reflowSentences(cleanTranscript(parts.join('\n'))), sermonStart };
+}
+
+// Reflow caption-cue lines into complete sentences and readable paragraphs.
+// Cue boundaries split sentences mid-stream; join everything, then break on
+// sentence endings, grouping ~4 sentences per paragraph.
+function reflowSentences(text) {
+  const joined = text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ');
+  // Split into sentences on . ! ? followed by space + capital/quote/digit (keeps honorifics intact reasonably well)
+  const sentences = joined.match(/[^.!?]*[.!?]+(?:["')\]]+)?(?:\s|$)/g) || [joined];
+  const paras = [];
+  let cur = [];
+  for (const s of sentences) {
+    const t = s.trim();
+    if (!t) continue;
+    cur.push(t);
+    if (cur.length >= 4) {
+      paras.push(cur.join(' '));
+      cur = [];
+    }
+  }
+  if (cur.length) paras.push(cur.join(' '));
+  return paras.join('\n\n');
 }
 
 // Strip music/non-speech noise from a transcript: ♪ lines, [MUSIC PLAYING], (Applause), [BLANK_AUDIO], etc.
