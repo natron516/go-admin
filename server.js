@@ -1642,6 +1642,20 @@ app.patch('/api/users/:uid/block', adminOnly, async (req, res) => {
   }
 });
 
+// Approve a pending registration (clears pendingApproval — app unlocks in real time)
+app.patch('/api/users/:uid/approve', adminOnly, async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    await admin.firestore().collection('users').doc(req.params.uid).set(
+      { pendingApproval: false, approved: true, approvedAt: new Date().toISOString() },
+      { merge: true }
+    );
+    res.json({ ok: true, uid: req.params.uid, approved: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Grant or revoke private content access
 app.patch('/api/users/:uid/private-access', async (req, res) => {
   if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
