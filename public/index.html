@@ -1235,6 +1235,7 @@ tr.dirty .at-save { display: inline-flex !important; }
 .audio-upload-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.1s; width: 0%; }
 </style>
 <!-- Firebase (compat — works with onclick handlers) -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
@@ -4468,6 +4469,25 @@ function transcriptPrev() {
 
 // ── Scripture References ─────────────────────────
 let _refsHls = null;
+let _trimHls = null;
+
+// Attach a Mux HLS stream to a <video>, using hls.js when native HLS isn't supported (Chrome/Firefox/Edge)
+function attachHls(video, playbackId, existingHls) {
+  if (existingHls) { try { existingHls.destroy(); } catch (e) {} }
+  const url = `https://stream.mux.com/${playbackId}.m3u8`;
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = url;
+    return null;
+  }
+  if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    return hls;
+  }
+  video.src = url; // last resort
+  return null;
+}
 
 async function openScriptureRefs(assetId, playbackId, title) {
   document.getElementById('refs-modal-title').textContent = `📖 Scripture References: ${title || 'Sermon'}`;
@@ -4477,7 +4497,7 @@ async function openScriptureRefs(assetId, playbackId, title) {
   document.getElementById('refs-modal').classList.add('open');
   // Set up the player (HLS via native or hls.js already used elsewhere — use native src for Safari, fallback basic)
   const video = document.getElementById('refs-video');
-  video.src = `https://stream.mux.com/${playbackId}.m3u8`;
+  _refsHls = attachHls(video, playbackId, _refsHls);
   try {
     const r = await fetch('/api/assets/' + assetId + '/scripture-refs');
     const data = await r.json();
@@ -4517,14 +4537,16 @@ function jumpToRef(secs, refName) {
 function closeRefsModal() {
   document.getElementById('refs-modal').classList.remove('open');
   const video = document.getElementById('refs-video');
-  video.pause(); video.removeAttribute('src'); video.load();
+  video.pause();
+  if (_refsHls) { try { _refsHls.destroy(); } catch (e) {} _refsHls = null; }
+  video.removeAttribute('src'); video.load();
 }
 
 function openTrimModal(assetId, playbackId, title, duration) {
   trimState = { assetId, playbackId, duration, startTime: 0, endTime: duration };
   document.getElementById('trim-modal-title').textContent = `✂️ Trim: ${title || 'Video'}`;
   const video = document.getElementById('trim-video');
-  video.src = `https://stream.mux.com/${playbackId}.m3u8`;
+  _trimHls = attachHls(video, playbackId, _trimHls);
   video.currentTime = 0;
   document.getElementById('trim-start').value = fmtTime(0);
   document.getElementById('trim-end').value = fmtTime(duration);
@@ -4540,7 +4562,9 @@ function openTrimModal(assetId, playbackId, title, duration) {
 function closeTrimModal() {
   document.getElementById('trim-modal').classList.remove('open');
   const video = document.getElementById('trim-video');
-  video.pause(); video.src = ''; video.ontimeupdate = null;
+  video.pause();
+  if (_trimHls) { try { _trimHls.destroy(); } catch (e) {} _trimHls = null; }
+  video.removeAttribute('src'); video.load(); video.ontimeupdate = null;
 }
 
 function fmtTime(s) {
