@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 58;
+const ADMIN_BUILD = 59;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -556,7 +556,7 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
     let r = await fetch(txtUrl);
     let text;
     if (r.ok) {
-      text = await r.text();
+      text = (await buildRefsHeader(asset)) + await r.text();
     } else {
       const vttRes = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
       if (!vttRes.ok) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
@@ -637,7 +637,53 @@ app.post('/api/transcripts/cleanup-non-sermons', async (req, res) => {
   }
 });
 
-// Download transcript as a .txt attachment
+// Fetch KJV verse text for a reference like "2 Timothy 4:1-3" (cached)
+const _kjvCache = {}; // reference -> text
+async function fetchKjvText(ref) {
+  if (_kjvCache[ref] !== undefined) return _kjvCache[ref];
+  try {
+    const q = encodeURIComponent(ref.replace(/\s+/g, ' '));
+    const r = await fetch(`https://bible-api.com/${q}?translation=kjv`);
+    if (!r.ok) { _kjvCache[ref] = null; return null; }
+    const d = await r.json();
+    const text = (d.text || '').replace(/\s*\n\s*/g, ' ').trim();
+    _kjvCache[ref] = text || null;
+    return _kjvCache[ref];
+  } catch {
+    _kjvCache[ref] = null;
+    return null;
+  }
+}
+
+function fmtTimestamp(secs) {
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = Math.floor(secs % 60);
+  return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0');
+}
+
+// Build the "Scripture References" header block for a transcript
+async function buildRefsHeader(asset) {
+  try {
+    const refs = await extractScriptureRefs(asset);
+    if (!refs || !refs.length) return '';
+    // De-dupe by reference string for the header list (keep first timestamp)
+    const seen = new Set();
+    const unique = refs.filter(r => !seen.has(r.reference) && seen.add(r.reference));
+    const lines = ['SCRIPTURE REFERENCES', '====================', ''];
+    for (const ref of unique) {
+      const verse = await fetchKjvText(ref.reference);
+      lines.push(`[${fmtTimestamp(ref.timestamp)}] ${ref.reference}`);
+      if (verse) lines.push(`  "${verse}" (KJV)`);
+      lines.push('');
+    }
+    lines.push('====================', 'TRANSCRIPT', '====================', '');
+    return lines.join('\n');
+  } catch (e) {
+    console.error('[transcript] refs header failed:', e.message);
+    return '';
+  }
+}
+
+// Download transcript as a .txt attachment (with scripture reference header)
 app.get('/api/assets/:id/transcript.txt', async (req, res) => {
   try {
     const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
@@ -648,10 +694,11 @@ app.get('/api/assets/:id/transcript.txt', async (req, res) => {
     const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.txt`);
     if (!r.ok) return res.status(502).send('Failed to fetch transcript');
     const text = await r.text();
+    const header = await buildRefsHeader(asset);
     const title = (asset.meta?.title || 'transcript').replace(/[^a-z0-9 \-_]/gi, '').trim() || 'transcript';
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Content-Disposition', `attachment; filename="${title}.txt"`);
-    res.send(text);
+    res.send(header + text);
   } catch (e) {
     res.status(500).send(e.message);
   }
