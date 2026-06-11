@@ -1656,6 +1656,38 @@ app.patch('/api/users/:uid/approve', adminOnly, async (req, res) => {
   }
 });
 
+// One-time backfill: pre-approve all existing users (except blocked/disabled ones)
+app.post('/api/users/backfill-approve', adminOnly, async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const db = admin.firestore();
+    let approved = 0, skippedBlocked = 0, pageToken;
+    do {
+      const page = await admin.auth().listUsers(1000, pageToken);
+      for (const u of page.users) {
+        if (u.disabled) { skippedBlocked++; continue; }
+        // Double-check Firestore blocked flag
+        const doc = await db.collection('users').doc(u.uid).get();
+        if (doc.exists && doc.data().blocked === true) { skippedBlocked++; continue; }
+        await db.collection('users').doc(u.uid).set(
+          { pendingApproval: false, approved: true, approvedAt: new Date().toISOString(), approvedVia: 'backfill' },
+          { merge: true }
+        );
+        // Stamp newSignups so the app never re-treats this user as a new registration
+        await db.collection('newSignups').doc(u.uid).set(
+          { uid: u.uid, email: u.email || '', displayName: u.displayName || '', notified: true, backfilled: true },
+          { merge: true }
+        );
+        approved++;
+      }
+      pageToken = page.pageToken;
+    } while (pageToken);
+    res.json({ ok: true, approved, skippedBlocked });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Grant or revoke private content access
 app.patch('/api/users/:uid/private-access', async (req, res) => {
   if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
