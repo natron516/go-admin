@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 64;
+const ADMIN_BUILD = 65;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -698,16 +698,28 @@ async function buildCleanTranscript(asset) {
   if (!r.ok) throw new Error('VTT fetch failed: ' + r.status);
   const cues = parseVtt(await r.text());
   const sermonStart = detectSermonStart(cues);
-  // De-duplicate consecutive identical cues (Mux VTT often repeats lines)
-  const parts = [];
+  // De-duplicate consecutive identical cues (Mux VTT often repeats lines),
+  // then infer missing sentence ends at cue boundaries: when a cue ends without
+  // punctuation, the next cue starts with a capital, and the last word isn't a
+  // connector, the speaker almost certainly ended a sentence the AI didn't punctuate.
+  const CONNECTORS = new Set(['and','but','or','to','of','the','a','an','in','on','for','with','that','which','who','as','is','are','was','were','be','by','at','from','so','because','if','when','my','our','your','his','her','their','this','these','those','very','more','most','can','could','will','would','shall','should','has','have','had','not','no','it','he','she','we','they','you','i','what','how','than','then']);
+  const kept = [];
   let prev = null;
   for (const c of cues) {
     if (c.start < sermonStart) continue;
     const t = c.text.trim();
     if (!t || t === prev) continue;
-    parts.push(t);
+    kept.push(t);
     prev = t;
   }
+  const parts = kept.map((t, i) => {
+    const nxt = kept[i + 1];
+    if (nxt && t && !/[.!?,;:]$/.test(t) && /^[A-Z]/.test(nxt)) {
+      const lastWord = (t.split(/\s+/).pop() || '').toLowerCase().replace(/["']/g, '');
+      if (lastWord && !CONNECTORS.has(lastWord)) return t + '.';
+    }
+    return t;
+  });
   return { text: reflowSentences(cleanTranscript(parts.join('\n'))), sermonStart };
 }
 
