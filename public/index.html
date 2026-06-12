@@ -1588,6 +1588,12 @@ tr.dirty .at-save { display: inline-flex !important; }
             <button class="btn btn-primary" onclick="saveFeatured()" id="featured-save-btn">💾 Save Order</button>
           </div>
         </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="featured-group-tabs">
+          <button class="btn btn-sm feat-group-tab" data-group="ids" onclick="switchFeaturedGroup('ids')">⭐ Main</button>
+          <button class="btn btn-sm feat-group-tab" data-group="parents" onclick="switchFeaturedGroup('parents')">👪 Parents</button>
+          <button class="btn btn-sm feat-group-tab" data-group="youngPeople" onclick="switchFeaturedGroup('youngPeople')">🧑 Young People</button>
+          <button class="btn btn-sm feat-group-tab" data-group="children" onclick="switchFeaturedGroup('children')">🧩 Children</button>
+        </div>
         <div id="featured-content"><div class="spinner"></div></div>
       </section>
 
@@ -2772,12 +2778,13 @@ async function applyUploadDoneActions() {
 
   if (feat) {
     try {
-      const r = await fetch('/api/featured');
-      const { featured } = await r.json();
-      const newFeatured = [assetId, ...featured.filter(id => id !== assetId)].slice(0, featured.length || 8);
-      await fetch('/api/featured', {
+      const r = await fetch('/api/config/featured');
+      const { ids } = await r.json();
+      const cur = Array.isArray(ids) ? ids : [];
+      const newFeatured = [assetId, ...cur.filter(id => id !== assetId)];
+      await fetch('/api/config/featured', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ featured: newFeatured })
+        body: JSON.stringify({ ids: newFeatured })
       });
       toast('Added to Featured!');
     } catch (e) { console.error('Feature failed:', e); toast('Failed to feature: ' + e.message); }
@@ -5023,8 +5030,39 @@ function loadFirestore() {
 
 const FB_PROJECT = 'gospel-outreach-tv';
 const FEAT_DOC = `config/featured`;
-let featuredIds = [];
+// All curated lists in config/featured: ids (main) + per-group lists
+const FEAT_GROUPS = ['ids', 'parents', 'youngPeople', 'children'];
+const FEAT_GROUP_LABELS = { ids: 'Main', parents: 'Parents', youngPeople: 'Young People', children: 'Children' };
+let featuredDoc = { ids: [], parents: [], youngPeople: [], children: [] };
+let currentFeatGroup = 'ids';
+let featuredIds = [];   // ids for the currently-selected group
 let featuredDraft = [];
+let featAllAssets = [];
+
+function switchFeaturedGroup(group) {
+  // Stash current edits before switching
+  featuredDoc[currentFeatGroup] = featuredIds;
+  currentFeatGroup = group;
+  featuredIds = featuredDoc[group] || [];
+  rebuildFeaturedDraft();
+  updateFeatGroupTabs();
+  renderFeatured(document.getElementById('featured-content'));
+}
+
+function updateFeatGroupTabs() {
+  document.querySelectorAll('.feat-group-tab').forEach(b => {
+    const isActive = b.dataset.group === currentFeatGroup;
+    b.classList.toggle('btn-primary', isActive);
+    b.classList.toggle('btn-ghost', !isActive);
+  });
+}
+
+function rebuildFeaturedDraft() {
+  const featSet = new Set(featuredIds);
+  const featAssets = featuredIds.map(id => featAllAssets.find(a => a.id === id)).filter(Boolean);
+  const restAssets = featAllAssets.filter(a => !featSet.has(a.id)).sort((a,b) => (a.meta?.title||'').localeCompare(b.meta?.title||''));
+  featuredDraft = [...featAssets, ...restAssets];
+}
 
 async function getFirestore() {
   await loadFirestore();
@@ -5043,13 +5081,13 @@ async function loadFeatured() {
     if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
 
     const snap = await db.collection('config').doc('featured').get();
-    featuredIds = snap.exists ? (snap.data()?.ids || []) : [];
+    const data = snap.exists ? (snap.data() || {}) : {};
+    FEAT_GROUPS.forEach(g => { featuredDoc[g] = Array.isArray(data[g]) ? data[g] : []; });
 
-    const featSet = new Set(featuredIds);
-    const featAssets = featuredIds.map(id => assets.find(a => a.id === id)).filter(Boolean);
-    const restAssets = assets.filter(a => !featSet.has(a.id)).sort((a,b) => (a.meta?.title||'').localeCompare(b.meta?.title||''));
-    featuredDraft = [...featAssets, ...restAssets];
-
+    featAllAssets = assets;
+    featuredIds = featuredDoc[currentFeatGroup] || [];
+    rebuildFeaturedDraft();
+    updateFeatGroupTabs();
     renderFeatured(el);
   } catch(err) {
     el.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(err.message)}</p>`;
@@ -5127,8 +5165,9 @@ async function saveFeatured() {
     ensureFirebase();
     if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
     const db = firebase.firestore();
-    await db.collection('config').doc('featured').set({ ids: featuredIds });
-    toast(`Featured list saved (${featuredIds.length} videos) ✓`);
+    featuredDoc[currentFeatGroup] = featuredIds;
+    await db.collection('config').doc('featured').set(featuredDoc, { merge: true });
+    toast(`${FEAT_GROUP_LABELS[currentFeatGroup]} list saved (${featuredIds.length} videos) ✓`);
   } catch(err) {
     toast('Save failed: ' + err.message);
   } finally {

@@ -2654,21 +2654,34 @@ app.get('/api/series/:id/episodes', async (req, res) => {
 });
 
 // ── Featured Videos Config ─────────────────────────────
+// Lists stored in config/featured: ids (main carousel) + per-group rows
+const FEATURED_GROUP_FIELDS = ['ids', 'parents', 'youngPeople', 'children'];
+
 app.get('/api/config/featured', async (req, res) => {
   try {
     const db = admin.firestore();
     const doc = await db.collection('config').doc('featured').get();
-    res.json({ ids: doc.exists ? (doc.data().ids || []) : [] });
+    const data = doc.exists ? (doc.data() || {}) : {};
+    const out = {};
+    for (const f of FEATURED_GROUP_FIELDS) out[f] = Array.isArray(data[f]) ? data[f] : [];
+    res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put('/api/config/featured', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { ids } = req.body;
-    if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });
-    await db.collection('config').doc('featured').set({ ids });
-    res.json({ ok: true, count: ids.length });
+    const update = {};
+    for (const f of FEATURED_GROUP_FIELDS) {
+      if (req.body[f] !== undefined) {
+        if (!Array.isArray(req.body[f])) return res.status(400).json({ error: `${f} must be an array` });
+        update[f] = req.body[f];
+      }
+    }
+    if (Object.keys(update).length === 0) return res.status(400).json({ error: 'no valid list fields provided' });
+    // merge:true so updating one list never wipes the others
+    await db.collection('config').doc('featured').set(update, { merge: true });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
