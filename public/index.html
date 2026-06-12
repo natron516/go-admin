@@ -5037,7 +5037,7 @@ let featuredDoc = { ids: [], parents: [], youngPeople: [], children: [] };
 let currentFeatGroup = 'ids';
 let featuredIds = [];   // ids for the currently-selected group
 let featuredDraft = [];
-let featAllAssets = [];
+let featAllItems = [];  // unified: videos + audio + series + podcasts + books + articles
 
 function switchFeaturedGroup(group) {
   // Stash current edits before switching
@@ -5058,11 +5058,40 @@ function updateFeatGroupTabs() {
 }
 
 function rebuildFeaturedDraft() {
+  // Main carousel is video-only (app renders it as a video TabView).
+  // Group rows accept every content type.
+  const pool = currentFeatGroup === 'ids' ? featAllItems.filter(i => i.type === 'video') : featAllItems;
   const featSet = new Set(featuredIds);
-  const featAssets = featuredIds.map(id => featAllAssets.find(a => a.id === id)).filter(Boolean);
-  const restAssets = featAllAssets.filter(a => !featSet.has(a.id)).sort((a,b) => (a.meta?.title||'').localeCompare(b.meta?.title||''));
-  featuredDraft = [...featAssets, ...restAssets];
+  const featItems = featuredIds.map(id => pool.find(i => i.key === id)).filter(Boolean);
+  const restItems = pool.filter(i => !featSet.has(i.key)).sort((a,b) => (a.title||'').localeCompare(b.title||''));
+  featuredDraft = [...featItems, ...restItems];
 }
+
+// Build the unified item list from all content endpoints.
+// key format: plain Mux asset id for videos (legacy compat), "<type>:<id>" for the rest.
+function buildFeatItems({ assets, audio, series, podcasts, books, articles }) {
+  const items = [];
+  (assets || []).forEach(a => {
+    if (a.status !== 'ready' && a.status !== 'preparing') return;
+    if (a.resolution_tier === 'audio-only') return;
+    const pid = a.playback_ids?.[0]?.id;
+    const ptData = parsePassthrough(a.passthrough);
+    const thumbTime = ptData.thumbnail_time || 10;
+    items.push({
+      key: a.id, type: 'video', title: a.meta?.title || 'Untitled',
+      cat: (ptData.category || a.passthrough || '').trim(),
+      thumb: ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=${thumbTime}` : '')
+    });
+  });
+  (audio || []).forEach(a => items.push({ key: `audio:${a.id}`, type: 'audio', title: a.title || 'Untitled', cat: a.category || '', thumb: a.coverImageUrl || '' }));
+  (series || []).forEach(s => items.push({ key: `series:${s.id}`, type: 'series', title: s.title || 'Untitled', cat: s.category || '', thumb: s.artworkUrl || '' }));
+  (podcasts || []).forEach(p => items.push({ key: `podcast:${p.id}`, type: 'podcast', title: p.title || 'Untitled', cat: p.category || '', thumb: p.artworkUrl || '' }));
+  (books || []).forEach(b => items.push({ key: `book:${b.id}`, type: 'book', title: b.title || 'Untitled', cat: b.category || '', thumb: b.coverImageUrl || '' }));
+  (articles || []).forEach(a => items.push({ key: `article:${a.id}`, type: 'article', title: a.title || 'Untitled', cat: a.category || '', thumb: a.coverImageUrl || '' }));
+  return items;
+}
+
+const FEAT_TYPE_BADGES = { video: '🎬', audio: '🎵', series: '📼', podcast: '🎙️', book: '📖', article: '📄' };
 
 async function getFirestore() {
   await loadFirestore();
@@ -5074,9 +5103,16 @@ async function loadFeatured() {
   const el = document.getElementById('featured-content');
   el.innerHTML = '<div class="spinner"></div>';
   try {
-    const [assetsResp, db] = await Promise.all([fetch('/api/assets'), getFirestore()]);
-    const assetsData = await assetsResp.json();
-    const assets = assetsData.data || [];
+    const j = r => r.ok ? r.json() : {};
+    const [assetsResp, audioResp, seriesResp, podcastsResp, booksResp, articlesResp, db] = await Promise.all([
+      fetch('/api/assets').then(j).catch(() => ({})),
+      fetch('/api/audio').then(j).catch(() => ({})),
+      fetch('/api/series').then(j).catch(() => ({})),
+      fetch('/api/podcasts').then(j).catch(() => ({})),
+      fetch('/api/books').then(j).catch(() => ({})),
+      fetch('/api/articles').then(j).catch(() => ({})),
+      getFirestore()
+    ]);
 
     if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
 
@@ -5084,7 +5120,14 @@ async function loadFeatured() {
     const data = snap.exists ? (snap.data() || {}) : {};
     FEAT_GROUPS.forEach(g => { featuredDoc[g] = Array.isArray(data[g]) ? data[g] : []; });
 
-    featAllAssets = assets;
+    featAllItems = buildFeatItems({
+      assets: assetsResp.data || [],
+      audio: audioResp.audio || [],
+      series: seriesResp.series || [],
+      podcasts: podcastsResp.podcasts || [],
+      books: booksResp.books || [],
+      articles: articlesResp.articles || []
+    });
     featuredIds = featuredDoc[currentFeatGroup] || [];
     rebuildFeaturedDraft();
     updateFeatGroupTabs();
@@ -5095,26 +5138,22 @@ async function loadFeatured() {
 }
 
 function renderFeatured(el) {
-  if (!featuredDraft.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px;">No assets found. Upload some videos first.</p>'; return; }
+  if (!featuredDraft.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px;">No content found. Upload some videos first.</p>'; return; }
   const featSet = new Set(featuredIds);
   let order = 0;
-  const rows = featuredDraft.map((a, idx) => {
-    const isFeat = featSet.has(a.id);
-    const pid = a.playback_ids?.[0]?.id;
-    const ptData = parsePassthrough(a.passthrough);
-    const thumbTime = ptData.thumbnail_time || 10;
-    const thumb = ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=${thumbTime}` : '');
-    const cat = (ptData.category || a.passthrough || '').trim();
+  const rows = featuredDraft.map(item => {
+    const isFeat = featSet.has(item.key);
+    const badge = FEAT_TYPE_BADGES[item.type] || '';
     const num = isFeat ? `<span class="feat-order">${++order}</span>` : `<span class="feat-order" style="color:var(--muted)"></span>`;
-    return `<div class="feat-row ${isFeat?'is-featured':''}" data-id="${a.id}" draggable="true"
+    return `<div class="feat-row ${isFeat?'is-featured':''}" data-id="${escHtml(item.key)}" draggable="true"
         ondragstart="featDragStart(event)" ondragover="featDragOver(event)" ondragleave="featDragLeave(event)" ondrop="featDrop(event)">
       <span class="feat-handle" title="Drag to reorder">≡</span>
       ${num}
-      ${thumb ? `<img class="feat-thumb" src="${escHtml(thumb)}" loading="lazy" alt="">` : `<div class="feat-thumb" style="background:#222;border-radius:5px;"></div>`}
-      <span class="feat-title">${escHtml(a.meta?.title || 'Untitled')}</span>
-      ${cat ? `<span class="feat-cat">${escHtml(cat)}</span>` : ''}
-      <input class="feat-check" type="checkbox" title="Feature this video" ${isFeat?'checked':''}
-        onchange="featToggle('${a.id}', this.checked)">
+      ${item.thumb ? `<img class="feat-thumb" src="${escHtml(item.thumb)}" loading="lazy" alt="">` : `<div class="feat-thumb" style="background:#222;border-radius:5px;"></div>`}
+      <span class="feat-title">${badge} ${escHtml(item.title)}</span>
+      <span class="feat-cat">${escHtml(item.type)}${item.cat ? ' · ' + escHtml(item.cat) : ''}</span>
+      <input class="feat-check" type="checkbox" title="Feature this item" ${isFeat?'checked':''}
+        onchange="featToggle(this.closest('.feat-row').dataset.id, this.checked)">
     </div>`;
   }).join('');
   el.innerHTML = `<div class="feat-list" id="feat-list">${rows}</div>`;
@@ -5123,8 +5162,8 @@ function renderFeatured(el) {
 function featToggle(id, checked) {
   if (checked) {
     if (!featuredIds.includes(id)) featuredIds.push(id);
-    const idx = featuredDraft.findIndex(a => a.id === id);
-    if (idx > 0) { const [a] = featuredDraft.splice(idx, 1); featuredDraft.unshift(a); }
+    const idx = featuredDraft.findIndex(i => i.key === id);
+    if (idx > 0) { const [it] = featuredDraft.splice(idx, 1); featuredDraft.unshift(it); }
   } else {
     featuredIds = featuredIds.filter(x => x !== id);
   }
@@ -5148,13 +5187,13 @@ function featDrop(e) {
   const targetId = e.currentTarget.dataset.id;
   e.currentTarget.classList.remove('drag-over');
   if (!dragSrcId || dragSrcId === targetId) return;
-  const srcIdx = featuredDraft.findIndex(a => a.id === dragSrcId);
-  const tgtIdx = featuredDraft.findIndex(a => a.id === targetId);
+  const srcIdx = featuredDraft.findIndex(i => i.key === dragSrcId);
+  const tgtIdx = featuredDraft.findIndex(i => i.key === targetId);
   if (srcIdx < 0 || tgtIdx < 0) return;
   const [moved] = featuredDraft.splice(srcIdx, 1);
   featuredDraft.splice(tgtIdx, 0, moved);
   const featSet = new Set(featuredIds);
-  featuredIds = featuredDraft.filter(a => featSet.has(a.id)).map(a => a.id);
+  featuredIds = featuredDraft.filter(i => featSet.has(i.key)).map(i => i.key);
   renderFeatured(document.getElementById('featured-content'));
 }
 
