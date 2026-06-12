@@ -2653,6 +2653,18 @@ app.get('/api/series/:id/episodes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Portal Version ─────────────────────────────
+// PORTAL_BUILD = git commit count at deploy time. Bump alongside each deploy commit.
+const PORTAL_BUILD = 233;
+app.get('/api/version', (req, res) => {
+  res.json({
+    build: PORTAL_BUILD,
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ? process.env.RAILWAY_GIT_COMMIT_SHA.slice(0, 7) : null,
+    startedAt: serverStartedAt
+  });
+});
+const serverStartedAt = new Date().toISOString();
+
 // ── Featured Videos Config ─────────────────────────────
 // Lists stored in config/featured: ids (main carousel) + per-group rows
 const FEATURED_GROUP_FIELDS = ['ids', 'parents', 'youngPeople', 'children'];

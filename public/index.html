@@ -1395,6 +1395,9 @@ tr.dirty .at-save { display: inline-flex !important; }
         <span class="nav-label">Settings</span>
       </button>
     </nav>
+    <div class="sidebar-footer" style="font-size:11px;color:var(--muted);text-align:center;" title="Admin portal build">
+      <span class="nav-label">Portal build <span id="portal-build">233</span></span>
+    </div>
   </aside>
 
   <!-- Main content -->
@@ -4655,6 +4658,12 @@ function updateTrimDuration() {
     document.removeEventListener('touchmove', onMove);
     document.removeEventListener('touchend', onUp);
   }
+  // Show the live portal build number from the server (so the sidebar can't go stale)
+  fetch('/api/version').then(r => r.json()).then(v => {
+    const el = document.getElementById('portal-build');
+    if (el && v.build) el.textContent = v.build + (v.commit ? ` (${v.commit})` : '');
+  }).catch(() => {});
+
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('trim-handle-left')?.addEventListener('mousedown', e => onDown(e, 'left'));
     document.getElementById('trim-handle-right')?.addEventListener('mousedown', e => onDown(e, 'right'));
