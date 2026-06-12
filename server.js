@@ -2657,7 +2657,7 @@ app.get('/api/series/:id/episodes', async (req, res) => {
 
 // ── Portal Version ─────────────────────────────
 // PORTAL_BUILD = git commit count at deploy time. Bump alongside each deploy commit.
-const PORTAL_BUILD = 234;
+const PORTAL_BUILD = 235;
 app.get('/api/version', (req, res) => {
   res.json({
     build: PORTAL_BUILD,

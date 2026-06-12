@@ -865,6 +865,21 @@ tr.dirty .at-save { display: inline-flex !important; }
   transition: background var(--transition), border-color var(--transition);
 }
 .feat-row.is-featured { border-color: rgba(99,102,241,.4); background: rgba(99,102,241,.06); }
+/* New chip-based featured UI */
+.feat-chip-row { display: flex; flex-wrap: wrap; gap: 8px; min-height: 44px; padding-top: 8px; }
+.feat-chip {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 5px 8px; cursor: grab; max-width: 280px;
+}
+.feat-chip.dragging { opacity: .4; }
+.feat-chip-title { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feat-chip-x {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 13px; padding: 2px 4px; border-radius: 4px; flex-shrink: 0;
+}
+.feat-chip-x:hover { color: var(--red); background: rgba(239,68,68,.12); }
+
 .feat-row.dragging { opacity: .45; }
 .feat-row.drag-over { border-color: var(--accent); background: rgba(99,102,241,.12); }
 .feat-handle { cursor: grab; color: var(--muted); font-size: 18px; flex-shrink: 0; user-select: none; }
@@ -1583,21 +1598,39 @@ tr.dirty .at-save { display: inline-flex !important; }
       <section id="tab-featured" class="section">
         <div class="page-header">
           <div class="page-header-text">
-            <div class="page-title">Featured Videos</div>
-            <div class="page-subtitle">Check videos to feature on the home screen · Drag to reorder</div>
+            <div class="page-title">Featured</div>
+            <div class="page-subtitle">What appears on the app home page · changes save automatically</div>
           </div>
           <div class="page-actions">
             <button class="btn btn-ghost btn-sm" onclick="loadFeatured()">↺ Refresh</button>
-            <button class="btn btn-primary" onclick="saveFeatured()" id="featured-save-btn">💾 Save Order</button>
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="featured-group-tabs">
-          <button class="btn btn-sm feat-group-tab" data-group="ids" onclick="switchFeaturedGroup('ids')">⭐ Main</button>
-          <button class="btn btn-sm feat-group-tab" data-group="parents" onclick="switchFeaturedGroup('parents')">👪 Parents</button>
-          <button class="btn btn-sm feat-group-tab" data-group="youngPeople" onclick="switchFeaturedGroup('youngPeople')">🧑 Young People</button>
-          <button class="btn btn-sm feat-group-tab" data-group="children" onclick="switchFeaturedGroup('children')">🧩 Children</button>
-        </div>
         <div id="featured-content"><div class="spinner"></div></div>
+
+        <!-- Add-to-group picker modal -->
+        <div class="modal-backdrop" id="feat-picker-modal" onclick="if(event.target===this)closeFeatPicker()">
+          <div class="modal" style="max-width:680px;">
+            <h3 id="feat-picker-title">Add to Featured</h3>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+              <input type="text" id="feat-picker-search" placeholder="🔍 Search by title…" oninput="renderFeatPicker()"
+                style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:14px;outline:none;">
+              <select id="feat-picker-type" onchange="renderFeatPicker()"
+                style="padding:9px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;">
+                <option value="">All types</option>
+                <option value="video">🎬 Videos</option>
+                <option value="series">📼 Series</option>
+                <option value="audio">🎵 Audio</option>
+                <option value="podcast">🎙️ Podcasts</option>
+                <option value="book">📖 Books</option>
+                <option value="article">📄 Articles</option>
+              </select>
+            </div>
+            <div id="feat-picker-list" style="max-height:52vh;overflow-y:auto;margin-top:10px;display:flex;flex-direction:column;gap:4px;"></div>
+            <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+              <button class="btn btn-ghost" onclick="closeFeatPicker()">Done</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ── USERS ───────────────────────────────────── -->
@@ -5038,46 +5071,27 @@ function loadFirestore() {
 }
 
 const FB_PROJECT = 'gospel-outreach-tv';
-const FEAT_DOC = `config/featured`;
-// All curated lists in config/featured: ids (main) + per-group lists
+// Lists in config/featured: ids (main video carousel) + per-group lists.
 const FEAT_GROUPS = ['ids', 'parents', 'youngPeople', 'children'];
-const FEAT_GROUP_LABELS = { ids: 'Main', parents: 'Parents', youngPeople: 'Young People', children: 'Children' };
+const FEAT_GROUP_META = {
+  ids:         { label: '⭐ Main Carousel', hint: 'Top video slideshow (videos only)' },
+  parents:     { label: '👪 Parents',       hint: 'Parents section' },
+  youngPeople: { label: '🧑 Young People',  hint: 'Young People section' },
+  children:    { label: '🧩 Children',      hint: 'Children section' },
+};
+const FEAT_TYPE_BADGES = { video: '🎬', audio: '🎵', series: '📼', podcast: '🎙️', book: '📖', article: '📄' };
 let featuredDoc = { ids: [], parents: [], youngPeople: [], children: [] };
-let currentFeatGroup = 'ids';
-let featuredIds = [];   // ids for the currently-selected group
-let featuredDraft = [];
-let featAllItems = [];  // unified: videos + audio + series + podcasts + books + articles
+let featAllItems = [];   // unified content catalog
+let featItemByKey = {};
+let featPickerGroup = null;
+let featSaveTimer = null;
 
-function switchFeaturedGroup(group) {
-  // Stash current edits before switching
-  featuredDoc[currentFeatGroup] = featuredIds;
-  currentFeatGroup = group;
-  featuredIds = featuredDoc[group] || [];
-  rebuildFeaturedDraft();
-  updateFeatGroupTabs();
-  renderFeatured(document.getElementById('featured-content'));
+async function getFirestore() {
+  await loadFirestore();
+  ensureFirebase();
+  return firebase.firestore();
 }
 
-function updateFeatGroupTabs() {
-  document.querySelectorAll('.feat-group-tab').forEach(b => {
-    const isActive = b.dataset.group === currentFeatGroup;
-    b.classList.toggle('btn-primary', isActive);
-    b.classList.toggle('btn-ghost', !isActive);
-  });
-}
-
-function rebuildFeaturedDraft() {
-  // Main carousel is video-only (app renders it as a video TabView).
-  // Group rows accept every content type.
-  const pool = currentFeatGroup === 'ids' ? featAllItems.filter(i => i.type === 'video') : featAllItems;
-  const featSet = new Set(featuredIds);
-  const featItems = featuredIds.map(id => pool.find(i => i.key === id)).filter(Boolean);
-  const restItems = pool.filter(i => !featSet.has(i.key)).sort((a,b) => (a.title||'').localeCompare(b.title||''));
-  featuredDraft = [...featItems, ...restItems];
-}
-
-// Build the unified item list from all content endpoints.
-// key format: plain Mux asset id for videos (legacy compat), "<type>:<id>" for the rest.
 function buildFeatItems({ assets, audio, series, podcasts, books, articles }) {
   const items = [];
   (assets || []).forEach(a => {
@@ -5089,7 +5103,7 @@ function buildFeatItems({ assets, audio, series, podcasts, books, articles }) {
     items.push({
       key: a.id, type: 'video', title: a.meta?.title || 'Untitled',
       cat: (ptData.category || a.passthrough || '').trim(),
-      thumb: ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=80&time=${thumbTime}` : '')
+      thumb: ptData.thumbnail || (pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=120&time=${thumbTime}` : '')
     });
   });
   (audio || []).forEach(a => items.push({ key: `audio:${a.id}`, type: 'audio', title: a.title || 'Untitled', cat: a.category || '', thumb: a.coverImageUrl || '' }));
@@ -5098,14 +5112,6 @@ function buildFeatItems({ assets, audio, series, podcasts, books, articles }) {
   (books || []).forEach(b => items.push({ key: `book:${b.id}`, type: 'book', title: b.title || 'Untitled', cat: b.category || '', thumb: b.coverImageUrl || '' }));
   (articles || []).forEach(a => items.push({ key: `article:${a.id}`, type: 'article', title: a.title || 'Untitled', cat: a.category || '', thumb: a.coverImageUrl || '' }));
   return items;
-}
-
-const FEAT_TYPE_BADGES = { video: '🎬', audio: '🎵', series: '📼', podcast: '🎙️', book: '📖', article: '📄' };
-
-async function getFirestore() {
-  await loadFirestore();
-  ensureFirebase();
-  return firebase.firestore();
 }
 
 async function loadFeatured() {
@@ -5137,91 +5143,156 @@ async function loadFeatured() {
       books: booksResp.books || [],
       articles: articlesResp.articles || []
     });
-    featuredIds = featuredDoc[currentFeatGroup] || [];
-    rebuildFeaturedDraft();
-    updateFeatGroupTabs();
-    renderFeatured(el);
+    featItemByKey = Object.fromEntries(featAllItems.map(i => [i.key, i]));
+    renderFeaturedGroups();
   } catch(err) {
     el.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(err.message)}</p>`;
   }
 }
 
-function renderFeatured(el) {
-  if (!featuredDraft.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px;">No content found. Upload some videos first.</p>'; return; }
-  const featSet = new Set(featuredIds);
-  let order = 0;
-  const rows = featuredDraft.map(item => {
-    const isFeat = featSet.has(item.key);
-    const badge = FEAT_TYPE_BADGES[item.type] || '';
-    const num = isFeat ? `<span class="feat-order">${++order}</span>` : `<span class="feat-order" style="color:var(--muted)"></span>`;
-    return `<div class="feat-row ${isFeat?'is-featured':''}" data-id="${escHtml(item.key)}" draggable="true"
-        ondragstart="featDragStart(event)" ondragover="featDragOver(event)" ondragleave="featDragLeave(event)" ondrop="featDrop(event)">
-      <span class="feat-handle" title="Drag to reorder">≡</span>
-      ${num}
-      ${item.thumb ? `<img class="feat-thumb" src="${escHtml(item.thumb)}" loading="lazy" alt="">` : `<div class="feat-thumb" style="background:#222;border-radius:5px;"></div>`}
-      <span class="feat-title">${badge} ${escHtml(item.title)}</span>
-      <span class="feat-cat">${escHtml(item.type)}${item.cat ? ' · ' + escHtml(item.cat) : ''}</span>
-      <input class="feat-check" type="checkbox" title="Feature this item" ${isFeat?'checked':''}
-        onchange="featToggle(this.closest('.feat-row').dataset.id, this.checked)">
+function renderFeaturedGroups() {
+  const el = document.getElementById('featured-content');
+  const cards = FEAT_GROUPS.map(g => {
+    const meta = FEAT_GROUP_META[g];
+    const keys = featuredDoc[g] || [];
+    const chips = keys.map(k => {
+      const item = featItemByKey[k];
+      const title = item ? item.title : '(missing item)';
+      const badge = item ? (FEAT_TYPE_BADGES[item.type] || '') : '⚠️';
+      const thumb = item && item.thumb ? `<img src="${escHtml(item.thumb)}" loading="lazy" alt="" style="width:52px;height:30px;object-fit:cover;border-radius:4px;background:#222;">` : `<div style="width:52px;height:30px;border-radius:4px;background:#222;"></div>`;
+      return `<div class="feat-chip" draggable="true" data-group="${g}" data-key="${escHtml(k)}"
+          ondragstart="featChipDragStart(event)" ondragover="featChipDragOver(event)" ondrop="featChipDrop(event)" ondragend="featChipDragEnd(event)">
+        ${thumb}
+        <span style="font-size:12px;">${badge}</span>
+        <span class="feat-chip-title">${escHtml(title)}</span>
+        <button class="feat-chip-x" title="Remove" onclick="featRemove('${g}', this.closest('.feat-chip').dataset.key)">✕</button>
+      </div>`;
+    }).join('');
+    return `<div class="card" style="padding:16px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">${meta.label}</div>
+          <div style="font-size:12px;color:var(--muted);">${meta.hint} · ${keys.length} item${keys.length===1?'':'s'} · drag to reorder</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openFeatPicker('${g}')">➕ Add</button>
+      </div>
+      <div class="feat-chip-row" data-group="${g}" ondragover="featChipDragOver(event)" ondrop="featChipDrop(event)">
+        ${chips || '<div style="color:var(--muted);font-size:13px;padding:10px 2px;">Nothing featured yet — tap ➕ Add</div>'}
+      </div>
     </div>`;
   }).join('');
-  el.innerHTML = `<div class="feat-list" id="feat-list">${rows}</div>`;
+  el.innerHTML = cards;
 }
 
-function featToggle(id, checked) {
-  if (checked) {
-    if (!featuredIds.includes(id)) featuredIds.push(id);
-    const idx = featuredDraft.findIndex(i => i.key === id);
-    if (idx > 0) { const [it] = featuredDraft.splice(idx, 1); featuredDraft.unshift(it); }
-  } else {
-    featuredIds = featuredIds.filter(x => x !== id);
-  }
-  renderFeatured(document.getElementById('featured-content'));
+// ── Auto-save (debounced) ──
+function featScheduleSave() {
+  clearTimeout(featSaveTimer);
+  featSaveTimer = setTimeout(featSaveNow, 600);
 }
 
-let dragSrcId = null;
-function featDragStart(e) {
-  dragSrcId = e.currentTarget.dataset.id;
-  e.currentTarget.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-}
-function featDragOver(e) {
-  e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-  document.querySelectorAll('.feat-row.drag-over').forEach(r => r.classList.remove('drag-over'));
-  e.currentTarget.classList.add('drag-over');
-}
-function featDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
-function featDrop(e) {
-  e.preventDefault();
-  const targetId = e.currentTarget.dataset.id;
-  e.currentTarget.classList.remove('drag-over');
-  if (!dragSrcId || dragSrcId === targetId) return;
-  const srcIdx = featuredDraft.findIndex(i => i.key === dragSrcId);
-  const tgtIdx = featuredDraft.findIndex(i => i.key === targetId);
-  if (srcIdx < 0 || tgtIdx < 0) return;
-  const [moved] = featuredDraft.splice(srcIdx, 1);
-  featuredDraft.splice(tgtIdx, 0, moved);
-  const featSet = new Set(featuredIds);
-  featuredIds = featuredDraft.filter(i => featSet.has(i.key)).map(i => i.key);
-  renderFeatured(document.getElementById('featured-content'));
-}
-
-async function saveFeatured() {
-  const btn = document.getElementById('featured-save-btn');
-  btn.disabled = true; btn.textContent = 'Saving…';
+async function featSaveNow() {
   try {
     ensureFirebase();
     if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
     const db = firebase.firestore();
-    featuredDoc[currentFeatGroup] = featuredIds;
     await db.collection('config').doc('featured').set(featuredDoc, { merge: true });
-    toast(`${FEAT_GROUP_LABELS[currentFeatGroup]} list saved (${featuredIds.length} videos) ✓`);
+    toast('Saved ✓');
   } catch(err) {
     toast('Save failed: ' + err.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '💾 Save Order';
   }
 }
+
+function featRemove(group, key) {
+  featuredDoc[group] = (featuredDoc[group] || []).filter(k => k !== key);
+  renderFeaturedGroups();
+  featScheduleSave();
+}
+
+// ── Picker modal ──
+function openFeatPicker(group) {
+  featPickerGroup = group;
+  document.getElementById('feat-picker-title').textContent = `Add to ${FEAT_GROUP_META[group].label.replace(/^[^ ]+ /, '')}`;
+  document.getElementById('feat-picker-search').value = '';
+  document.getElementById('feat-picker-type').value = '';
+  document.getElementById('feat-picker-modal').classList.add('open');
+  renderFeatPicker();
+  setTimeout(() => document.getElementById('feat-picker-search').focus(), 50);
+}
+
+function closeFeatPicker() {
+  document.getElementById('feat-picker-modal').classList.remove('open');
+  featPickerGroup = null;
+}
+
+function renderFeatPicker() {
+  if (!featPickerGroup) return;
+  const q = (document.getElementById('feat-picker-search').value || '').toLowerCase().trim();
+  const typeFilter = document.getElementById('feat-picker-type').value;
+  const inGroup = new Set(featuredDoc[featPickerGroup] || []);
+  // Main carousel only accepts videos
+  let pool = featPickerGroup === 'ids' ? featAllItems.filter(i => i.type === 'video') : featAllItems;
+  if (typeFilter) pool = pool.filter(i => i.type === typeFilter);
+  if (q) pool = pool.filter(i => (i.title || '').toLowerCase().includes(q));
+  pool = pool.slice(0, 60);
+  const listEl = document.getElementById('feat-picker-list');
+  if (!pool.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:14px;font-size:13px;">No matches.</div>'; return; }
+  listEl.innerHTML = pool.map(i => {
+    const added = inGroup.has(i.key);
+    const thumb = i.thumb ? `<img src="${escHtml(i.thumb)}" loading="lazy" alt="" style="width:64px;height:36px;object-fit:cover;border-radius:4px;background:#222;flex-shrink:0;">` : `<div style="width:64px;height:36px;border-radius:4px;background:#222;flex-shrink:0;"></div>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;background:var(--surface2);">
+      ${thumb}
+      <span style="font-size:12px;flex-shrink:0;">${FEAT_TYPE_BADGES[i.type] || ''}</span>
+      <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(i.title)}</span>
+      <span style="font-size:11px;color:var(--muted);flex-shrink:0;">${escHtml(i.cat || i.type)}</span>
+      <button class="btn btn-sm ${added ? 'btn-ghost' : 'btn-primary'}" style="flex-shrink:0;" ${added ? 'disabled' : ''}
+        onclick="featPickerAdd('${escHtml(i.key)}', this)">${added ? '✓ Added' : '➕ Add'}</button>
+    </div>`;
+  }).join('');
+}
+
+function featPickerAdd(key, btn) {
+  if (!featPickerGroup) return;
+  if (!(featuredDoc[featPickerGroup] || []).includes(key)) {
+    featuredDoc[featPickerGroup].push(key);
+    featScheduleSave();
+    renderFeaturedGroups();
+  }
+  if (btn) { btn.disabled = true; btn.className = 'btn btn-sm btn-ghost'; btn.textContent = '✓ Added'; }
+}
+
+// ── Chip drag-to-reorder (within a group) ──
+let featDragKey = null, featDragGroup = null;
+function featChipDragStart(e) {
+  featDragKey = e.currentTarget.dataset.key;
+  featDragGroup = e.currentTarget.dataset.group;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function featChipDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+function featChipDrop(e) {
+  e.preventDefault();
+  const targetChip = e.target.closest('.feat-chip');
+  const group = (targetChip || e.currentTarget).dataset.group;
+  if (!featDragKey || group !== featDragGroup) return;
+  const list = featuredDoc[group] || [];
+  const from = list.indexOf(featDragKey);
+  if (from < 0) return;
+  list.splice(from, 1);
+  if (targetChip && targetChip.dataset.key !== featDragKey) {
+    const to = list.indexOf(targetChip.dataset.key);
+    list.splice(to < 0 ? list.length : to, 0, featDragKey);
+  } else {
+    list.push(featDragKey);
+  }
+  featuredDoc[group] = list;
+  renderFeaturedGroups();
+  featScheduleSave();
+}
+function featChipDragEnd(e) {
+  document.querySelectorAll('.feat-chip.dragging').forEach(c => c.classList.remove('dragging'));
+  featDragKey = null; featDragGroup = null;
+}
+
 
 // ── Force Update Settings ─────────────────────────────────
 async function loadForceUpdateConfig() {
