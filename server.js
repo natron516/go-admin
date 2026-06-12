@@ -1230,14 +1230,16 @@ app.post('/api/upload-cover', upload.single('image'), async (req, res) => {
     const filename = `covers/${type}_${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
     const file = bucket.file(filename);
 
-    // Resize to max 800px wide, compress
-    const compressed = await sharp(req.file.buffer)
-      .resize({ width: 800, withoutEnlargement: true })
-      .jpeg({ quality: 80 })
-      .toBuffer();
+    // Resize to max 800px wide, compress.
+    // PNGs keep PNG format to preserve transparency (round logos etc.); others → JPEG.
+    const isPng = ext === 'png';
+    const pipeline = sharp(req.file.buffer).resize({ width: 800, withoutEnlargement: true });
+    const compressed = isPng
+      ? await pipeline.png({ compressionLevel: 9 }).toBuffer()
+      : await pipeline.jpeg({ quality: 80 }).toBuffer();
 
     await file.save(compressed, {
-      metadata: { contentType: 'image/jpeg' },
+      metadata: { contentType: isPng ? 'image/png' : 'image/jpeg' },
     });
     await file.makePublic();
     const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
@@ -2655,7 +2657,7 @@ app.get('/api/series/:id/episodes', async (req, res) => {
 
 // ── Portal Version ─────────────────────────────
 // PORTAL_BUILD = git commit count at deploy time. Bump alongside each deploy commit.
-const PORTAL_BUILD = 233;
+const PORTAL_BUILD = 234;
 app.get('/api/version', (req, res) => {
   res.json({
     build: PORTAL_BUILD,
