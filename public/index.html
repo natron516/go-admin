@@ -5072,7 +5072,10 @@ function loadFirestore() {
 
 const FB_PROJECT = 'gospel-outreach-tv';
 // Lists in config/featured: ids (main video carousel) + per-group lists.
+// 'ids' (legacy main carousel) still exists in Firestore but is hidden from the
+// admin UI — the app only uses it when all three group sections are empty.
 const FEAT_GROUPS = ['ids', 'parents', 'youngPeople', 'children'];
+const FEAT_VISIBLE_GROUPS = ['parents', 'youngPeople', 'children'];
 const FEAT_GROUP_META = {
   ids:         { label: '⭐ Main Carousel', hint: 'Top video slideshow (videos only)' },
   parents:     { label: '👪 Parents',       hint: 'Parents section' },
@@ -5152,7 +5155,7 @@ async function loadFeatured() {
 
 function renderFeaturedGroups() {
   const el = document.getElementById('featured-content');
-  const cards = FEAT_GROUPS.map(g => {
+  const cards = FEAT_VISIBLE_GROUPS.map(g => {
     const meta = FEAT_GROUP_META[g];
     const keys = featuredDoc[g] || [];
     const chips = keys.map(k => {
