@@ -5168,6 +5168,7 @@ function renderFeaturedGroups() {
         ${thumb}
         <span style="font-size:12px;">${badge}</span>
         <span class="feat-chip-title">${escHtml(title)}</span>
+        ${item && (item.cat||'').toLowerCase()==='hidden' ? '<span style="font-size:10px;color:var(--orange);flex-shrink:0;" title="Hidden category — not visible in the app">⚠️</span>' : ''}
         <button class="feat-chip-x" title="Remove" onclick="featRemove('${g}', this.closest('.feat-chip').dataset.key)">✕</button>
       </div>`;
     }).join('');
@@ -5247,6 +5248,7 @@ function renderFeatPicker() {
       <span style="font-size:12px;flex-shrink:0;">${FEAT_TYPE_BADGES[i.type] || ''}</span>
       <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(i.title)}</span>
       <span style="font-size:11px;color:var(--muted);flex-shrink:0;">${escHtml(i.cat || i.type)}</span>
+      ${(i.cat||'').toLowerCase()==='hidden' ? '<span style="font-size:10px;color:var(--orange);flex-shrink:0;" title="Hidden category content never displays in the app, even when featured">⚠️ hidden — won\'t appear in app</span>' : ''}
       <button class="btn btn-sm ${added ? 'btn-ghost' : 'btn-primary'}" style="flex-shrink:0;" ${added ? 'disabled' : ''}
         onclick="featPickerAdd('${escHtml(i.key)}', this)">${added ? '✓ Added' : '➕ Add'}</button>
     </div>`;
