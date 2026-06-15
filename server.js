@@ -703,12 +703,18 @@ async function buildCleanTranscript(asset) {
   // punctuation, the next cue starts with a capital, and the last word isn't a
   // connector, the speaker almost certainly ended a sentence the AI didn't punctuate.
   const CONNECTORS = new Set(['and','but','or','to','of','the','a','an','in','on','for','with','that','which','who','as','is','are','was','were','be','by','at','from','so','because','if','when','my','our','your','his','her','their','this','these','those','very','more','most','can','could','will','would','shall','should','has','have','had','not','no','it','he','she','we','they','you','i','what','how','than','then']);
+  // Non-speech marker cue: [MUSIC PLAYING], ( Singing ), [Applause], etc. (any bracketed/parened tag,
+  // optionally with trailing punctuation like "." or ","). Drop these BEFORE de-dupe and BEFORE the
+  // punctuation-inference pass, otherwise a tag that gets a period appended (e.g. "[ Singing ].")
+  // will no longer match the end-of-line stripper in cleanTranscript() and will leak into the output.
+  const NONSPEECH_RE = /^[\[\(]\s*(music|applause|laughter|blank[_ ]?audio|singing|instrumental|inaudible|silence|noise|background\s+noise|crowd|coughing|sighs?)[^\]\)]*[\]\)][.,;:!?]*$/i;
   const kept = [];
   let prev = null;
   for (const c of cues) {
     if (c.start < sermonStart) continue;
     const t = c.text.trim();
     if (!t || t === prev) continue;
+    if (NONSPEECH_RE.test(t)) continue;
     kept.push(t);
     prev = t;
   }
