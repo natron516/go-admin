@@ -1556,12 +1556,14 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="performance">🎭 Performance</option>
             <option value="funzone">🎉 FunZone</option>
             <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="archived">❌ Archived (none — hidden everywhere)</option>
             <option value="uncategorized">📁 Uncategorized (Series)</option>
           </select>
           <div class="exclude-dropdown" id="exclude-dropdown">
             <button class="btn btn-ghost btn-sm" id="exclude-btn" onclick="toggleExcludeMenu(event)">🚫 Exclude ▾</button>
             <div class="exclude-menu" id="exclude-menu">
               <label><input type="checkbox" value="hidden" onchange="filterAssets()"> 🚫 Hidden (Private)</label>
+              <label><input type="checkbox" value="archived" onchange="filterAssets()"> ❌ Archived (none)</label>
               <label><input type="checkbox" value="sermon" onchange="filterAssets()"> 📖 Sermon</label>
               <label><input type="checkbox" value="children" onchange="filterAssets()"> ⭐ Children's</label>
               <label><input type="checkbox" value="music" onchange="filterAssets()"> 🎵 Music</label>
@@ -1990,6 +1992,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="theology">Theology</option>
             <option value="books-for-mothers">Books for Mothers</option>
             <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
         <div class="field">
@@ -2058,6 +2061,7 @@ tr.dirty .at-save { display: inline-flex !important; }
           <select id="article-category">
             <option value="articles">All</option>
             <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
         <div class="field">
@@ -2147,6 +2151,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="teaching">Teaching</option>
             <option value="music">Music</option>
             <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
         <div class="field">
@@ -2214,6 +2219,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="music">Music</option>
             <option value="general">General</option>
             <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
         <div class="field">
@@ -2335,6 +2341,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="spoken-word">Spoken Word</option>
             <option value="audiobook">Audiobook</option>
             <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
         <div class="field">
@@ -3111,6 +3118,7 @@ const CATEGORIES = [
   { value: 'performance', label: '🎭 Performance' },
   { value: 'funzone',     label: '🎉 FunZone' },
   { value: 'hidden',      label: '🚫 Hidden (Private)' },
+  { value: 'archived',    label: '❌ Archived (none — hidden everywhere)' },
 ];
 
 // Generate AI placeholder cover via /api/generate-cover
@@ -5168,7 +5176,7 @@ function renderFeaturedGroups() {
         ${thumb}
         <span style="font-size:12px;">${badge}</span>
         <span class="feat-chip-title">${escHtml(title)}</span>
-        ${item && (item.cat||'').toLowerCase()==='hidden' ? '<span style="font-size:10px;color:var(--orange);flex-shrink:0;" title="Hidden category — not visible in the app">⚠️</span>' : ''}
+        ${item && ['hidden','archived'].includes((item.cat||'').toLowerCase()) ? `<span style="font-size:10px;color:var(--orange);flex-shrink:0;" title="${(item.cat||'').toLowerCase()==='archived' ? 'Archived — hidden everywhere in the app' : 'Hidden category — not visible in the app'}">⚠️</span>` : ''}
         <button class="feat-chip-x" title="Remove" onclick="featRemove('${g}', this.closest('.feat-chip').dataset.key)">✕</button>
       </div>`;
     }).join('');
@@ -5248,7 +5256,7 @@ function renderFeatPicker() {
       <span style="font-size:12px;flex-shrink:0;">${FEAT_TYPE_BADGES[i.type] || ''}</span>
       <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(i.title)}</span>
       <span style="font-size:11px;color:var(--muted);flex-shrink:0;">${escHtml(i.cat || i.type)}</span>
-      ${(i.cat||'').toLowerCase()==='hidden' ? '<span style="font-size:10px;color:var(--orange);flex-shrink:0;" title="Hidden category content never displays in the app, even when featured">⚠️ hidden — won\'t appear in app</span>' : ''}
+      ${['hidden','archived'].includes((i.cat||'').toLowerCase()) ? `<span style="font-size:10px;color:var(--orange);flex-shrink:0;" title="${(i.cat||'').toLowerCase()==='archived' ? 'Archived — hidden everywhere in the app, even Private' : 'Hidden category content never displays in the app, even when featured'}">⚠️ ${(i.cat||'').toLowerCase()==='archived' ? 'archived' : 'hidden'} — won\'t appear in app</span>` : ''}
       <button class="btn btn-sm ${added ? 'btn-ghost' : 'btn-primary'}" style="flex-shrink:0;" ${added ? 'disabled' : ''}
         onclick="featPickerAdd('${escHtml(i.key)}', this)">${added ? '✓ Added' : '➕ Add'}</button>
     </div>`;
@@ -5402,7 +5410,7 @@ function renderBooksTable() {
     el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No books yet. Click <b>+ Add Book</b> to get started.</div>';
     return;
   }
-  const catOpts = (sel) => ['all','books-for-boys','books-for-girls','theology','books-for-mothers','hidden'].map(v => `<option value="${v}"${v===sel?' selected':''}>${v==='all'?'All':v.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>`).join('');
+  const catOpts = (sel) => ['all','books-for-boys','books-for-girls','theology','books-for-mothers','hidden','archived'].map(v => `<option value="${v}"${v===sel?' selected':''}>${v==='all'?'All':v.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>`).join('');
   const rows = _books.map(b => `
     <tr>
       <td style="padding:10px 12px;">
