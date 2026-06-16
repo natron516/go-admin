@@ -618,6 +618,66 @@ app.all('/api/audio-transcript/:playbackId', async (req, res) => {
   }
 });
 
+// Locate the audio TIMESTAMP for a snippet of transcript text. Used by the
+// app's "Listen" button on a highlighted note: given the highlight's quoted
+// text, find where it was spoken so the player can seek there.
+// GET /api/audio-transcript/:playbackId/locate?q=<snippet>
+// -> { ok: true, start: <seconds> } | { ok: false, message }
+function normForMatch(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')   // drop punctuation
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+app.get('/api/audio-transcript/:playbackId/locate', async (req, res) => {
+  try {
+    const q = normForMatch(req.query.q || '');
+    if (q.length < 4) return res.json({ ok: false, message: 'Query too short.' });
+    const assetId = await assetIdForPlaybackId(req.params.playbackId);
+    if (!assetId) return res.json({ ok: false, message: 'No asset for that playback ID.' });
+    const current = await mux('GET', `/video/v1/assets/${assetId}`);
+    const asset = current.data;
+    const textTrack = (asset?.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
+    if (!textTrack) return res.json({ ok: false, message: 'No transcript captions ready.' });
+    const pid = asset.playback_ids?.[0]?.id;
+    const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+    if (!r.ok) return res.json({ ok: false, message: 'VTT fetch failed.' });
+    const cues = parseVtt(await r.text());
+    if (!cues.length) return res.json({ ok: false, message: 'Empty transcript.' });
+
+    // Build one normalized string of all cue text, tracking which cue each
+    // character belongs to (so a found offset maps back to a cue start time).
+    let big = '';
+    const owners = []; // owners[i] = index of cue that produced char i of big
+    for (let ci = 0; ci < cues.length; ci++) {
+      const piece = normForMatch(cues[ci].text);
+      if (!piece) continue;
+      const withSpace = (big.length ? ' ' : '') + piece;
+      for (let k = 0; k < withSpace.length; k++) owners.push(ci);
+      big += withSpace;
+    }
+
+    // Try the full snippet first, then progressively shorter leading slices so a
+    // small transcript-vs-caption wording difference still finds the spot.
+    const words = q.split(' ');
+    let foundIdx = -1;
+    for (const take of [words.length, 12, 8, 6, 4]) {
+      if (take > words.length) continue;
+      const probe = words.slice(0, take).join(' ');
+      const idx = big.indexOf(probe);
+      if (idx >= 0) { foundIdx = idx; break; }
+    }
+    if (foundIdx < 0) return res.json({ ok: false, message: 'Snippet not found in transcript.' });
+    const cueIdx = owners[foundIdx] ?? 0;
+    const start = cues[cueIdx]?.start ?? 0;
+    return res.json({ ok: true, start });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Batch: kick off caption generation for every Korby-lecture audio track.
 // Reads audio docs from Firestore, finds the Korby ones (artist/title/category),
 // resolves each playback ID -> asset, and starts generate-subtitles where missing.
