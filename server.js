@@ -562,6 +562,93 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
   }
 });
 
+// Resolve a Mux PLAYBACK ID -> asset ID. Audio tracks in the app only carry the
+// stream URL (https://stream.mux.com/<playbackId>.m3u8), so the app passes the
+// playback ID and we map it to the underlying asset.
+async function assetIdForPlaybackId(playbackId) {
+  const data = await mux('GET', `/video/v1/playback-ids/${playbackId}`);
+  return data?.data?.object?.id || null; // { object: { type: 'asset', id } }
+}
+
+// Get or generate a transcript for an AUDIO track by its Mux playback ID.
+// Used by the iOS/tvOS app: tapping the transcript icon on an audio track hits
+// this with the playback ID parsed from the track's stream URL.
+// GET  -> returns transcript if ready, else current status (does NOT start it)
+// POST -> returns transcript if ready, else kicks off caption generation
+app.all('/api/audio-transcript/:playbackId', async (req, res) => {
+  try {
+    const assetId = await assetIdForPlaybackId(req.params.playbackId);
+    if (!assetId) return res.status(404).json({ status: 'unavailable', message: 'No asset for that playback ID.' });
+    const current = await mux('GET', `/video/v1/assets/${assetId}`);
+    const asset = current.data;
+    if (!asset) return res.status(404).json({ status: 'unavailable', message: 'Asset not found.' });
+
+    const tracks = asset.tracks || [];
+    const textTrack = tracks.find(t => t.type === 'text' && t.text_type === 'subtitles');
+
+    if (!textTrack) {
+      if (req.method !== 'POST') return res.json({ status: 'none', message: 'No transcript yet.' });
+      const audioTrack = tracks.find(t => t.type === 'audio');
+      if (!audioTrack) return res.json({ status: 'unavailable', message: 'No audio track on this asset.' });
+      try {
+        await mux('POST', `/video/v1/assets/${assetId}/tracks/${audioTrack.id}/generate-subtitles`, {
+          generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+        });
+        console.log(`[audio-transcript] Started caption generation for asset ${assetId} (pid ${req.params.playbackId})`);
+        return res.json({ status: 'preparing', message: 'Transcription started — takes a few minutes.' });
+      } catch (e) {
+        return res.json({ status: 'errored', message: 'Could not start transcription: ' + e.message });
+      }
+    }
+    if (textTrack.status === 'preparing') return res.json({ status: 'preparing', message: 'Transcription in progress…' });
+    if (textTrack.status === 'errored') return res.json({ status: 'errored', message: 'Transcription failed.' });
+
+    const clean = await buildCleanTranscript(asset);
+    if (!clean) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
+    // Lectures have no worship intro; buildCleanTranscript only trims when it
+    // detects pre-sermon singing, so for these tracks sermonStart is ~0 and the
+    // full lecture text is returned.
+    res.json({ status: 'ready', text: clean.text, trackId: textTrack.id });
+  } catch (e) {
+    res.status(500).json({ status: 'errored', error: e.message });
+  }
+});
+
+// Batch: kick off caption generation for every Korby-lecture audio track.
+// Reads audio docs from Firestore, finds the Korby ones (artist/title/category),
+// resolves each playback ID -> asset, and starts generate-subtitles where missing.
+app.post('/api/audio-transcripts/korby', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('audioAssets').get();
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const korby = all.filter(a => /korby/i.test(`${a.title || ''} ${a.artist || ''}`));
+    let started = 0, already = 0, failed = 0, noAsset = 0;
+    const detail = [];
+    for (const a of korby) {
+      const m = /stream\.mux\.com\/([^.\/?]+)/.exec(a.audioUrl || '');
+      if (!m) { failed++; detail.push({ title: a.title, result: 'no-playback-id' }); continue; }
+      try {
+        const assetId = await assetIdForPlaybackId(m[1]);
+        if (!assetId) { noAsset++; detail.push({ title: a.title, result: 'no-asset' }); continue; }
+        const cur = await mux('GET', `/video/v1/assets/${assetId}`);
+        const asset = cur.data; const tracks = asset?.tracks || [];
+        if (tracks.find(t => t.type === 'text' && t.text_type === 'subtitles')) { already++; detail.push({ title: a.title, result: 'already' }); continue; }
+        const audioTrack = tracks.find(t => t.type === 'audio');
+        if (!audioTrack) { failed++; detail.push({ title: a.title, result: 'no-audio-track' }); continue; }
+        await mux('POST', `/video/v1/assets/${assetId}/tracks/${audioTrack.id}/generate-subtitles`, {
+          generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+        });
+        started++; detail.push({ title: a.title, result: 'started' });
+      } catch (e) { failed++; detail.push({ title: a.title, result: 'error: ' + e.message }); }
+    }
+    console.log(`[audio-transcripts/korby] started=${started} already=${already} noAsset=${noAsset} failed=${failed}`);
+    res.json({ total: korby.length, started, already, noAsset, failed, detail });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Backfill: start transcription for ready SERMON assets that don't have captions yet
 app.post('/api/transcripts/backfill', async (req, res) => {
   try {
