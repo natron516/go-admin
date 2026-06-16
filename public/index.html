@@ -6616,7 +6616,7 @@ function fmtDuration(secs) {
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 
-let _audioSortCol = 'title', _audioSortAsc = true;
+let _audioSortCol = 'series', _audioSortAsc = true;
 
 function getAudioDate(a) {
   if (!a.createdAt) return 0;
@@ -6643,13 +6643,26 @@ function renderAudioTable() {
     el.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted);">No audio assets yet. Click <b>+ Add Audio</b> to get started.</div>';
     return;
   }
+  const seriesTitle = a => ((_seriesList.find(s => s.id === a.seriesId) || {}).title || '').toLowerCase();
+  const epNum = a => { const n = Number(a.episodeNumber); return Number.isFinite(n) ? n : Infinity; };
   const sorted = [..._audioAssets].sort((a, b) => {
+    // Series sort: group by series title, then ascending episode/track number
+    // within each series. Unassigned (no series) always sorts to the bottom.
+    if (_audioSortCol === 'series') {
+      const sa = seriesTitle(a), sb = seriesTitle(b);
+      const aHas = !!sa, bHas = !!sb;
+      if (aHas !== bHas) return aHas ? -1 : 1; // unassigned always last
+      if (sa !== sb) { const c = sa < sb ? -1 : 1; return _audioSortAsc ? c : -c; }
+      // same series → always ascending by episode number, then title
+      const ea = epNum(a), eb = epNum(b);
+      if (ea !== eb) return ea - eb;
+      return (a.title||'').toLowerCase() < (b.title||'').toLowerCase() ? -1 : 1;
+    }
     let va, vb;
     switch (_audioSortCol) {
       case 'title': va = (a.title||'').toLowerCase(); vb = (b.title||'').toLowerCase(); break;
       case 'artist': va = (a.artist||'').toLowerCase(); vb = (b.artist||'').toLowerCase(); break;
       case 'category': va = (a.category||'').toLowerCase(); vb = (b.category||'').toLowerCase(); break;
-      case 'series': va = ((_seriesList.find(s=>s.id===a.seriesId)||{}).title||'').toLowerCase(); vb = ((_seriesList.find(s=>s.id===b.seriesId)||{}).title||'').toLowerCase(); break;
       case 'date': va = getAudioDate(a); vb = getAudioDate(b); break;
       default: va = (a.title||'').toLowerCase(); vb = (b.title||'').toLowerCase();
     }
