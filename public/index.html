@@ -1669,6 +1669,11 @@ tr.dirty .at-save { display: inline-flex !important; }
                 <option value="book">Books</option>
                 <option value="article">Articles</option>
               </select>
+              <select id="pastor-picker-sort" onchange="renderPastorPicker()"
+                style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:9px 12px;outline:none;">
+                <option value="recent">Recently uploaded</option>
+                <option value="name">Name (A–Z)</option>
+              </select>
             </div>
             <div id="pastor-picker-list" style="max-height:52vh;overflow-y:auto;margin-top:10px;display:flex;flex-direction:column;gap:4px;"></div>
             <div style="display:flex;justify-content:flex-end;margin-top:12px;">
@@ -5353,6 +5358,16 @@ async function openPastorPicker() {
       fetch('/api/books').then(j).catch(() => ({})),
       fetch('/api/articles').then(j).catch(() => ({})),
     ]);
+    // Normalize an upload timestamp (epoch ms) from either Mux (created_at: unix
+    // seconds string) or Firestore (createdAt: {_seconds} or ISO/Date).
+    const ts = v => {
+      if (v == null) return 0;
+      if (typeof v === 'object' && v._seconds != null) return v._seconds * 1000;
+      if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // seconds vs ms
+      const n = Number(v);
+      if (Number.isFinite(n)) return n < 1e12 ? n * 1000 : n;
+      const d = Date.parse(v); return Number.isFinite(d) ? d : 0;
+    };
     const items = [];
     (assetsResp.data || []).forEach(a => {
       const pt = parsePassthrough(a.passthrough);
@@ -5362,19 +5377,19 @@ async function openPastorPicker() {
       const vtitle = (a.meta && a.meta.title) || a.title || pt.title || 'Untitled';
       items.push({ type:'video', id:a.id, title:vtitle, sub:'Video',
         thumb: a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''),
-        icon:'🎬', _title:vtitle === 'Untitled' ? '' : vtitle });
+        icon:'🎬', _title:vtitle === 'Untitled' ? '' : vtitle, _ts: ts(a.created_at) });
     });
     (audioResp.audio || []).forEach(a => {
       if (a.category === 'hidden' || a.category === 'archived') return;
-      items.push({ type:'audio', id:a.id, title:a.title, sub:a.artist||'Audio', thumb:a.coverImageUrl, icon:'🎧', _title:a.title });
+      items.push({ type:'audio', id:a.id, title:a.title, sub:a.artist||'Audio', thumb:a.coverImageUrl, icon:'🎧', _title:a.title, _ts: ts(a.createdAt) });
     });
     (booksResp.books || []).forEach(b => {
       if (b.category === 'hidden' || b.category === 'archived') return;
-      items.push({ type:'book', id:b.id, title:b.title, sub:b.author||'Book', thumb:b.coverImageUrl, icon:'📚', _title:b.title });
+      items.push({ type:'book', id:b.id, title:b.title, sub:b.author||'Book', thumb:b.coverImageUrl, icon:'📚', _title:b.title, _ts: ts(b.createdAt) });
     });
     (articlesResp.articles || []).forEach(a => {
       if (a.category === 'hidden' || a.category === 'archived') return;
-      items.push({ type:'article', id:a.id, title:a.title, sub:a.author||'Article', thumb:a.coverImageUrl, icon:'📄', _title:a.title });
+      items.push({ type:'article', id:a.id, title:a.title, sub:a.author||'Article', thumb:a.coverImageUrl, icon:'📄', _title:a.title, _ts: ts(a.createdAt) });
     });
     _pastorPickerItems = items;
     renderPastorPicker();
@@ -5391,10 +5406,14 @@ function renderPastorPicker() {
   const list = document.getElementById('pastor-picker-list');
   const q = (document.getElementById('pastor-picker-search').value || '').toLowerCase();
   const typeFilter = document.getElementById('pastor-picker-type').value;
+  const sortMode = (document.getElementById('pastor-picker-sort') || {}).value || 'recent';
   const filtered = _pastorPickerItems.filter(it =>
     (typeFilter === 'all' || it.type === typeFilter) &&
     (!q || (it._title || '').toLowerCase().includes(q))
   );
+  filtered.sort((a, b) => sortMode === 'name'
+    ? (a._title || '').toLowerCase().localeCompare((b._title || '').toLowerCase())
+    : (b._ts || 0) - (a._ts || 0)); // recent: newest uploaded first
   if (!filtered.length) {
     list.innerHTML = '<p style="text-align:center;padding:24px;color:var(--muted);">No matching content.</p>';
     return;
