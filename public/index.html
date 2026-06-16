@@ -1327,6 +1327,11 @@ tr.dirty .at-save { display: inline-flex !important; }
         <span class="nav-label">Featured</span>
       </button>
 
+      <button class="tab" data-label="Pastor Content" onclick="navTo('pastor', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="nav-label">Pastor Content</span>
+      </button>
+
       <!-- Watch -->
       <div style="padding:12px 10px 2px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;opacity:.7;" class="nav-label">Watch</div>
 
@@ -1633,6 +1638,20 @@ tr.dirty .at-save { display: inline-flex !important; }
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- ── PASTOR CONTENT ──────────────────────────── -->
+      <section id="tab-pastor" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">🔒 Pastor Content</div>
+            <div class="page-subtitle">All media marked Private (Hidden) — videos, audio, books &amp; articles. Mark any item Private and it appears here automatically.</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadPastorContent()">↺ Refresh</button>
+          </div>
+        </div>
+        <div id="pastor-content"><div class="spinner"></div></div>
       </section>
 
       <!-- ── USERS ───────────────────────────────────── -->
@@ -3301,6 +3320,7 @@ function showTab(name, btn) {
   if (name === 'live')     loadLive();
   if (name === 'assets')   loadAssets();
   if (name === 'featured') loadFeatured();
+  if (name === 'pastor')   loadPastorContent();
   if (name === 'users')    loadUsers();
   if (name === 'feedback') loadFeedback();
   if (name === 'analytics') { loadMuxCost(); loadAnalytics(); }
@@ -5192,6 +5212,65 @@ async function loadFeatured() {
     });
     featItemByKey = Object.fromEntries(featAllItems.map(i => [i.key, i]));
     renderFeaturedGroups();
+  } catch(err) {
+    el.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(err.message)}</p>`;
+  }
+}
+
+// ── Pastor Content (admin portal page) ──────────────────
+// Aggregates every media item marked Private (category === 'hidden')
+// across videos, audio, books and articles. Mark anything Private in its
+// own page and it shows up here automatically.
+async function loadPastorContent() {
+  const el = document.getElementById('pastor-content');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const j = r => r.ok ? r.json() : {};
+    const [assetsResp, audioResp, booksResp, articlesResp] = await Promise.all([
+      fetch('/api/assets').then(j).catch(() => ({})),
+      fetch('/api/audio').then(j).catch(() => ({})),
+      fetch('/api/books').then(j).catch(() => ({})),
+      fetch('/api/articles').then(j).catch(() => ({})),
+    ]);
+
+    const videos = (assetsResp.data || []).filter(a => (parsePassthrough(a.passthrough).category || '') === 'hidden');
+    const audio = (audioResp.audio || []).filter(a => a.category === 'hidden');
+    const books = (booksResp.books || []).filter(b => b.category === 'hidden');
+    const articles = (articlesResp.articles || []).filter(a => a.category === 'hidden');
+
+    const total = videos.length + audio.length + books.length + articles.length;
+    if (!total) {
+      el.innerHTML = '<p style="text-align:center;padding:48px 16px;color:var(--muted);">No private content yet. Mark any video, audio, book, or article as <strong>🚫 Hidden (Private)</strong> and it will appear here.</p>';
+      return;
+    }
+
+    const thumb = (url, fallback) => url
+      ? `<img src="${escAttr(url)}" style="width:54px;height:54px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--surface2);" onerror="this.style.display='none'">`
+      : `<div style="width:54px;height:54px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;">${fallback}</div>`;
+
+    const row = (icon, title, sub, thumbUrl) => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);">
+        ${thumb(thumbUrl, icon)}
+        <div style="min-width:0;flex:1;">
+          <div style="font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(title || '(untitled)')}</div>
+          <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(sub || '')}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;">🔒 Private</span>
+      </div>`;
+
+    const groupCard = (label, count, rowsHtml) => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px;">
+        <div style="padding:12px 14px;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:#c084fc;background:rgba(168,85,247,.08);border-bottom:1px solid var(--border);">${label} (${count})</div>
+        ${rowsHtml}
+      </div>`;
+
+    let html = '';
+    if (videos.length)   html += groupCard('🎬 Videos', videos.length, videos.map(a => row('🎬', a.title || (parsePassthrough(a.passthrough).title), 'Video', a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''))).join(''));
+    if (audio.length)    html += groupCard('🎧 Audio', audio.length, audio.map(a => row('🎧', a.title, a.artist || 'Audio', a.coverImageUrl)).join(''));
+    if (books.length)    html += groupCard('📚 Books', books.length, books.map(b => row('📚', b.title, b.author || 'Book', b.coverImageUrl)).join(''));
+    if (articles.length) html += groupCard('📄 Articles', articles.length, articles.map(a => row('📄', a.title, a.author || 'Article', a.coverImageUrl)).join(''));
+
+    el.innerHTML = html;
   } catch(err) {
     el.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(err.message)}</p>`;
   }
