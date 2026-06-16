@@ -649,6 +649,45 @@ app.post('/api/audio-transcripts/korby', async (req, res) => {
   }
 });
 
+// Status map for the admin audio list: returns { statuses: { <audioAssetId>: 'ready'|'preparing'|'errored'|'none' } }
+// so the UI can show a 📜 transcript icon next to assets that have a (ready/in-progress) transcript.
+// Resolves each audio asset's Mux playback ID -> asset -> text track status, in small parallel batches.
+app.get('/api/audio-transcript-status', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('audioAssets').get();
+    const audio = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const statuses = {};
+
+    async function statusFor(a) {
+      const m = /stream\.mux\.com\/([^.\/?]+)/.exec(a.audioUrl || '');
+      if (!m) return 'none';
+      try {
+        const assetId = await assetIdForPlaybackId(m[1]);
+        if (!assetId) return 'none';
+        const cur = await mux('GET', `/video/v1/assets/${assetId}`);
+        const tracks = cur?.data?.tracks || [];
+        const textTrack = tracks.find(t => t.type === 'text' && t.text_type === 'subtitles');
+        if (!textTrack) return 'none';
+        if (textTrack.status === 'ready') return 'ready';
+        if (textTrack.status === 'preparing') return 'preparing';
+        if (textTrack.status === 'errored') return 'errored';
+        return 'none';
+      } catch { return 'none'; }
+    }
+
+    const CONCURRENCY = 6;
+    for (let i = 0; i < audio.length; i += CONCURRENCY) {
+      const batch = audio.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(a => statusFor(a).then(s => [a.id, s])));
+      for (const [id, s] of results) statuses[id] = s;
+    }
+    res.json({ statuses });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Backfill: start transcription for ready SERMON assets that don't have captions yet
 app.post('/api/transcripts/backfill', async (req, res) => {
   try {

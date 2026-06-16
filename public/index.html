@@ -4491,6 +4491,58 @@ async function fetchTranscript(assetId) {
   }
 }
 
+// Audio transcripts are keyed by Mux PLAYBACK ID (parsed from the stream URL),
+// served by /api/audio-transcript/:playbackId — separate from the video endpoint.
+async function openAudioTranscript(assetId, title, audioUrl) {
+  const modal = document.getElementById('transcript-modal');
+  const body = document.getElementById('transcript-body');
+  document.getElementById('transcript-modal-title').textContent = `\ud83d\udcdc Transcript: ${title || 'Audio'}`;
+  document.getElementById('transcript-copy-btn').style.display = 'none';
+  document.getElementById('transcript-dl-btn').style.display = 'none';
+  document.getElementById('transcript-search-bar').style.display = 'none';
+  document.getElementById('transcript-search').value = '';
+  document.getElementById('transcript-search-count').textContent = '';
+  const m = /stream\.mux\.com\/([^.\/?]+)/.exec(audioUrl || '');
+  if (!m) { body.textContent = '\u274c No playback ID on this audio asset.'; modal.classList.add('open'); return; }
+  const pid = m[1];
+  body.textContent = 'Checking transcript status\u2026';
+  modal.classList.add('open');
+  await fetchAudioTranscript(pid);
+}
+
+async function fetchAudioTranscript(pid) {
+  const body = document.getElementById('transcript-body');
+  try {
+    // GET does not start generation — only reads status / returns text if ready.
+    const r = await fetch('/api/audio-transcript/' + pid);
+    const data = await r.json();
+    if (data.status === 'ready') {
+      if (_transcriptPolls[pid]) { clearInterval(_transcriptPolls[pid]); delete _transcriptPolls[pid]; }
+      _transcriptText = data.text || '';
+      body.textContent = _transcriptText || '(Transcript is empty)';
+      if (_transcriptText) document.getElementById('transcript-search-bar').style.display = 'flex';
+      document.getElementById('transcript-copy-btn').style.display = '';
+    } else if (data.status === 'preparing') {
+      body.textContent = '\u23f3 ' + (data.message || 'Transcription in progress\u2026') + '\n\nThis window updates automatically.';
+      if (!_transcriptPolls[pid]) {
+        _transcriptPolls[pid] = setInterval(() => {
+          if (!document.getElementById('transcript-modal').classList.contains('open')) {
+            clearInterval(_transcriptPolls[pid]);
+            delete _transcriptPolls[pid];
+            return;
+          }
+          fetchAudioTranscript(pid);
+        }, 15000);
+      }
+    } else {
+      if (_transcriptPolls[pid]) { clearInterval(_transcriptPolls[pid]); delete _transcriptPolls[pid]; }
+      body.textContent = '\u274c ' + (data.message || data.error || 'Transcript unavailable.');
+    }
+  } catch (e) {
+    body.textContent = '\u274c Error: ' + e.message;
+  }
+}
+
 function closeTranscriptModal() {
   document.getElementById('transcript-modal').classList.remove('open');
   Object.keys(_transcriptPolls).forEach(k => { clearInterval(_transcriptPolls[k]); delete _transcriptPolls[k]; });
@@ -6520,6 +6572,7 @@ async function previewPodcastEpisodes(id) {
 // =============================================================
 let _audioAssets = [];
 let _editingAudioId = null;
+let _audioTranscriptStatus = {}; // { audioAssetId: 'ready'|'preparing'|'errored'|'none' }
 
 async function loadAudio() {
   const el = document.getElementById('audio-content');
@@ -6529,9 +6582,27 @@ async function loadAudio() {
     const data = await r.json();
     _audioAssets = data.audio || [];
     renderAudioTable();
+    loadAudioTranscriptStatus(); // non-blocking; refreshes the 📜 icons when it resolves
   } catch (e) {
     el.innerHTML = `<p style="color:var(--red)">Error: ${escHtml(e.message)}</p>`;
   }
+}
+
+// Fetch transcript readiness for all audio assets, then re-render so the 📜 icon
+// appears next to the bell for any asset that has a generated transcript.
+async function loadAudioTranscriptStatus() {
+  try {
+    const r = await fetch('/api/audio-transcript-status');
+    const data = await r.json();
+    _audioTranscriptStatus = data.statuses || {};
+    renderAudioTable();
+  } catch (e) { /* leave icons hidden on failure */ }
+}
+
+// Parse the Mux playback ID out of an audio asset's stream URL.
+function audioPlaybackId(a) {
+  const m = /stream\.mux\.com\/([^.\/?]+)/.exec((a && a.audioUrl) || '');
+  return m ? m[1] : '';
 }
 
 function fmtDuration(secs) {
@@ -6598,7 +6669,14 @@ function renderAudioTable() {
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDuration(a.duration)}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
         ${a.audioUrl ? `<a href="${escAttr(a.audioUrl)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-right:4px;">&#9654; Play</a>` : ''}
-        <button class="btn btn-ghost btn-sm" onclick="notifyContent('audio','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.coverImageUrl||'')}')" id="notify-audio-${escAttr(a.id)}" title="Notify users">\ud83d\udd14</button>
+        <button class="btn btn-ghost btn-sm" onclick="notifyContent('audio','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.coverImageUrl||'')}')" id="notify-audio-${escAttr(a.id)}" title="Notify users">\ud83d\udd14</button>${(() => {
+          const ts = _audioTranscriptStatus[a.id];
+          if (!ts || ts === 'none') return '';
+          const ready = ts === 'ready';
+          const prep = ts === 'preparing';
+          const tip = ready ? 'View transcript' : prep ? 'Transcribing\u2026' : 'Transcript errored';
+          return `<button class="btn btn-ghost btn-sm ${ready ? 'dl-ready' : ''}" onclick="openAudioTranscript('${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.audioUrl||'')}')" title="${tip}" id="tr-audio-${escAttr(a.id)}" style="margin-left:2px;">${prep ? '<span class=dl-pulse>\ud83d\udcdc</span>' : '\ud83d\udcdc'}</button>`;
+        })()}
         <button class="btn btn-ghost btn-sm" onclick="editAudio('${escAttr(a.id)}')">Edit</button>
         <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
       </td>
