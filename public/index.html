@@ -6637,6 +6637,20 @@ function sortAudio(col) {
   renderAudioTable();
 }
 
+// Distinct color per audio category for the Category badge.
+function audioCatColor(cat) {
+  switch ((cat || '').toLowerCase()) {
+    case 'music':       return { bg: 'rgba(99,102,241,.18)',  fg: '#818cf8' }; // indigo
+    case 'children':    return { bg: 'rgba(34,197,94,.18)',   fg: '#22c55e' }; // green
+    case 'sermons':     return { bg: 'rgba(245,158,11,.18)',  fg: '#f59e0b' }; // amber
+    case 'spoken-word': return { bg: 'rgba(168,85,247,.18)',  fg: '#a855f7' }; // purple
+    case 'audiobook':   return { bg: 'rgba(56,189,248,.18)',  fg: '#38bdf8' }; // sky
+    case 'hidden':      return { bg: 'rgba(239,68,68,.18)',   fg: '#ef4444' }; // red (Pastor Content)
+    case 'archived':    return { bg: 'rgba(157,157,178,.18)', fg: '#9d9db2' }; // muted gray
+    default:            return { bg: 'rgba(157,157,178,.18)', fg: '#9d9db2' };
+  }
+}
+
 function renderAudioTable() {
   const el = document.getElementById('audio-content');
   if (!_audioAssets.length) {
@@ -6680,7 +6694,7 @@ function renderAudioTable() {
         <span style="font-weight:600;">${escHtml(a.title)}</span>
       </td>
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.artist||'')}</td>
-      <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
+      <td style="padding:10px 12px;">${(() => { const c = audioCatColor(a.category); return a.category ? `<span style="background:${c.bg};color:${c.fg};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category)}</span>` : ''; })()}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${(() => { const s = a.seriesId ? _seriesList.find(x=>x.id===a.seriesId) : null; return s ? '<span style="color:var(--accent2);font-size:11px;">&#128250; ' + escHtml(s.title||'Series') + '</span>' : '<span style="color:var(--muted);">\u2014</span>'; })()}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDate(a)}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDuration(a.duration)}</td>
