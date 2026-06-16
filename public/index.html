@@ -1560,14 +1560,14 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="music">🎵 Music</option>
             <option value="performance">🎭 Performance</option>
             <option value="funzone">🎉 FunZone</option>
-            <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
             <option value="uncategorized">📁 Uncategorized (Series)</option>
           </select>
           <div class="exclude-dropdown" id="exclude-dropdown">
             <button class="btn btn-ghost btn-sm" id="exclude-btn" onclick="toggleExcludeMenu(event)">🚫 Exclude ▾</button>
             <div class="exclude-menu" id="exclude-menu">
-              <label><input type="checkbox" value="hidden" onchange="filterAssets()"> 🚫 Hidden (Private)</label>
+              <label><input type="checkbox" value="hidden" onchange="filterAssets()"> 🔒 Pastor Content</label>
               <label><input type="checkbox" value="archived" onchange="filterAssets()"> ❌ Archived (none)</label>
               <label><input type="checkbox" value="sermon" onchange="filterAssets()"> 📖 Sermon</label>
               <label><input type="checkbox" value="children" onchange="filterAssets()"> ⭐ Children's</label>
@@ -1649,9 +1649,34 @@ tr.dirty .at-save { display: inline-flex !important; }
           </div>
           <div class="page-actions">
             <button class="btn btn-ghost btn-sm" onclick="loadPastorContent()">↺ Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openPastorPicker()">+ Add Pastor Content</button>
           </div>
         </div>
         <div id="pastor-content"><div class="spinner"></div></div>
+
+        <!-- Add Pastor Content picker modal -->
+        <div class="modal-backdrop" id="pastor-picker-modal" onclick="if(event.target===this)closePastorPicker()">
+          <div class="modal" style="max-width:680px;">
+            <h3>Add Pastor Content</h3>
+            <p style="font-size:13px;color:var(--muted);margin:4px 0 12px;">Select existing content to mark as Pastor Content (private). It will appear in the Pastor Content tab in the app for users with private access.</p>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="pastor-picker-search" placeholder="🔍 Search by title…" oninput="renderPastorPicker()"
+                style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:9px 12px;outline:none;">
+              <select id="pastor-picker-type" onchange="renderPastorPicker()"
+                style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:9px 12px;outline:none;">
+                <option value="all">All types</option>
+                <option value="video">Videos</option>
+                <option value="audio">Audio</option>
+                <option value="book">Books</option>
+                <option value="article">Articles</option>
+              </select>
+            </div>
+            <div id="pastor-picker-list" style="max-height:52vh;overflow-y:auto;margin-top:10px;display:flex;flex-direction:column;gap:4px;"></div>
+            <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+              <button class="btn btn-ghost" onclick="closePastorPicker()">Done</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ── USERS ───────────────────────────────────── -->
@@ -2017,7 +2042,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="books-for-girls">Books for Girls</option>
             <option value="theology">Theology</option>
             <option value="books-for-mothers">Books for Mothers</option>
-            <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
@@ -2086,7 +2111,7 @@ tr.dirty .at-save { display: inline-flex !important; }
           <label>Category</label>
           <select id="article-category">
             <option value="articles">All</option>
-            <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
@@ -2176,7 +2201,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="children">Children's</option>
             <option value="teaching">Teaching</option>
             <option value="music">Music</option>
-            <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
@@ -2244,7 +2269,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="devotional">Devotional</option>
             <option value="music">Music</option>
             <option value="general">General</option>
-            <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
@@ -2366,7 +2391,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="sermons">Sermons</option>
             <option value="spoken-word">Spoken Word</option>
             <option value="audiobook">Audiobook</option>
-            <option value="hidden">🚫 Hidden (Private)</option>
+            <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
           </select>
         </div>
@@ -3143,7 +3168,7 @@ const CATEGORIES = [
   { value: 'music',       label: '🎵 Music' },
   { value: 'performance', label: '🎭 Performance' },
   { value: 'funzone',     label: '🎉 FunZone' },
-  { value: 'hidden',      label: '🚫 Hidden (Private)' },
+  { value: 'hidden',      label: '🔒 Pastor Content' },
   { value: 'archived',    label: '❌ Archived (none — hidden everywhere)' },
 ];
 
@@ -5240,7 +5265,7 @@ async function loadPastorContent() {
 
     const total = videos.length + audio.length + books.length + articles.length;
     if (!total) {
-      el.innerHTML = '<p style="text-align:center;padding:48px 16px;color:var(--muted);">No private content yet. Mark any video, audio, book, or article as <strong>🚫 Hidden (Private)</strong> and it will appear here.</p>';
+      el.innerHTML = '<p style="text-align:center;padding:48px 16px;color:var(--muted);">No private content yet. Mark any video, audio, book, or article as <strong>🔒 Pastor Content</strong> and it will appear here.</p>';
       return;
     }
 
@@ -5273,6 +5298,103 @@ async function loadPastorContent() {
     el.innerHTML = html;
   } catch(err) {
     el.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(err.message)}</p>`;
+  }
+}
+
+// ── Add Pastor Content picker ─────────────────────────
+let _pastorPickerItems = [];   // all NON-private items available to add
+
+async function openPastorPicker() {
+  document.getElementById('pastor-picker-modal').classList.add('active');
+  const list = document.getElementById('pastor-picker-list');
+  list.innerHTML = '<div class="spinner"></div>';
+  try {
+    const j = r => r.ok ? r.json() : {};
+    const [assetsResp, audioResp, booksResp, articlesResp] = await Promise.all([
+      fetch('/api/assets').then(j).catch(() => ({})),
+      fetch('/api/audio').then(j).catch(() => ({})),
+      fetch('/api/books').then(j).catch(() => ({})),
+      fetch('/api/articles').then(j).catch(() => ({})),
+    ]);
+    const items = [];
+    (assetsResp.data || []).forEach(a => {
+      const pt = parsePassthrough(a.passthrough);
+      if ((pt.category || '') === 'hidden') return;
+      items.push({ type:'video', id:a.id, title:a.title || pt.title || 'Untitled', sub:'Video',
+        thumb: a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''),
+        icon:'🎬', _title:(a.title||pt.title||'') });
+    });
+    (audioResp.audio || []).forEach(a => {
+      if (a.category === 'hidden' || a.category === 'archived') return;
+      items.push({ type:'audio', id:a.id, title:a.title, sub:a.artist||'Audio', thumb:a.coverImageUrl, icon:'🎧', _title:a.title });
+    });
+    (booksResp.books || []).forEach(b => {
+      if (b.category === 'hidden' || b.category === 'archived') return;
+      items.push({ type:'book', id:b.id, title:b.title, sub:b.author||'Book', thumb:b.coverImageUrl, icon:'📚', _title:b.title });
+    });
+    (articlesResp.articles || []).forEach(a => {
+      if (a.category === 'hidden' || a.category === 'archived') return;
+      items.push({ type:'article', id:a.id, title:a.title, sub:a.author||'Article', thumb:a.coverImageUrl, icon:'📄', _title:a.title });
+    });
+    _pastorPickerItems = items;
+    renderPastorPicker();
+  } catch(err) {
+    list.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${escHtml(err.message)}</p>`;
+  }
+}
+
+function closePastorPicker() {
+  document.getElementById('pastor-picker-modal').classList.remove('active');
+}
+
+function renderPastorPicker() {
+  const list = document.getElementById('pastor-picker-list');
+  const q = (document.getElementById('pastor-picker-search').value || '').toLowerCase();
+  const typeFilter = document.getElementById('pastor-picker-type').value;
+  const filtered = _pastorPickerItems.filter(it =>
+    (typeFilter === 'all' || it.type === typeFilter) &&
+    (!q || (it._title || '').toLowerCase().includes(q))
+  );
+  if (!filtered.length) {
+    list.innerHTML = '<p style="text-align:center;padding:24px;color:var(--muted);">No matching content.</p>';
+    return;
+  }
+  const thumb = (url, fallback) => url
+    ? `<img src="${escAttr(url)}" style="width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--surface2);" onerror="this.style.display='none'">`
+    : `<div style="width:44px;height:44px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">${fallback}</div>`;
+  list.innerHTML = filtered.map(it => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;">
+      ${thumb(it.thumb, it.icon)}
+      <div style="min-width:0;flex:1;">
+        <div style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(it.title || '(untitled)')}</div>
+        <div style="font-size:11px;color:var(--muted);">${escHtml(it.sub)}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="markAsPastor('${it.type}','${escAttr(it.id)}', this)">🔒 Add</button>
+    </div>`).join('');
+}
+
+async function markAsPastor(type, id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    let url, body;
+    if (type === 'video') {
+      // Assets PATCH needs title; fetch current title from the picker item.
+      const it = _pastorPickerItems.find(x => x.type === 'video' && x.id === id);
+      url = `/api/assets/${id}`;
+      body = { title: it ? it.title : 'Untitled', passthrough: 'hidden' };
+    } else if (type === 'audio')   { url = `/api/audio/${id}`;    body = { category: 'hidden' }; }
+    else if (type === 'book')      { url = `/api/books/${id}`;    body = { category: 'hidden' }; }
+    else if (type === 'article')   { url = `/api/articles/${id}`; body = { category: 'hidden' }; }
+    const r = await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    // Remove from picker pool + refresh pastor list
+    _pastorPickerItems = _pastorPickerItems.filter(x => !(x.type === type && x.id === id));
+    renderPastorPicker();
+    if (typeof toast === 'function') toast('Added to Pastor Content');
+    loadPastorContent();
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔒 Add'; }
+    alert('Failed to add: ' + err.message);
   }
 }
 
