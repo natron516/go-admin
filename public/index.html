@@ -3724,6 +3724,7 @@ if (dropZoneInline) {
 fetch('/api/build',{credentials:'include'}).then(r=>r.json()).then(d=>{
   const v = 'b' + d.build;
   document.querySelectorAll('#admin-build,#admin-build-main,#build-tag').forEach(el => { if(el) el.textContent = v; });
+  const pb = document.getElementById('portal-build'); if (pb) pb.textContent = d.build;
   document.title = 'GO Admin ' + v;
 }).catch(()=>{});
 

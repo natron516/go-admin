@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 238;
+const ADMIN_BUILD = 241;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -2665,7 +2665,7 @@ app.get('/api/series/:id/episodes', async (req, res) => {
 
 // ── Portal Version ─────────────────────────────
 // PORTAL_BUILD = git commit count at deploy time. Bump alongside each deploy commit.
-const PORTAL_BUILD = 238;
+const PORTAL_BUILD = 241;
 app.get('/api/version', (req, res) => {
   res.json({
     build: PORTAL_BUILD,
