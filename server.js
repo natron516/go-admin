@@ -681,6 +681,46 @@ app.get('/api/audio-transcript/:playbackId/locate', async (req, res) => {
 // Batch: kick off caption generation for every Korby-lecture audio track.
 // Reads audio docs from Firestore, finds the Korby ones (artist/title/category),
 // resolves each playback ID -> asset, and starts generate-subtitles where missing.
+// Generic batch: kick off Mux caption generation for every audio asset whose
+// title/artist matches a regex (?match=). Used to transcribe a whole series so
+// its episodes become searchable + highlightable in the app.
+// POST /api/audio-transcripts/generate?match=unfolding
+app.post('/api/audio-transcripts/generate', async (req, res) => {
+  try {
+    const raw = (req.query.match || req.body?.match || '').toString().trim();
+    if (!raw) return res.status(400).json({ error: 'Provide ?match=<regex> (matches title+artist).' });
+    let re;
+    try { re = new RegExp(raw, 'i'); } catch (e) { return res.status(400).json({ error: 'Bad regex: ' + e.message }); }
+    const db = admin.firestore();
+    const snap = await db.collection('audioAssets').get();
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const matched = all.filter(a => re.test(`${a.title || ''} ${a.artist || ''}`));
+    let started = 0, already = 0, failed = 0, noAsset = 0;
+    const detail = [];
+    for (const a of matched) {
+      const m = /stream\.mux\.com\/([^.\/?]+)/.exec(a.audioUrl || '');
+      if (!m) { failed++; detail.push({ title: a.title, result: 'no-playback-id' }); continue; }
+      try {
+        const assetId = await assetIdForPlaybackId(m[1]);
+        if (!assetId) { noAsset++; detail.push({ title: a.title, result: 'no-asset' }); continue; }
+        const cur = await mux('GET', `/video/v1/assets/${assetId}`);
+        const asset = cur.data; const tracks = asset?.tracks || [];
+        if (tracks.find(t => t.type === 'text' && t.text_type === 'subtitles')) { already++; detail.push({ title: a.title, result: 'already' }); continue; }
+        const audioTrack = tracks.find(t => t.type === 'audio');
+        if (!audioTrack) { failed++; detail.push({ title: a.title, result: 'no-audio-track' }); continue; }
+        await mux('POST', `/video/v1/assets/${assetId}/tracks/${audioTrack.id}/generate-subtitles`, {
+          generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+        });
+        started++; detail.push({ title: a.title, result: 'started' });
+      } catch (e) { failed++; detail.push({ title: a.title, result: 'error: ' + e.message }); }
+    }
+    console.log(`[audio-transcripts/generate match=${raw}] started=${started} already=${already} noAsset=${noAsset} failed=${failed}`);
+    res.json({ match: raw, total: matched.length, started, already, noAsset, failed, detail });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/audio-transcripts/korby', async (req, res) => {
   try {
     const db = admin.firestore();
