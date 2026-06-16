@@ -5397,9 +5397,11 @@ async function openPastorPicker() {
       items.push({ type:'article', id:a.id, title:a.title, sub:a.author||'Article', thumb:a.coverImageUrl, icon:'📄', _title:a.title, _ts: ts(a.createdAt) });
     });
     (seriesResp.series || []).forEach(s => {
-      if (s.category === 'hidden' || s.category === 'archived') return;
+      // Show ALL series (including hidden/archived) so they can always be added.
       // Adding a series marks the series + all its files as Pastor Content.
-      items.push({ type:'series', id:s.id, title:s.title, sub:'Series — includes all files', thumb:s.artworkUrl, icon:'📺', _title:s.title, _ts: ts(s.createdAt) });
+      const tag = (s.category === 'hidden') ? ' \u2022 currently hidden'
+                : (s.category === 'archived') ? ' \u2022 currently archived' : '';
+      items.push({ type:'series', id:s.id, title:s.title, sub:'Series — includes all files' + tag, thumb:s.artworkUrl, icon:'📺', _title:s.title, _ts: ts(s.createdAt) });
     });
     _pastorPickerItems = items;
     renderPastorPicker();
