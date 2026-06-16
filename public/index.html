@@ -1411,7 +1411,7 @@ tr.dirty .at-save { display: inline-flex !important; }
       </button>
     </nav>
     <div class="sidebar-footer" style="font-size:11px;color:var(--muted);text-align:center;" title="Admin portal build">
-      <span class="nav-label">Portal build <span id="portal-build">239</span></span>
+      <span class="nav-label">Portal build <span id="portal-build">240</span></span>
     </div>
   </aside>
 
@@ -4880,8 +4880,11 @@ function renderUsers(users) {
     return d.toLocaleDateString(undefined, {month:'short',day:'numeric',year:'numeric'})
       + ' ' + d.toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'});
   };
-  // Desktop table
-  document.getElementById('users-tbody').innerHTML = users.map(u => {
+  // Split into private-access users (top section) and regular users
+  const privateUsers = users.filter(u => u.privateAccess);
+  const regularUsers = users.filter(u => !u.privateAccess);
+
+  const tableRowFor = u => {
     const joined = fmtDt(u.createdAt);
     const lastIn = fmtDt(u.lastSignIn);
     const providerLabel = { 'google.com':'🔵 Google', 'apple.com':'⚫ Apple', 'password':'✉️ Email', 'phone':'📞 Phone' }[u.provider] || u.provider;
@@ -4907,11 +4910,24 @@ function renderUsers(users) {
       <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}</td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" title="Revoke portal editor access" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')" title="Grant portal editor access">✏️ Make Editor</button>`) : ''}</td>
     </tr>`;
-  }).join('');
+  };
+
+  const sectionHeaderRow = (label, count) => `<tr><td colspan="10" style="background:rgba(168,85,247,.10);color:#c084fc;font-weight:700;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:8px 12px;border-top:1px solid rgba(168,85,247,.25)">${label} (${count})</td></tr>`;
+
+  let tbodyHtml = '';
+  if (privateUsers.length) {
+    tbodyHtml += sectionHeaderRow('🔒 Private Access', privateUsers.length);
+    tbodyHtml += privateUsers.map(tableRowFor).join('');
+  }
+  if (regularUsers.length) {
+    tbodyHtml += sectionHeaderRow('All Other Users', regularUsers.length);
+    tbodyHtml += regularUsers.map(tableRowFor).join('');
+  }
+  document.getElementById('users-tbody').innerHTML = tbodyHtml;
 
   // Mobile cards
   if (cardsEl) {
-    cardsEl.innerHTML = users.map(u => {
+    const cardFor = u => {
       const providerLabel = { 'google.com':'🔵 Google', 'apple.com':'⚫ Apple', 'password':'✉️ Email', 'phone':'📞 Phone' }[u.provider] || u.provider;
       const avatar = u.photoURL ? `<img class="user-avatar" src="${escHtml(u.photoURL)}" onerror="this.style.display='none'">` : `<div class="user-avatar" style="display:inline-flex;align-items:center;justify-content:center;font-size:14px;">👤</div>`;
       const pp = u.platforms || [];
@@ -4955,7 +4971,19 @@ function renderUsers(users) {
           ${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')">✏️ Make Editor</button>`) : ''}
         </div>
       </div>`;
-    }).join('');
+    };
+
+    const cardHeader = (label, count) => `<div style="margin:14px 4px 8px;color:#c084fc;font-weight:700;font-size:12px;letter-spacing:.4px;text-transform:uppercase">${label} (${count})</div>`;
+    let cardsHtml = '';
+    if (privateUsers.length) {
+      cardsHtml += cardHeader('🔒 Private Access', privateUsers.length);
+      cardsHtml += privateUsers.map(cardFor).join('');
+    }
+    if (regularUsers.length) {
+      cardsHtml += cardHeader('All Other Users', regularUsers.length);
+      cardsHtml += regularUsers.map(cardFor).join('');
+    }
+    cardsEl.innerHTML = cardsHtml;
   }
 }
 
