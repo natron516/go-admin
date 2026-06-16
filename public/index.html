@@ -1292,7 +1292,6 @@ tr.dirty .at-save { display: inline-flex !important; }
   <div class="modal-box">
     <h3>🎉 Video Uploaded!</h3>
     <p style="color:var(--muted);font-size:13px;margin-bottom:16px" id="upload-done-title"></p>
-    <label><input type="checkbox" id="upload-feat-check"> Add to Featured (top spot)</label>
     <label><input type="checkbox" id="upload-notify-check" checked> Send push notification to users</label>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeUploadDoneModal()">Skip</button>
@@ -2063,10 +2062,6 @@ tr.dirty .at-save { display: inline-flex !important; }
         <label>Audiobook URL</label>
         <input type="url" id="book-audiobook" placeholder="https://...">
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="book-featured" style="accent-color:var(--accent);width:15px;height:15px;">
-        <label for="book-featured" style="font-size:13px;cursor:pointer;">Featured</label>
-      </div>
     </div>
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeBookModal()">Cancel</button>
@@ -2138,10 +2133,6 @@ tr.dirty .at-save { display: inline-flex !important; }
         <div style="display:flex;align-items:center;gap:8px;">
           <input type="checkbox" id="article-published" style="accent-color:var(--accent);width:15px;height:15px;">
           <label for="article-published" style="font-size:13px;cursor:pointer;">Published</label>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="article-featured" style="accent-color:var(--accent);width:15px;height:15px;">
-          <label for="article-featured" style="font-size:13px;cursor:pointer;">Featured</label>
         </div>
       </div>
     </div>
@@ -2403,10 +2394,6 @@ tr.dirty .at-save { display: inline-flex !important; }
           <label>Sort Order</label>
           <input type="number" id="audio-sort" value="0" min="0">
         </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="audio-featured" style="accent-color:var(--accent);width:15px;height:15px;">
-        <label for="audio-featured" style="font-size:13px;cursor:pointer;">Featured</label>
       </div>
     </div>
     <div class="modal-actions" style="margin-top:20px;">
@@ -2837,7 +2824,6 @@ let lastUploadedAsset = null;
 function showUploadDoneModal(title, assetId, playbackId) {
   lastUploadedAsset = { title, assetId, playbackId };
   document.getElementById('upload-done-title').textContent = title || 'Untitled Video';
-  document.getElementById('upload-feat-check').checked = window._preUploadFeat || false;
   document.getElementById('upload-notify-check').checked = window._preUploadNotify !== undefined ? window._preUploadNotify : true;
   document.getElementById('upload-done-modal').classList.remove('hidden');
 }
@@ -2847,7 +2833,7 @@ function closeUploadDoneModal() {
 }
 async function applyUploadDoneActions() {
   if (!lastUploadedAsset) return;
-  const feat = document.getElementById('upload-feat-check').checked;
+  const feat = false; // Featuring is managed only in the Featured tab now.
   const notify = document.getElementById('upload-notify-check').checked;
   let { title, assetId, playbackId } = lastUploadedAsset;
   closeUploadDoneModal();
@@ -3840,7 +3826,6 @@ function renderFileList() {
       <div style="margin-bottom:8px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Category</label><select class="ut-select" onchange="updateFile('${item.uid}','passthrough',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);">${catOptions(item.passthrough)}</select></div>
       <div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--border);padding-top:8px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" ${notifyChecked} onchange="updateFile('${item.uid}','notify',this.checked)" ${dis?'disabled':''} style="width:18px;height:18px;"> 🔔 Notify users</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" ${featChecked} onchange="updateFile('${item.uid}','featured',this.checked)" ${dis?'disabled':''} style="width:18px;height:18px;"> ⭐ Add to Featured</label>
       </div>
     </div>`;
   }).join('');
@@ -5656,7 +5641,7 @@ function renderBooksTable() {
       </td>
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(b.author||'')}</td>
       <td style="padding:10px 12px;"><select onchange="inlineUpdateBook('${escAttr(b.id)}',{category:this.value})" style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;border:1px solid transparent;cursor:pointer;-webkit-appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%278%27 height=%278%27 viewBox=%270 0 8 8%27%3E%3Cpath fill=%27%236366f1%27 d=%27M4 6L0 2h8z%27/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 4px center;padding-right:16px;">${catOpts(b.category||'all')}</select></td>
-      <td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${b.featured?'checked':''} onchange="inlineUpdateBook('${escAttr(b.id)}',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:${b.featured?'var(--orange)':'var(--muted)'};font-size:13px;">${b.featured?'★ Featured':'—'}</span></label></td>
+
       <td style="padding:10px 12px;">
         ${b.amazonUrl ? `<a href="${escAttr(b.amazonUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;margin-right:6px;">Amazon</a>` : ''}
         ${b.kindleUrl ? `<a href="${escAttr(b.kindleUrl)}" target="_blank" style="color:var(--accent2);font-size:12px;margin-right:6px;">Kindle</a>` : ''}
@@ -5676,7 +5661,6 @@ function renderBooksTable() {
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Title</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Author</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Links</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
           </tr>
@@ -5699,7 +5683,6 @@ function openBookModal(book) {
   document.getElementById('book-kindle').value = book?.kindleUrl || '';
   document.getElementById('book-audiobook').value = book?.audiobookUrl || '';
   document.getElementById('book-coverfit').value = book?.coverFit || 'fill';
-  document.getElementById('book-featured').checked = !!book?.featured;
   document.getElementById('book-modal').classList.add('open');
 }
 
@@ -5727,7 +5710,6 @@ async function saveBook() {
     kindleUrl: document.getElementById('book-kindle').value.trim(),
     audiobookUrl: document.getElementById('book-audiobook').value.trim(),
     coverFit: document.getElementById('book-coverfit').value,
-    featured: document.getElementById('book-featured').checked,
   };
   try {
     const url = _editingBookId ? `/api/books/${_editingBookId}` : '/api/books';
@@ -6236,7 +6218,7 @@ function renderArticlesTable() {
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.author||'')}</td>
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
       <td style="padding:10px 12px;">${a.published ? '<span style="color:var(--green);font-weight:600;">Published</span>' : '<span style="color:var(--muted);">Draft</span>'}</td>
-      <td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${a.featured?'checked':''} onchange="inlinePatchArticle('${escAttr(a.id)}',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:${a.featured?'var(--orange)':'var(--muted)'};font-size:13px;">${a.featured?'★ Featured':'—'}</span></label></td>
+
       <td style="padding:10px 12px;white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('article','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.imageUrl||'')}')" id="notify-article-${escAttr(a.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewArticle('${escAttr(a.id)}')">Preview</button>
@@ -6253,7 +6235,6 @@ function renderArticlesTable() {
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Author</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
           </tr>
         </thead>
@@ -6290,7 +6271,7 @@ function openArticleModal(article) {
   document.getElementById('article-category').value = article?.category || 'articles';
   document.getElementById('article-sort').value = article?.sortOrder ?? 0;
   document.getElementById('article-published').checked = !!article?.published;
-  document.getElementById('article-featured').checked = !!article?.featured;
+
   document.getElementById('article-pdf-file').value = '';
   document.getElementById('article-pdf-url').value = article?.pdfUrl || '';
   document.getElementById('article-pdf-status').textContent = article?.pdfUrl ? '✓ PDF attached' : '';
@@ -6352,7 +6333,6 @@ async function saveArticle() {
     sortOrder: Number(document.getElementById('article-sort').value) || 0,
     content,
     published: document.getElementById('article-published').checked,
-    featured: document.getElementById('article-featured').checked,
     pdfUrl,
   };
   try {
@@ -6410,7 +6390,7 @@ function renderPodcastsTable() {
       </td>
       <td style="padding:10px 12px;max-width:240px;"><span style="font-size:11px;color:var(--muted);word-break:break-all;">${escHtml(p.feedUrl||'')}</span></td>
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(p.category||'')}</span></td>
-      <td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${p.featured?'checked':''} onchange="inlinePatchPodcast('${escAttr(p.id)}',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:${p.featured?'var(--orange)':'var(--muted)'};font-size:13px;">${p.featured?'★ Featured':'—'}</span></label></td>
+
       <td style="padding:10px 12px;">${p.enabled !== false ? '<span style="color:var(--green);font-weight:600;">Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('podcast','${escAttr(p.id)}','${escAttr(p.title)}','${escAttr(p.artworkUrl||'')}')" id="notify-podcast-${escAttr(p.id)}" title="Notify users">🔔</button>
@@ -6427,7 +6407,6 @@ function renderPodcastsTable() {
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Podcast</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Feed URL</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>
-            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>
             <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>
           </tr>
@@ -6617,7 +6596,6 @@ function renderAudioTable() {
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${a.seriesId ? '<span style="color:var(--accent2);font-size:11px;">&#128250; ' + escHtml((_seriesList.find(s=>s.id===a.seriesId)||{}).title||'Series') + (a.episodeNumber ? ' #'+a.episodeNumber : '') + '</span>' : '<span style="color:var(--muted);">\u2014</span>'}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDate(a)}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDuration(a.duration)}</td>
-      <td style="padding:10px 12px;">${a.featured ? '<span style="color:var(--orange);">&#9733; Featured</span>' : '<span style="color:var(--muted);">&#8212;</span>'}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
         ${a.audioUrl ? `<a href="${escAttr(a.audioUrl)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-right:4px;">&#9654; Play</a>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('audio','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.coverImageUrl||'')}')" id="notify-audio-${escAttr(a.id)}" title="Notify users">\ud83d\udd14</button>
@@ -6636,7 +6614,6 @@ function renderAudioTable() {
             <th style="${thStyle}" onclick="sortAudio('series')">Series${arrow('series')}</th>
             <th style="${thStyle}" onclick="sortAudio('date')">Uploaded${arrow('date')}</th>
             <th style="${thStyleNoSort}">Duration</th>
-            <th style="${thStyleNoSort}">Featured</th>
             <th style="${thStyleNoSort}">Actions</th>
           </tr>
         </thead>
@@ -6656,7 +6633,7 @@ async function openAudioModal(audio) {
   document.getElementById('audio-category').value = audio?.category || 'music';
   document.getElementById('audio-duration').value = audio?.duration ?? 0;
   document.getElementById('audio-sort').value = audio?.sortOrder ?? 0;
-  document.getElementById('audio-featured').checked = !!audio?.featured;
+
   document.getElementById('audio-media-type').value = audio?.mediaType || 'audio';
   document.getElementById('audio-episode').value = audio?.episodeNumber ?? '';
   await populateSeriesDropdown(audio?.seriesId || '');
@@ -6713,7 +6690,6 @@ async function saveAudio() {
     category: document.getElementById('audio-category').value,
     duration: Number(document.getElementById('audio-duration').value) || 0,
     sortOrder: Number(document.getElementById('audio-sort').value) || 0,
-    featured: document.getElementById('audio-featured').checked,
     mediaType: document.getElementById('audio-media-type').value,
     seriesId: seriesId || null,
     episodeNumber: seriesId && episodeNum ? Number(episodeNum) : null,
@@ -6780,7 +6756,7 @@ function renderSeriesTable() {
       '<td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">' + escHtml(s.category||'') + '</span></td>' +
       '<td style="padding:10px 12px;"><span style="background:rgba(0,0,0,.3);color:' + mediaColor + ';padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">' + mediaLabel + '</span></td>' +
       '<td style="padding:10px 12px;">' + (s.enabled !== false ? '<span style="color:var(--green);">&#10003; Enabled</span>' : '<span style="color:var(--muted);">Disabled</span>') + '</td>' +
-      '<td style="padding:10px 12px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ' + (s.featured?'checked':'') + ' onchange="inlinePatchSeries(\'' + escAttr(s.id) + '\',{featured:this.checked})" style="cursor:pointer;width:16px;height:16px;accent-color:var(--orange);"><span style="color:' + (s.featured?'var(--orange)':'var(--muted)') + ';font-size:13px;">' + (s.featured?'\u2605 Featured':'\u2014') + '</span></label></td>' +
+
       '<td style="padding:10px 12px;color:var(--muted);font-size:12px;">' + (s.sortOrder || 0) + '</td>' +
       '<td style="padding:10px 12px;white-space:nowrap;">' +
         '<button class="btn btn-ghost btn-sm" onclick="notifyContent(\'' + escAttr(s.category === 'audiobook' ? 'audiobook' : 'series') + '\',\'' + escAttr(s.id) + '\',\'' + escAttr(s.title) + '\',\'' + escAttr(s.artworkUrl || '') + '\')" id="notify-' + (s.category === 'audiobook' ? 'audiobook' : 'series') + '-' + escAttr(s.id) + '" title="Notify users">🔔</button> ' +
@@ -6799,7 +6775,6 @@ function renderSeriesTable() {
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Category</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Media Type</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Status</th>' +
-            '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Featured</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Order</th>' +
             '<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Actions</th>' +
           '</tr>' +
