@@ -1831,6 +1831,34 @@ app.post('/api/users/backfill-approve', adminOnly, async (req, res) => {
   }
 });
 
+// Backfill displayName + email from Firebase Auth into every Firestore users
+// doc, so the in-app pastor directory (which reads Firestore, not Auth) shows
+// real names instead of "Unknown".
+app.post('/api/users/backfill-names', adminOnly, async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const db = admin.firestore();
+    let updated = 0, skipped = 0, pageToken;
+    do {
+      const page = await admin.auth().listUsers(1000, pageToken);
+      for (const u of page.users) {
+        const name = u.displayName || '';
+        const email = u.email || '';
+        if (!name && !email) { skipped++; continue; }
+        await db.collection('users').doc(u.uid).set(
+          { displayName: name, email: email },
+          { merge: true }
+        );
+        updated++;
+      }
+      pageToken = page.pageToken;
+    } while (pageToken);
+    res.json({ ok: true, updated, skipped });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Grant or revoke private content access
 app.patch('/api/users/:uid/private-access', async (req, res) => {
   if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
