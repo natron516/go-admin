@@ -6578,8 +6578,12 @@ async function loadAudio() {
   const el = document.getElementById('audio-content');
   el.innerHTML = '<div class="spinner"></div>';
   try {
-    const r = await fetch('/api/audio');
-    const data = await r.json();
+    // Series list is needed to render the Series column with real titles.
+    // If the user lands on Audio before opening the Series tab, _seriesList is
+    // empty and the column falls back to "Series #N" — so load it here too.
+    const reqs = [fetch('/api/audio').then(r => r.json())];
+    if (!_seriesList.length) reqs.push(fetch('/api/series').then(r => r.json()).then(d => { _seriesList = d.series || []; }).catch(() => {}));
+    const [data] = await Promise.all(reqs);
     _audioAssets = data.audio || [];
     renderAudioTable();
     loadAudioTranscriptStatus(); // non-blocking; refreshes the 📜 icons when it resolves
@@ -6664,7 +6668,7 @@ function renderAudioTable() {
       </td>
       <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.artist||'')}</td>
       <td style="padding:10px 12px;"><span style="background:rgba(99,102,241,.15);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escHtml(a.category||'')}</span></td>
-      <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${a.seriesId ? '<span style="color:var(--accent2);font-size:11px;">&#128250; ' + escHtml((_seriesList.find(s=>s.id===a.seriesId)||{}).title||'Series') + (a.episodeNumber ? ' #'+a.episodeNumber : '') + '</span>' : '<span style="color:var(--muted);">\u2014</span>'}</td>
+      <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${(() => { const s = a.seriesId ? _seriesList.find(x=>x.id===a.seriesId) : null; return s ? '<span style="color:var(--accent2);font-size:11px;">&#128250; ' + escHtml(s.title||'Series') + '</span>' : '<span style="color:var(--muted);">\u2014</span>'; })()}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDate(a)}</td>
       <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${fmtDuration(a.duration)}</td>
       <td style="padding:10px 12px;white-space:nowrap;">
