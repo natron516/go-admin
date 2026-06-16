@@ -5290,7 +5290,7 @@ async function loadPastorContent() {
 let _pastorPickerItems = [];   // all NON-private items available to add
 
 async function openPastorPicker() {
-  document.getElementById('pastor-picker-modal').classList.add('active');
+  document.getElementById('pastor-picker-modal').classList.add('open');
   const list = document.getElementById('pastor-picker-list');
   list.innerHTML = '<div class="spinner"></div>';
   try {
@@ -5329,7 +5329,7 @@ async function openPastorPicker() {
 }
 
 function closePastorPicker() {
-  document.getElementById('pastor-picker-modal').classList.remove('active');
+  document.getElementById('pastor-picker-modal').classList.remove('open');
 }
 
 function renderPastorPicker() {
