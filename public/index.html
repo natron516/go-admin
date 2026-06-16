@@ -1664,6 +1664,7 @@ tr.dirty .at-save { display: inline-flex !important; }
               <select id="pastor-picker-type" onchange="renderPastorPicker()"
                 style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:9px 12px;outline:none;">
                 <option value="all">All types</option>
+                <option value="series">Series</option>
                 <option value="video">Videos</option>
                 <option value="audio">Audio</option>
                 <option value="book">Books</option>
@@ -5293,19 +5294,21 @@ async function loadPastorContent() {
   el.innerHTML = '<div class="spinner"></div>';
   try {
     const j = r => r.ok ? r.json() : {};
-    const [assetsResp, audioResp, booksResp, articlesResp] = await Promise.all([
+    const [assetsResp, audioResp, booksResp, articlesResp, seriesResp] = await Promise.all([
       fetch('/api/assets').then(j).catch(() => ({})),
       fetch('/api/audio').then(j).catch(() => ({})),
       fetch('/api/books').then(j).catch(() => ({})),
       fetch('/api/articles').then(j).catch(() => ({})),
+      fetch('/api/series').then(j).catch(() => ({})),
     ]);
 
+    const seriesHidden = (seriesResp.series || []).filter(s => s.category === 'hidden');
     const videos = (assetsResp.data || []).filter(a => (parsePassthrough(a.passthrough).category || '') === 'hidden');
     const audio = (audioResp.audio || []).filter(a => a.category === 'hidden');
     const books = (booksResp.books || []).filter(b => b.category === 'hidden');
     const articles = (articlesResp.articles || []).filter(a => a.category === 'hidden');
 
-    const total = videos.length + audio.length + books.length + articles.length;
+    const total = videos.length + audio.length + books.length + articles.length + seriesHidden.length;
     if (!total) {
       el.innerHTML = '<p style="text-align:center;padding:48px 16px;color:var(--muted);">No private content yet. Mark any video, audio, book, or article as <strong>🔒 Pastor Content</strong> and it will appear here.</p>';
       return;
@@ -5332,6 +5335,7 @@ async function loadPastorContent() {
       </div>`;
 
     let html = '';
+    if (seriesHidden.length) html += groupCard('📺 Series', seriesHidden.length, seriesHidden.map(s => row('📺', s.title, 'Series — all files private', s.artworkUrl)).join(''));
     if (videos.length)   html += groupCard('🎬 Videos', videos.length, videos.map(a => row('🎬', (a.meta && a.meta.title) || a.title || parsePassthrough(a.passthrough).title, 'Video', a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''))).join(''));
     if (audio.length)    html += groupCard('🎧 Audio', audio.length, audio.map(a => row('🎧', a.title, a.artist || 'Audio', a.coverImageUrl)).join(''));
     if (books.length)    html += groupCard('📚 Books', books.length, books.map(b => row('📚', b.title, b.author || 'Book', b.coverImageUrl)).join(''));
@@ -5352,11 +5356,12 @@ async function openPastorPicker() {
   list.innerHTML = '<div class="spinner"></div>';
   try {
     const j = r => r.ok ? r.json() : {};
-    const [assetsResp, audioResp, booksResp, articlesResp] = await Promise.all([
+    const [assetsResp, audioResp, booksResp, articlesResp, seriesResp] = await Promise.all([
       fetch('/api/assets').then(j).catch(() => ({})),
       fetch('/api/audio').then(j).catch(() => ({})),
       fetch('/api/books').then(j).catch(() => ({})),
       fetch('/api/articles').then(j).catch(() => ({})),
+      fetch('/api/series').then(j).catch(() => ({})),
     ]);
     // Normalize an upload timestamp (epoch ms) from either Mux (created_at: unix
     // seconds string) or Firestore (createdAt: {_seconds} or ISO/Date).
@@ -5390,6 +5395,11 @@ async function openPastorPicker() {
     (articlesResp.articles || []).forEach(a => {
       if (a.category === 'hidden' || a.category === 'archived') return;
       items.push({ type:'article', id:a.id, title:a.title, sub:a.author||'Article', thumb:a.coverImageUrl, icon:'📄', _title:a.title, _ts: ts(a.createdAt) });
+    });
+    (seriesResp.series || []).forEach(s => {
+      if (s.category === 'hidden' || s.category === 'archived') return;
+      // Adding a series marks the series + all its files as Pastor Content.
+      items.push({ type:'series', id:s.id, title:s.title, sub:'Series — includes all files', thumb:s.artworkUrl, icon:'📺', _title:s.title, _ts: ts(s.createdAt) });
     });
     _pastorPickerItems = items;
     renderPastorPicker();
@@ -5444,12 +5454,21 @@ async function markAsPastor(type, id, btn) {
     } else if (type === 'audio')   { url = `/api/audio/${id}`;    body = { category: 'hidden' }; }
     else if (type === 'book')      { url = `/api/books/${id}`;    body = { category: 'hidden' }; }
     else if (type === 'article')   { url = `/api/articles/${id}`; body = { category: 'hidden' }; }
+    // Series cascades: marks the series + every file in it as Pastor Content.
+    else if (type === 'series')    { url = `/api/series/${id}/pastor`; body = { category: 'hidden' }; }
     const r = await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    // Remove from picker pool + refresh pastor list
+    let added = 'Added to Pastor Content';
+    if (type === 'series') {
+      const d = await r.json().catch(() => ({}));
+      added = `Series added to Pastor Content (${(d.episodesUpdated ?? 0)} files)`;
+    }
+    // Remove from picker pool + refresh pastor list. For a series, also drop its
+    // member audio files from the pool since they're now hidden too.
     _pastorPickerItems = _pastorPickerItems.filter(x => !(x.type === type && x.id === id));
     renderPastorPicker();
-    if (typeof toast === 'function') toast('Added to Pastor Content');
+    if (typeof toast === 'function') toast(added);
+    if (type === 'series' && typeof loadAudio === 'function') loadAudio();
     loadPastorContent();
   } catch(err) {
     if (btn) { btn.disabled = false; btn.textContent = '🔒 Add'; }

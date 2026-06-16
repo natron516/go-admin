@@ -2793,6 +2793,29 @@ app.get('/api/series/:id/episodes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Mark a whole series as Pastor Content (private): sets the series category to
+// 'hidden' AND cascades category='hidden' to every audio file in that series.
+// Body: { category: 'hidden' } (default) or { category: '<other>' } to move the
+// whole series + its files to another category.
+app.patch('/api/series/:id/pastor', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const category = (req.body && req.body.category) || 'hidden';
+    const seriesRef = db.collection('series').doc(req.params.id);
+    const epSnap = await db.collection('audioAssets')
+      .where('seriesId', '==', req.params.id).get();
+    // Firestore batches cap at 500 writes; chunk to be safe.
+    const docs = [seriesRef, ...epSnap.docs.map(d => d.ref)];
+    for (let i = 0; i < docs.length; i += 450) {
+      const batch = db.batch();
+      for (const ref of docs.slice(i, i + 450)) batch.update(ref, { category });
+      await batch.commit();
+    }
+    console.log(`[series/pastor] series ${req.params.id} + ${epSnap.size} episodes -> category=${category}`);
+    res.json({ ok: true, episodesUpdated: epSnap.size, category });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Portal Version ─────────────────────────────
 // PORTAL_BUILD = git commit count at deploy time. Bump alongside each deploy commit.
 const PORTAL_BUILD = 245;
