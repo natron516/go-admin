@@ -1994,7 +1994,7 @@ app.get('/api/books', async (req, res) => {
 app.post('/api/books', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, featured, sortOrder } = req.body;
+    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, coverFit, featured, sortOrder } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
@@ -2005,6 +2005,7 @@ app.post('/api/books', async (req, res) => {
       amazonUrl: amazonUrl || '',
       kindleUrl: kindleUrl || '',
       audiobookUrl: audiobookUrl || '',
+      coverFit: (coverFit === 'fit') ? 'fit' : 'fill',
       featured: !!featured,
       sortOrder: Number(sortOrder) || 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2018,7 +2019,7 @@ app.post('/api/books', async (req, res) => {
 app.patch('/api/books/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, featured, sortOrder } = req.body;
+    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, coverFit, featured, sortOrder } = req.body;
     const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
     if (title !== undefined) update.title = title;
     if (author !== undefined) update.author = author;
@@ -2028,6 +2029,7 @@ app.patch('/api/books/:id', async (req, res) => {
     if (amazonUrl !== undefined) update.amazonUrl = amazonUrl;
     if (kindleUrl !== undefined) update.kindleUrl = kindleUrl;
     if (audiobookUrl !== undefined) update.audiobookUrl = audiobookUrl;
+    if (coverFit !== undefined) update.coverFit = (coverFit === 'fit') ? 'fit' : 'fill';
     if (featured !== undefined) update.featured = !!featured;
     if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
     await db.collection('books').doc(req.params.id).update(update);

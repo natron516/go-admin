@@ -1982,6 +1982,13 @@ tr.dirty .at-save { display: inline-flex !important; }
         <label>Cover Image URL</label>
         <input type="url" id="book-cover" placeholder="https://...">
       </div>
+      <div class="field">
+        <label>Thumbnail Display</label>
+        <select id="book-coverfit">
+          <option value="fill">Fill (crop to fill frame)</option>
+          <option value="fit">Fit (show whole cover)</option>
+        </select>
+      </div>
       <div class="field-group" style="grid-template-columns:1fr 1fr;">
         <div class="field">
           <label>Category</label>
@@ -5461,6 +5468,7 @@ function openBookModal(book) {
   document.getElementById('book-amazon').value = book?.amazonUrl || '';
   document.getElementById('book-kindle').value = book?.kindleUrl || '';
   document.getElementById('book-audiobook').value = book?.audiobookUrl || '';
+  document.getElementById('book-coverfit').value = book?.coverFit || 'fill';
   document.getElementById('book-featured').checked = !!book?.featured;
   document.getElementById('book-modal').classList.add('open');
 }
@@ -5488,6 +5496,7 @@ async function saveBook() {
     amazonUrl: document.getElementById('book-amazon').value.trim(),
     kindleUrl: document.getElementById('book-kindle').value.trim(),
     audiobookUrl: document.getElementById('book-audiobook').value.trim(),
+    coverFit: document.getElementById('book-coverfit').value,
     featured: document.getElementById('book-featured').checked,
   };
   try {
