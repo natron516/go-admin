@@ -5327,7 +5327,7 @@ async function loadPastorContent() {
       </div>`;
 
     let html = '';
-    if (videos.length)   html += groupCard('🎬 Videos', videos.length, videos.map(a => row('🎬', a.title || (parsePassthrough(a.passthrough).title), 'Video', a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''))).join(''));
+    if (videos.length)   html += groupCard('🎬 Videos', videos.length, videos.map(a => row('🎬', (a.meta && a.meta.title) || a.title || parsePassthrough(a.passthrough).title, 'Video', a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''))).join(''));
     if (audio.length)    html += groupCard('🎧 Audio', audio.length, audio.map(a => row('🎧', a.title, a.artist || 'Audio', a.coverImageUrl)).join(''));
     if (books.length)    html += groupCard('📚 Books', books.length, books.map(b => row('📚', b.title, b.author || 'Book', b.coverImageUrl)).join(''));
     if (articles.length) html += groupCard('📄 Articles', articles.length, articles.map(a => row('📄', a.title, a.author || 'Article', a.coverImageUrl)).join(''));
@@ -5357,9 +5357,12 @@ async function openPastorPicker() {
     (assetsResp.data || []).forEach(a => {
       const pt = parsePassthrough(a.passthrough);
       if ((pt.category || '') === 'hidden') return;
-      items.push({ type:'video', id:a.id, title:a.title || pt.title || 'Untitled', sub:'Video',
+      // Real title lives in a.meta.title (Mux metadata) — same source the asset
+      // table uses. a.title is not populated, so without meta we got 'Untitled'.
+      const vtitle = (a.meta && a.meta.title) || a.title || pt.title || 'Untitled';
+      items.push({ type:'video', id:a.id, title:vtitle, sub:'Video',
         thumb: a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''),
-        icon:'🎬', _title:(a.title||pt.title||'') });
+        icon:'🎬', _title:vtitle === 'Untitled' ? '' : vtitle });
     });
     (audioResp.audio || []).forEach(a => {
       if (a.category === 'hidden' || a.category === 'archived') return;

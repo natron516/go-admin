@@ -479,12 +479,16 @@ app.get('/api/upload-status/:uploadId', async (req, res) => {
 app.patch('/api/assets/:id', async (req, res) => {
   try {
     const { title, passthrough: category } = req.body;
-    // Fetch current asset so we can preserve existing passthrough fields
+    // Fetch current asset so we can preserve existing passthrough fields + title
     const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
     const existing = parsePassthrough(current.data?.passthrough);
     existing.category = category || '';
+    // Never clobber a real title with 'Untitled'. Only update meta.title when a
+    // non-empty title is explicitly provided; otherwise keep the current one.
+    const curTitle = current.data?.meta?.title;
+    const newTitle = (title && title.trim() && title.trim() !== 'Untitled') ? title.trim() : (curTitle || '');
     const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
-      meta: { title: title || 'Untitled' },
+      meta: { title: newTitle },
       passthrough: serializePassthrough(existing),
     });
     res.json(data);
