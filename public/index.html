@@ -5286,6 +5286,55 @@ async function loadFeatured() {
 }
 
 // ── Pastor Content (admin portal page) ──────────────────
+// Per-type category option sets for the inline Pastor Content category dropdown.
+const PASTOR_CATS = {
+  video:  [['sermon','\ud83d\udcd6 Sermon'],['audiobook','\ud83d\udcda Audiobook'],['children','\u2b50 Children\u2019s'],['music','\ud83c\udfb5 Music'],['performance','\ud83c\udfad Performance'],['funzone','\ud83c\udf89 FunZone'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
+  audio:  [['music','\ud83c\udfb5 Music'],['children','\u2b50 Children\u2019s'],['sermons','\ud83d\udcd6 Sermons'],['spoken-word','\ud83d\udde3 Spoken Word'],['audiobook','\ud83d\udcda Audiobook'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
+  book:   [['books-for-boys','Books for Boys'],['books-for-girls','Books for Girls'],['theology','Theology'],['books-for-mothers','Books for Mothers'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
+  article:[['articles','All'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
+  series: [['sermons','Sermons'],['teaching','Teaching'],['audiobook','Audiobook'],['children','Children\u2019s'],['devotional','Devotional'],['music','Music'],['general','General'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
+};
+
+// Render an inline category <select> for a Pastor Content row.
+function pastorCatSelect(type, id, cur) {
+  const opts = (PASTOR_CATS[type] || []);
+  const known = opts.some(o => o[0] === cur);
+  const extra = (cur && !known) ? `<option value="${escAttr(cur)}" selected>${escHtml(cur)}</option>` : '';
+  const body = extra + opts.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('');
+  return `<select onchange="changePastorCategory('${type}','${escAttr(id)}',this.value,this)" title="Change category"
+    style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px;outline:none;cursor:pointer;max-width:170px;">${body}</select>`;
+}
+
+// Change a Pastor Content item's category inline. Routes to the right endpoint
+// per type; series cascades to all its files.
+async function changePastorCategory(type, id, cat, sel) {
+  const prev = sel ? sel.getAttribute('data-prev') : null;
+  if (sel) sel.disabled = true;
+  try {
+    let url, body, method = 'PATCH';
+    if (type === 'video') {
+      const vids = (window._pastorVideoCache || {});
+      url = `/api/assets/${id}`;
+      body = { title: vids[id] || '', passthrough: cat };
+    } else if (type === 'series') {
+      url = `/api/series/${id}/pastor`; body = { category: cat }; // cascades to files
+    } else if (type === 'audio')   { url = `/api/audio/${id}`;    body = { category: cat }; }
+    else if (type === 'book')      { url = `/api/books/${id}`;    body = { category: cat }; }
+    else if (type === 'article')   { url = `/api/articles/${id}`; body = { category: cat }; }
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (typeof toast === 'function') {
+      const d = (type === 'series') ? await r.json().catch(() => ({})) : {};
+      toast(type === 'series' ? `Series moved to ${cat} (${d.episodesUpdated ?? 0} files)` : `Category changed to ${cat}`);
+    }
+    if (type === 'audio' && typeof loadAudio === 'function') loadAudio();
+    loadPastorContent();
+  } catch (e) {
+    if (sel) { sel.disabled = false; if (prev != null) sel.value = prev; }
+    alert('Failed to change category: ' + e.message);
+  }
+}
+
 // Aggregates every media item marked Private (category === 'hidden')
 // across videos, audio, books and articles. Mark anything Private in its
 // own page and it shows up here automatically.
@@ -5318,14 +5367,16 @@ async function loadPastorContent() {
       ? `<img src="${escAttr(url)}" style="width:54px;height:54px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--surface2);" onerror="this.style.display='none'">`
       : `<div style="width:54px;height:54px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;">${fallback}</div>`;
 
-    const row = (icon, title, sub, thumbUrl) => `
+    // Cache real video titles so an inline category change can preserve meta.title.
+    window._pastorVideoCache = {};
+    const row = (icon, title, sub, thumbUrl, type, id, cat) => `
       <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);">
         ${thumb(thumbUrl, icon)}
         <div style="min-width:0;flex:1;">
           <div style="font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(title || '(untitled)')}</div>
           <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(sub || '')}</div>
         </div>
-        <span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;">🔒 Private</span>
+        ${type ? pastorCatSelect(type, id, cat) : '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;">\ud83d\udd12 Private</span>'}
       </div>`;
 
     const groupCard = (label, count, rowsHtml) => `
@@ -5335,11 +5386,11 @@ async function loadPastorContent() {
       </div>`;
 
     let html = '';
-    if (seriesHidden.length) html += groupCard('📺 Series', seriesHidden.length, seriesHidden.map(s => row('📺', s.title, 'Series — all files private', s.artworkUrl)).join(''));
-    if (videos.length)   html += groupCard('🎬 Videos', videos.length, videos.map(a => row('🎬', (a.meta && a.meta.title) || a.title || parsePassthrough(a.passthrough).title, 'Video', a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''))).join(''));
-    if (audio.length)    html += groupCard('🎧 Audio', audio.length, audio.map(a => row('🎧', a.title, a.artist || 'Audio', a.coverImageUrl)).join(''));
-    if (books.length)    html += groupCard('📚 Books', books.length, books.map(b => row('📚', b.title, b.author || 'Book', b.coverImageUrl)).join(''));
-    if (articles.length) html += groupCard('📄 Articles', articles.length, articles.map(a => row('📄', a.title, a.author || 'Article', a.coverImageUrl)).join(''));
+    if (seriesHidden.length) html += groupCard('📺 Series', seriesHidden.length, seriesHidden.map(s => row('📺', s.title, 'Series — all files private', s.artworkUrl, 'series', s.id, s.category || 'hidden')).join(''));
+    if (videos.length)   html += groupCard('🎬 Videos', videos.length, videos.map(a => { const vt = (a.meta && a.meta.title) || a.title || parsePassthrough(a.passthrough).title || ''; window._pastorVideoCache[a.id] = vt; return row('🎬', vt, 'Video', a.thumbnail || (a.playback_ids && a.playback_ids[0] ? `https://image.mux.com/${a.playback_ids[0].id}/thumbnail.jpg?width=108` : ''), 'video', a.id, parsePassthrough(a.passthrough).category || 'hidden'); }).join(''));
+    if (audio.length)    html += groupCard('🎧 Audio', audio.length, audio.map(a => row('🎧', a.title, a.artist || 'Audio', a.coverImageUrl, 'audio', a.id, a.category || 'hidden')).join(''));
+    if (books.length)    html += groupCard('📚 Books', books.length, books.map(b => row('📚', b.title, b.author || 'Book', b.coverImageUrl, 'book', b.id, b.category || 'hidden')).join(''));
+    if (articles.length) html += groupCard('📄 Articles', articles.length, articles.map(a => row('📄', a.title, a.author || 'Article', a.coverImageUrl, 'article', a.id, a.category || 'hidden')).join(''));
 
     el.innerHTML = html;
   } catch(err) {
