@@ -204,6 +204,14 @@ function adminOnly(req, res, next) {
   if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin access required' });
   next();
 }
+// Content management (incl. deleting content) is allowed for editors AND admins.
+// Sensitive actions (users, portal-editors, feedback) stay adminOnly.
+function editorOrAdmin(req, res, next) {
+  if (req.userRole !== 'admin' && req.userRole !== 'editor') {
+    return res.status(403).json({ error: 'Editor or admin access required' });
+  }
+  next();
+}
 app.use((req, res, next) => {
   // Public routes
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
@@ -1611,7 +1619,7 @@ app.post('/api/assets/:id/clip', async (req, res) => {
 });
 
 // Delete an asset
-app.delete('/api/assets/:id', adminOnly, async (req, res) => {
+app.delete('/api/assets/:id', editorOrAdmin, async (req, res) => {
   try {
     await fetch(`https://api.mux.com/video/v1/assets/${req.params.id}`, {
       method: 'DELETE',
@@ -1746,7 +1754,7 @@ app.get('/api/image-proxy', async (req, res) => {
 });
 
 // DELETE /api/thumbnails/:assetId
-app.delete('/api/thumbnails/:assetId', adminOnly, async (req, res) => {
+app.delete('/api/thumbnails/:assetId', editorOrAdmin, async (req, res) => {
   try {
     await fsDelete('thumbnails', req.params.assetId);
     res.json({ ok: true });
@@ -2597,7 +2605,7 @@ app.patch('/api/books/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/books/:id', adminOnly, async (req, res) => {
+app.delete('/api/books/:id', editorOrAdmin, async (req, res) => {
   try {
     await admin.firestore().collection('books').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -2669,7 +2677,7 @@ app.post('/api/music/album', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/music/album/:albumId', adminOnly, async (req, res) => {
+app.delete('/api/music/album/:albumId', editorOrAdmin, async (req, res) => {
   try {
     const db = admin.firestore();
     const ref = db.collection('config').doc('music');
@@ -2765,7 +2773,7 @@ app.post('/api/music/playlist', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/music/playlist/:playlistId', adminOnly, async (req, res) => {
+app.delete('/api/music/playlist/:playlistId', editorOrAdmin, async (req, res) => {
   try {
     const db = admin.firestore();
     const ref = db.collection('config').doc('music');
@@ -2947,7 +2955,7 @@ app.patch('/api/articles/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/articles/:id', adminOnly, async (req, res) => {
+app.delete('/api/articles/:id', editorOrAdmin, async (req, res) => {
   try {
     await admin.firestore().collection('articles').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -3016,7 +3024,7 @@ app.patch('/api/podcasts/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/podcasts/:id', adminOnly, async (req, res) => {
+app.delete('/api/podcasts/:id', editorOrAdmin, async (req, res) => {
   try {
     await admin.firestore().collection('podcasts').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -3142,7 +3150,7 @@ app.patch('/api/audio/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/audio/:id', adminOnly, async (req, res) => {
+app.delete('/api/audio/:id', editorOrAdmin, async (req, res) => {
   try {
     await admin.firestore().collection('audioAssets').doc(req.params.id).delete();
     res.json({ ok: true });
@@ -3210,7 +3218,7 @@ app.patch('/api/series/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/series/:id', adminOnly, async (req, res) => {
+app.delete('/api/series/:id', editorOrAdmin, async (req, res) => {
   try {
     await admin.firestore().collection('series').doc(req.params.id).delete();
     res.json({ ok: true });
