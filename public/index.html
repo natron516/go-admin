@@ -3188,7 +3188,9 @@ async function generateCover(targetInputId, titleInputId, type) {
 
 // Upload cover image to Firebase Storage via /api/upload-cover
 function getCropShape(type) {
-  return (type === 'series' || type === 'podcast') ? 'circle' : 'rect';
+  // Podcasts & series are shown as rounded SQUARES in the app, so crop 1:1
+  // square (not circular).
+  return (type === 'series' || type === 'podcast') ? 'square' : 'rect';
 }
 function getCropSize(type) {
   return (type === 'series' || type === 'podcast') ? { w: 600, h: 600 } : { w: 960, h: 540 };
@@ -3205,9 +3207,13 @@ async function uploadCover(fileInput, targetInputId, type) {
   const reader = new FileReader();
   reader.onload = e => {
     const imgSrc = e.target.result;
-    const _isCircle = getCropShape(type) === 'circle';
+    const _shape = getCropShape(type);
+    const _isCircle = _shape === 'circle';
+    const _isSquare = _shape === 'square';
+    const _previewStyle = _isCircle ? 'border-radius:50%;aspect-ratio:1;'
+      : (_isSquare ? 'border-radius:6px;aspect-ratio:1;' : 'border-radius:6px;aspect-ratio:16/9;');
     previewEl.innerHTML = `
-      <img id="cover-scale-img-${targetInputId}" src="${imgSrc}" style="max-height:150px;${_isCircle ? 'border-radius:50%;aspect-ratio:1;' : 'border-radius:6px;aspect-ratio:16/9;'}object-fit:cover;margin-top:4px;">
+      <img id="cover-scale-img-${targetInputId}" src="${imgSrc}" style="max-height:150px;${_previewStyle}object-fit:cover;margin-top:4px;">
       <div style="margin-top:8px;">
         <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
         <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
@@ -3252,11 +3258,14 @@ async function rescaleCover(existingUrl, targetInputId, type) {
     const cropShape = getCropShape(type);
     const cropSize = getCropSize(type);
     const isCircle = cropShape === 'circle';
+    const isSquare = cropShape === 'square';
+    const previewStyle = isCircle ? 'border-radius:50%;aspect-ratio:1;'
+      : (isSquare ? 'border-radius:6px;aspect-ratio:1;' : 'border-radius:6px;aspect-ratio:16/9;');
     img.onload = () => {
       // Show initial preview in correct shape
       const initCanvas = drawCropCanvas(img, 1, cropSize.w, cropSize.h, cropShape);
       previewEl.innerHTML = `
-        <img id="cover-scale-img-${targetInputId}" src="${initCanvas.toDataURL('image/png')}" style="max-height:150px;${isCircle ? 'border-radius:50%;aspect-ratio:1;' : 'border-radius:6px;aspect-ratio:16/9;'}margin-top:4px;">
+        <img id="cover-scale-img-${targetInputId}" src="${initCanvas.toDataURL('image/png')}" style="max-height:150px;${previewStyle}margin-top:4px;">
         <div style="margin-top:8px;">
           <label style="font-size:12px;color:var(--muted);">Scale: <span id="cover-scale-label-${targetInputId}">100%</span></label>
           <input type="range" id="cover-scale-${targetInputId}" min="50" max="200" value="100" step="5" style="width:100%;margin-top:2px;">
