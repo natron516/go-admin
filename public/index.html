@@ -1521,6 +1521,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <div class="page-subtitle">Manage your video library</div>
           </div>
           <div class="page-actions">
+            <button class="btn btn-primary btn-sm" id="assets-save-all" onclick="saveAllAssets()" style="display:none;" title="Save every changed video at once">💾 Save all (<span id="assets-dirty-count">0</span>)</button>
             <button class="btn btn-ghost btn-sm" onclick="loadAssets()">↺ Refresh</button>
             <button class="btn btn-primary btn-sm" onclick="toggleUploadPanel()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 15V3m0 0-4 4m4-4 4 4" stroke-linecap="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/></svg>
@@ -4159,6 +4160,7 @@ function renderAssets(assets) {
     <tbody>${assets.map(a => assetRowHtml(a)).join('')}</tbody>
   </table>
   </div>`;
+  updateDirtyCount();
 }
 
 function assetRowHtml(a) {
@@ -4260,6 +4262,35 @@ function setEdit(id, key, val) {
   assetEdits[id][key] = val;
   const row = document.getElementById('arow-'+id);
   if (row) row.classList.add('dirty');
+  updateDirtyCount();
+}
+
+// Show/hide the header "Save all" button and keep its count in sync with the
+// number of videos that currently have unsaved edits.
+function updateDirtyCount() {
+  const n = Object.keys(assetEdits).length;
+  const btn = document.getElementById('assets-save-all');
+  const cnt = document.getElementById('assets-dirty-count');
+  if (cnt) cnt.textContent = n;
+  if (btn) btn.style.display = n > 0 ? '' : 'none';
+}
+
+// Save every video that has pending edits in one click (sequentially, so we
+// don't hammer the API). Reuses saveAsset() per row; reports a summary.
+async function saveAllAssets() {
+  const ids = Object.keys(assetEdits);
+  if (!ids.length) return;
+  const btn = document.getElementById('assets-save-all');
+  if (btn) btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const id of ids) {
+    try { await saveAsset(id); ok++; }
+    catch { fail++; }
+    await new Promise(r => setTimeout(r, 80));
+  }
+  if (btn) btn.disabled = false;
+  updateDirtyCount();
+  toast(fail ? `Saved ${ok}, ${fail} failed ✕` : `Saved all ${ok} ✓`);
 }
 
 async function saveAsset(id) {
@@ -4278,11 +4309,14 @@ async function saveAsset(id) {
       a.passthrough = JSON.stringify(pt);
     }
     if (row) { row.classList.remove('saving'); row.classList.add('saved'); }
+    updateDirtyCount();
     toast('Saved ✓');
     setTimeout(() => { if (row) row.classList.remove('saved'); }, 2000);
-  } catch {
+  } catch (e) {
     if (row) { row.classList.add('dirty'); row.classList.remove('saving'); }
+    updateDirtyCount();
     toast('Save failed ✕');
+    throw e; // let saveAllAssets() count this as a failure
   }
 }
 
