@@ -5123,7 +5123,7 @@ function renderUsers(users) {
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
       <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" title="Revoke portal editor access" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')" title="Grant portal editor access">✏️ Make Editor</button>`) : ''}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" title="Revoke portal editor access" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}')" title="Grant portal editor access">✏️ Make Editor</button>`) : ''}</td>
     </tr>`;
   };
 
@@ -5183,7 +5183,7 @@ function renderUsers(users) {
           ${joined}
         </div>
         <div class="user-card-actions">
-          ${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}','${escAttr(u.email)}','${escAttr(u.displayName)}')">✏️ Make Editor</button>`) : ''}
+          ${approveBtn}${blockBtn}${privateBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}')">✏️ Make Editor</button>`) : ''}
         </div>
       </div>`;
     };
@@ -5204,6 +5204,15 @@ function renderUsers(users) {
 
 // ── Portal Editor Access ──────────────────────────────
 async function grantEditorAccess(uid, email, displayName) {
+  // Look up email/displayName from the loaded users so names/emails with
+  // apostrophes or quotes can't break an inline onclick (the button now passes
+  // only the uid).
+  if (email == null || displayName == null) {
+    const u = (allUsers || []).find(x => x.uid === uid);
+    email = email ?? (u?.email || '');
+    displayName = displayName ?? (u?.displayName || '');
+  }
+  if (!email) { alert('Could not find this user\u2019s email.'); return; }
   if (!confirm(`Grant portal editor access to ${displayName || email}?`)) return;
   try {
     const r = await fetch('/api/portal-editors', {
