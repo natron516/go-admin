@@ -618,6 +618,52 @@ app.all('/api/audio-transcript/:playbackId', async (req, res) => {
   }
 });
 
+// Timed sentence CUES for live transcript sync ("karaoke" highlight + auto-scroll).
+// Returns the SAME kept/cleaned cues that flow into the cleaned-text blob from
+// GET /api/audio-transcript/:playbackId, but each carries its audio start/end
+// time so the app can highlight the currently-spoken sentence and scroll to it.
+//
+// GET /api/audio-transcript/:playbackId/cues
+// -> { status: "ready", cues: [{ start, end, text }], sermonStart }
+//    | { status: "preparing"|"none"|"errored", message }
+//
+// Notes:
+//  - cues are in playback order; `start`/`end` are seconds from the start of
+//    the recording (NOT relative to the trimmed sermon).
+//  - end = next kept cue's start; the final cue gets a +6s tail.
+//  - the concatenated cue text (word order) matches the cleaned blob, so the
+//    app can locate each cue inside the rendered transcript by word sequence.
+app.get('/api/audio-transcript/:playbackId/cues', async (req, res) => {
+  try {
+    const assetId = await assetIdForPlaybackId(req.params.playbackId);
+    if (!assetId) return res.status(404).json({ status: 'none', message: 'No asset for that playback ID.' });
+    const current = await mux('GET', `/video/v1/assets/${assetId}`);
+    const asset = current.data;
+    if (!asset) return res.status(404).json({ status: 'none', message: 'Asset not found.' });
+    const pid = asset.playback_ids?.[0]?.id;
+    const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles');
+    if (!textTrack) return res.json({ status: 'none', message: 'No transcript yet.' });
+    if (textTrack.status === 'preparing') return res.json({ status: 'preparing', message: 'Transcription in progress…' });
+    if (textTrack.status === 'errored') return res.json({ status: 'errored', message: 'Transcription failed.' });
+    if (!pid || textTrack.status !== 'ready') return res.json({ status: 'preparing', message: 'Transcript not ready yet.' });
+
+    const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+    if (!r.ok) return res.json({ status: 'errored', message: 'VTT fetch failed.' });
+    const { kept, sermonStart } = trimCues(parseVtt(await r.text()));
+    if (!kept.length) return res.json({ status: 'none', message: 'Empty transcript.' });
+
+    // end = next cue's start; last cue gets a short tail so it stays "active".
+    const cues = kept.map((c, i) => ({
+      start: Math.round(c.start * 1000) / 1000,
+      end: Math.round((kept[i + 1] ? kept[i + 1].start : c.start + 6) * 1000) / 1000,
+      text: c.text,
+    }));
+    res.json({ status: 'ready', cues, sermonStart });
+  } catch (e) {
+    res.status(500).json({ status: 'errored', error: e.message });
+  }
+});
+
 // Locate the audio TIMESTAMP for a snippet of transcript text. Used by the
 // app's "Listen" button on a highlighted note: given the highlight's quoted
 // text, find where it was spoken so the player can seek there.
@@ -918,15 +964,16 @@ function detectSermonStart(cues) {
   return 0; // detection failed — keep everything
 }
 
-// Build a cleaned transcript (music stripped, singing portion removed) from an asset's VTT.
-// Returns { text, sermonStart } or null if no transcript ready.
-async function buildCleanTranscript(asset) {
-  const pid = asset.playback_ids?.[0]?.id;
-  const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
-  if (!pid || !textTrack) return null;
-  const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
-  if (!r.ok) throw new Error('VTT fetch failed: ' + r.status);
-  const cues = parseVtt(await r.text());
+// Trim + clean a parsed VTT cue list down to the SAME kept cues that
+// buildCleanTranscript() uses for its text. Returns { kept, sermonStart } where
+// `kept` is an array of { start, text } in order: pre-sermon music/singing
+// dropped, non-speech tags dropped, consecutive duplicates collapsed, and the
+// same end-of-sentence period inference applied to each cue's text.
+//
+// This is the shared core so the live-sync /cues endpoint stays word-for-word
+// aligned with the cleaned transcript blob the app renders (reflowSentences()
+// only rejoins/re-splits the SAME words, preserving order).
+function trimCues(cues) {
   const sermonStart = detectSermonStart(cues);
   // De-duplicate consecutive identical cues (Mux VTT often repeats lines),
   // then infer missing sentence ends at cue boundaries: when a cue ends without
@@ -945,18 +992,33 @@ async function buildCleanTranscript(asset) {
     const t = c.text.trim();
     if (!t || t === prev) continue;
     if (NONSPEECH_RE.test(t)) continue;
-    kept.push(t);
+    kept.push({ start: c.start, text: t });
     prev = t;
   }
-  const parts = kept.map((t, i) => {
-    const nxt = kept[i + 1];
+  // Apply the same end-of-sentence period inference, in place, so the kept cue
+  // text matches the words that flow into the cleaned blob.
+  for (let i = 0; i < kept.length; i++) {
+    const t = kept[i].text;
+    const nxt = kept[i + 1]?.text;
     if (nxt && t && !/[.!?,;:]$/.test(t) && /^[A-Z]/.test(nxt)) {
       const lastWord = (t.split(/\s+/).pop() || '').toLowerCase().replace(/["']/g, '');
-      if (lastWord && !CONNECTORS.has(lastWord)) return t + '.';
+      if (lastWord && !CONNECTORS.has(lastWord)) kept[i].text = t + '.';
     }
-    return t;
-  });
-  return { text: reflowSentences(cleanTranscript(parts.join('\n'))), sermonStart };
+  }
+  return { kept, sermonStart };
+}
+
+// Build a cleaned transcript (music stripped, singing portion removed) from an asset's VTT.
+// Returns { text, sermonStart } or null if no transcript ready.
+async function buildCleanTranscript(asset) {
+  const pid = asset.playback_ids?.[0]?.id;
+  const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
+  if (!pid || !textTrack) return null;
+  const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+  if (!r.ok) throw new Error('VTT fetch failed: ' + r.status);
+  const cues = parseVtt(await r.text());
+  const { kept, sermonStart } = trimCues(cues);
+  return { text: reflowSentences(cleanTranscript(kept.map(c => c.text).join('\n'))), sermonStart };
 }
 
 // Reflow caption-cue lines into complete sentences and readable paragraphs.
