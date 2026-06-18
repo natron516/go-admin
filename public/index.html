@@ -5223,11 +5223,59 @@ async function grantEditorAccess(uid, email, displayName) {
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     portalEditorMap[uid] = { uid, username: d.username, role: d.role };
-    alert(`Editor access granted!\n\nUsername: ${d.username}\nPassword: ${d.password}\n\nShare these credentials with them.`);
+    showCredentialsModal({ username: d.username, password: d.password, email,
+                           emailSent: d.emailSent, emailReason: d.emailReason });
     renderUsers(sortedUsers(allUsers));
   } catch (e) {
     alert('Error: ' + e.message);
   }
+}
+
+// Modal shown after granting editor access: displays the credentials, whether
+// they were emailed, and a "Copy credentials" button.
+function showCredentialsModal({ username, password, email, emailSent, emailReason }) {
+  const existing = document.getElementById('cred-modal');
+  if (existing) existing.remove();
+  const emailLine = emailSent
+    ? `<div style="color:var(--green);font-size:13px;margin-top:6px;">✉️ Emailed to ${escHtml(email || username)}</div>`
+    : `<div style="color:var(--orange);font-size:13px;margin-top:6px;">⚠️ Not emailed${emailReason === 'email-not-configured' ? ' (email not set up on server)' : (emailReason ? ' (' + escHtml(emailReason) + ')' : '')} — copy &amp; share manually</div>`;
+  const wrap = document.createElement('div');
+  wrap.id = 'cred-modal';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);';
+  wrap.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:22px;max-width:420px;width:90%;box-shadow:var(--shadow);">
+      <div style="font-size:17px;font-weight:700;margin-bottom:4px;">✅ Editor access granted</div>
+      ${emailLine}
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:14px;font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.7;">
+        <div><span style="color:var(--muted)">Username:</span> <span id="cred-user">${escHtml(username)}</span></div>
+        <div><span style="color:var(--muted)">Password:</span> <span id="cred-pass">${escHtml(password)}</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" id="cred-copy">📋 Copy credentials</button>
+        <button class="btn btn-primary btn-sm" id="cred-close">Done</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const copyText = `GO Media admin portal\nURL: https://go-admin-production-6be4.up.railway.app\nUsername: ${username}\nPassword: ${password}`;
+  document.getElementById('cred-copy').onclick = async () => {
+    const btn = document.getElementById('cred-copy');
+    try {
+      await navigator.clipboard.writeText(copyText);
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy credentials'; }, 1800);
+    } catch {
+      // Fallback for non-secure contexts
+      const ta = document.createElement('textarea');
+      ta.value = copyText; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); btn.textContent = '✅ Copied!'; }
+      catch { alert(copyText); }
+      ta.remove();
+      setTimeout(() => { btn.textContent = '📋 Copy credentials'; }, 1800);
+    }
+  };
+  const close = () => wrap.remove();
+  document.getElementById('cred-close').onclick = close;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
 }
 
 async function revokeEditorAccess(uid) {

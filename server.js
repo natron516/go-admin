@@ -5,6 +5,7 @@ const basicAuth = require('express-basic-auth');
 const multer = require('multer');
 const sharp = require('sharp');
 const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
 
 // ── Firebase Admin SDK ───────────────────────────────────
 const sa = process.env.FIREBASE_SA ? JSON.parse(process.env.FIREBASE_SA) : null;
@@ -28,6 +29,72 @@ const EDITOR_PASS   = process.env.EDITOR_PASS    || 'goedit';
 // Optional: when absent, word-level timing is simply skipped and the app falls
 // back to the existing sentence-level cue sync. Never breaks the Mux path.
 const DEEPGRAM_KEY  = process.env.DEEPGRAM_API_KEY || '';
+
+// ── Outbound email (portal editor credentials) ───────────────────────────────
+// Uses Gmail SMTP with an App Password. Set these in Railway:
+//   SMTP_USER  = the Gmail address to send from (e.g. natesclaw16@gmail.com)
+//   SMTP_PASS  = a Gmail App Password (NOT the account password)
+//   EDITOR_FROM (optional) = display From, e.g. "GO Media <natesclaw16@gmail.com>"
+// When SMTP creds are absent, email is skipped gracefully (the admin still gets
+// the credentials in the browser to copy/share manually).
+const SMTP_USER   = process.env.SMTP_USER || '';
+const SMTP_PASS   = process.env.SMTP_PASS || '';
+const EDITOR_FROM = process.env.EDITOR_FROM || (SMTP_USER ? `GO Media Admin <${SMTP_USER}>` : '');
+const PORTAL_URL  = process.env.PORTAL_URL || 'https://go-admin-production-6be4.up.railway.app';
+
+let mailTransport = null;
+function getMailTransport() {
+  if (!SMTP_USER || !SMTP_PASS) return null;
+  if (!mailTransport) {
+    mailTransport = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+    });
+  }
+  return mailTransport;
+}
+
+// Send portal-editor login credentials to a new editor. Returns
+// { sent: true } on success, or { sent: false, reason } when skipped/failed.
+async function sendEditorCredentialsEmail({ to, displayName, username, password }) {
+  const tx = getMailTransport();
+  if (!tx) return { sent: false, reason: 'email-not-configured' };
+  if (!to) return { sent: false, reason: 'no-recipient' };
+  const name = displayName || 'there';
+  const text =
+`Hi ${name},
+
+You've been granted editor access to the GO Media admin portal.
+
+Portal: ${PORTAL_URL}
+Username: ${username}
+Password: ${password}
+
+You can sign in with the credentials above. For security, please keep them private.
+
+— GO Media`;
+  const html =
+`<p>Hi ${name},</p>
+<p>You've been granted <b>editor access</b> to the GO Media admin portal.</p>
+<p>
+<b>Portal:</b> <a href="${PORTAL_URL}">${PORTAL_URL}</a><br>
+<b>Username:</b> ${username}<br>
+<b>Password:</b> ${password}
+</p>
+<p>You can sign in with the credentials above. For security, please keep them private.</p>
+<p>— GO Media</p>`;
+  try {
+    await tx.sendMail({
+      from: EDITOR_FROM, to,
+      subject: 'Your GO Media admin portal access',
+      text, html,
+    });
+    return { sent: true };
+  } catch (e) {
+    console.error('[editor-email] send failed:', e.message);
+    return { sent: false, reason: e.message };
+  }
+}
 
 // Role-based users map (hardcoded + dynamic from Firestore)
 const USERS = {
@@ -201,7 +268,12 @@ app.post('/api/portal-editors', adminOnly, async (req, res) => {
     await db.collection('portalEditors').doc(uid).set(data);
     // Update in-memory cache
     portalEditors[data.username] = { password, role: 'editor', uid, displayName: data.displayName };
-    res.json({ ok: true, username: data.username, password, role: 'editor' });
+    // Best-effort: email the credentials to the new editor.
+    const mail = await sendEditorCredentialsEmail({
+      to: email, displayName: data.displayName, username: data.username, password,
+    });
+    res.json({ ok: true, username: data.username, password, role: 'editor',
+               emailSent: mail.sent, emailReason: mail.reason || null });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
