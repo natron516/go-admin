@@ -2480,13 +2480,14 @@ app.get('/api/books', async (req, res) => {
 app.post('/api/books', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, coverFit, featured, sortOrder } = req.body;
+    const { title, author, description, coverImageUrl, featuredImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, coverFit, featured, sortOrder } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
       author: author || '',
       description: description || '',
       coverImageUrl: coverImageUrl || '',
+      featuredImageUrl: featuredImageUrl || '',
       category: category || '',
       amazonUrl: amazonUrl || '',
       kindleUrl: kindleUrl || '',
@@ -2505,12 +2506,13 @@ app.post('/api/books', async (req, res) => {
 app.patch('/api/books/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, description, coverImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, coverFit, featured, sortOrder } = req.body;
+    const { title, author, description, coverImageUrl, featuredImageUrl, category, amazonUrl, kindleUrl, audiobookUrl, coverFit, featured, sortOrder } = req.body;
     const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
     if (title !== undefined) update.title = title;
     if (author !== undefined) update.author = author;
     if (description !== undefined) update.description = description;
     if (coverImageUrl !== undefined) update.coverImageUrl = coverImageUrl;
+    if (featuredImageUrl !== undefined) update.featuredImageUrl = featuredImageUrl;
     if (category !== undefined) update.category = category;
     if (amazonUrl !== undefined) update.amazonUrl = amazonUrl;
     if (kindleUrl !== undefined) update.kindleUrl = kindleUrl;
@@ -2830,7 +2832,7 @@ app.post('/api/articles/upload-pdf', upload.single('pdf'), async (req, res) => {
 app.post('/api/articles', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder, pdfUrl } = req.body;
+    const { title, author, content, excerpt, coverImageUrl, featuredImageUrl, category, published, featured, sortOrder, pdfUrl } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
@@ -2838,6 +2840,7 @@ app.post('/api/articles', async (req, res) => {
       content: content || '',
       excerpt: excerpt || '',
       coverImageUrl: coverImageUrl || '',
+      featuredImageUrl: featuredImageUrl || '',
       category: category || 'articles',
       published: !!published,
       featured: !!featured,
@@ -2854,13 +2857,14 @@ app.post('/api/articles', async (req, res) => {
 app.patch('/api/articles/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, author, content, excerpt, coverImageUrl, category, published, featured, sortOrder, pdfUrl } = req.body;
+    const { title, author, content, excerpt, coverImageUrl, featuredImageUrl, category, published, featured, sortOrder, pdfUrl } = req.body;
     const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
     if (title !== undefined) update.title = title;
     if (author !== undefined) update.author = author;
     if (content !== undefined) update.content = content;
     if (excerpt !== undefined) update.excerpt = excerpt;
     if (coverImageUrl !== undefined) update.coverImageUrl = coverImageUrl;
+    if (featuredImageUrl !== undefined) update.featuredImageUrl = featuredImageUrl;
     if (category !== undefined) update.category = category;
     if (published !== undefined) update.published = !!published;
     if (featured !== undefined) update.featured = !!featured;
@@ -2901,7 +2905,7 @@ app.get('/api/podcasts', async (req, res) => {
 app.post('/api/podcasts', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, feedUrl, description, artworkUrl, category, enabled, featured, sortOrder } = req.body;
+    const { title, feedUrl, description, artworkUrl, featuredImageUrl, category, enabled, featured, sortOrder } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     if (!feedUrl) return res.status(400).json({ error: 'feedUrl required' });
     const data = {
@@ -2909,6 +2913,7 @@ app.post('/api/podcasts', async (req, res) => {
       feedUrl,
       description: description || '',
       artworkUrl: artworkUrl || '',
+      featuredImageUrl: featuredImageUrl || '',
       category: category || 'sermons',
       enabled: enabled !== false,
       featured: !!featured,
@@ -2923,12 +2928,13 @@ app.post('/api/podcasts', async (req, res) => {
 app.patch('/api/podcasts/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, feedUrl, description, artworkUrl, category, enabled, featured, sortOrder } = req.body;
+    const { title, feedUrl, description, artworkUrl, featuredImageUrl, category, enabled, featured, sortOrder } = req.body;
     const update = {};
     if (title !== undefined) update.title = title;
     if (feedUrl !== undefined) update.feedUrl = feedUrl;
     if (description !== undefined) update.description = description;
     if (artworkUrl !== undefined) update.artworkUrl = artworkUrl;
+    if (featuredImageUrl !== undefined) update.featuredImageUrl = featuredImageUrl;
     if (category !== undefined) update.category = category;
     if (enabled !== undefined) update.enabled = !!enabled;
     if (featured !== undefined) update.featured = !!featured;
@@ -3018,7 +3024,7 @@ app.get('/api/audio', async (req, res) => {
 app.post('/api/audio', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
+    const { title, artist, description, audioUrl, coverImageUrl, featuredImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
@@ -3026,6 +3032,7 @@ app.post('/api/audio', async (req, res) => {
       description: description || '',
       audioUrl: audioUrl || '',
       coverImageUrl: coverImageUrl || '',
+      featuredImageUrl: featuredImageUrl || '',
       category: category || 'music',
       duration: Number(duration) || 0,
       featured: !!featured,
@@ -3043,13 +3050,14 @@ app.post('/api/audio', async (req, res) => {
 app.patch('/api/audio/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, artist, description, audioUrl, coverImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
+    const { title, artist, description, audioUrl, coverImageUrl, featuredImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
     const update = {};
     if (title !== undefined) update.title = title;
     if (artist !== undefined) update.artist = artist;
     if (description !== undefined) update.description = description;
     if (audioUrl !== undefined) update.audioUrl = audioUrl;
     if (coverImageUrl !== undefined) update.coverImageUrl = coverImageUrl;
+    if (featuredImageUrl !== undefined) update.featuredImageUrl = featuredImageUrl;
     if (category !== undefined) update.category = category;
     if (duration !== undefined) update.duration = Number(duration);
     if (featured !== undefined) update.featured = !!featured;
@@ -3092,12 +3100,13 @@ app.get('/api/series', async (req, res) => {
 app.post('/api/series', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, description, artworkUrl, category, mediaType, enabled, featured, sortOrder } = req.body;
+    const { title, description, artworkUrl, featuredImageUrl, category, mediaType, enabled, featured, sortOrder } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
       description: description || '',
       artworkUrl: artworkUrl || '',
+      featuredImageUrl: featuredImageUrl || '',
       category: category || 'sermons',
       mediaType: mediaType || 'audio',
       enabled: enabled !== false,
@@ -3113,11 +3122,12 @@ app.post('/api/series', async (req, res) => {
 app.patch('/api/series/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, description, artworkUrl, category, mediaType, enabled, featured, sortOrder } = req.body;
+    const { title, description, artworkUrl, featuredImageUrl, category, mediaType, enabled, featured, sortOrder } = req.body;
     const update = {};
     if (title !== undefined) update.title = title;
     if (description !== undefined) update.description = description;
     if (artworkUrl !== undefined) update.artworkUrl = artworkUrl;
+    if (featuredImageUrl !== undefined) update.featuredImageUrl = featuredImageUrl;
     if (category !== undefined) update.category = category;
     if (mediaType !== undefined) update.mediaType = mediaType;
     if (enabled !== undefined) update.enabled = !!enabled;
