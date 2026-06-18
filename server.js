@@ -24,6 +24,10 @@ const ADMIN_USER    = process.env.ADMIN_USER     || 'admin';
 const ADMIN_PASS    = process.env.ADMIN_PASS     || 'gomedia';
 const EDITOR_USER   = process.env.EDITOR_USER    || 'editor';
 const EDITOR_PASS   = process.env.EDITOR_PASS    || 'goedit';
+// Reused from the (removed) scripture-detection feature; already set in Railway.
+// Optional: when absent, word-level timing is simply skipped and the app falls
+// back to the existing sentence-level cue sync. Never breaks the Mux path.
+const DEEPGRAM_KEY  = process.env.DEEPGRAM_API_KEY || '';
 
 // Role-based users map (hardcoded + dynamic from Firestore)
 const USERS = {
@@ -323,6 +327,9 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     } catch (err) {
       console.error('[webhook] Auto-transcribe failed:', err.message);
     }
+    // ADDITIVE: also generate Deepgram word-level timings (fire-and-forget,
+    // fully guarded). Does not block or affect the Mux caption path above.
+    maybeGenerateWords(event.data);
   }
 
   res.sendStatus(200);
@@ -352,6 +359,88 @@ async function autoTranscribe(asset) {
   });
   console.log(`[transcript] Auto-started transcription for ${assetId}`);
 }
+
+// ── Deepgram word-level timing (ADDITIVE) ──────────────────────────────────────
+// Stores per-word start/end timestamps in a NEW Firestore collection
+// `transcriptWords/{playbackId}` so the app can highlight the exact spoken word
+// and seek into the middle of a track accurately. This is COMPLETELY separate
+// from the existing Mux auto-caption (VTT) path used by /api/audio-transcript/*.
+// If anything here fails or the key is missing, the app falls back to the
+// existing sentence-level cue sync — nothing is overwritten or removed.
+//
+// Firestore doc shape (transcriptWords/{playbackId}):
+//   { words: [{ w: "Hello", s: 12.34, e: 12.61 }, ...], assetId, model, updatedAt }
+
+// Call Deepgram's pre-recorded REST API with a remote audio URL (the Mux HLS
+// playback URL). No ffmpeg needed — Deepgram fetches and decodes the URL itself.
+async function deepgramWordsForPlayback(playbackId) {
+  if (!DEEPGRAM_KEY) throw new Error('DEEPGRAM_API_KEY not set');
+  const audioUrl = `https://stream.mux.com/${playbackId}.m3u8`;
+  const params = new URLSearchParams({
+    model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
+  });
+  const r = await fetch(`https://api.deepgram.com/v1/listen?${params}`, {
+    method: 'POST',
+    headers: { Authorization: `Token ${DEEPGRAM_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: audioUrl }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`Deepgram ${r.status}: ${t.slice(0, 200)}`);
+  }
+  const json = await r.json();
+  const alt = json?.results?.channels?.[0]?.alternatives?.[0];
+  const rawWords = alt?.words || [];
+  // Keep payload small: punctuated_word for display, start/end rounded to ms.
+  const words = rawWords.map(w => ({
+    w: w.punctuated_word || w.word || '',
+    s: Math.round((w.start ?? 0) * 1000) / 1000,
+    e: Math.round((w.end ?? 0) * 1000) / 1000,
+  })).filter(w => w.w);
+  return words;
+}
+
+// Generate + persist word timings for one playback id (idempotent unless force).
+// Returns { ok, count, skipped? }. Never throws into callers that wrap it.
+async function generateAndStoreWords(playbackId, assetId, { force = false } = {}) {
+  if (!DEEPGRAM_KEY) return { ok: false, error: 'DEEPGRAM_API_KEY not set' };
+  const db = admin.firestore();
+  const ref = db.collection('transcriptWords').doc(playbackId);
+  if (!force) {
+    const existing = await ref.get();
+    if (existing.exists && Array.isArray(existing.data()?.words) && existing.data().words.length) {
+      return { ok: true, count: existing.data().words.length, skipped: true };
+    }
+  }
+  const words = await deepgramWordsForPlayback(playbackId);
+  if (!words.length) return { ok: false, error: 'no words returned' };
+  await ref.set({
+    words,
+    assetId: assetId || null,
+    model: 'nova-2',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { ok: true, count: words.length };
+}
+
+// Fire-and-forget word-timing generation for a freshly-ready sermon asset.
+// Fully guarded: any failure is logged and swallowed so the existing Mux
+// caption path is never affected. Mux captions are NOT required to be ready
+// for this (Deepgram transcribes the audio directly).
+async function maybeGenerateWords(asset) {
+  try {
+    if (!DEEPGRAM_KEY) return;
+    if (!isSermonAsset(asset)) return;
+    const pid = asset.playback_ids?.[0]?.id;
+    if (!pid) return;
+    const res = await generateAndStoreWords(pid, asset.id);
+    if (res.ok) console.log(`[words] Stored ${res.count} word timings for ${asset.id} (pid ${pid})${res.skipped ? ' [skipped, existed]' : ''}`);
+    else console.warn(`[words] Skipped word timings for ${asset.id}: ${res.error}`);
+  } catch (e) {
+    console.error(`[words] Word-timing generation failed for ${asset?.id}: ${e.message}`);
+  }
+}
+
 app.get('/api/build', (req, res) => res.json({ build: ADMIN_BUILD }));
 app.use(express.static('public', { maxAge: 0, etag: false, setHeaders: (res, path) => {
   if (path.endsWith('.html')) res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -664,6 +753,29 @@ app.get('/api/audio-transcript/:playbackId/cues', async (req, res) => {
   }
 });
 
+// Per-WORD timings for accurate karaoke highlight + mid-track seeking (ADDITIVE).
+// Reads the NEW transcriptWords/{playbackId} Firestore doc populated by Deepgram.
+// This does NOT touch the Mux caption path. The app calls this OPTIONALLY: if the
+// status isn't "ready", it falls back to the existing sentence-level /cues sync.
+//
+// GET /api/audio-transcript/:playbackId/words
+//   -> { status: "ready", words: [{ w, s, e }] }
+//      | { status: "none", message }   (no word data yet — app uses /cues)
+app.get('/api/audio-transcript/:playbackId/words', async (req, res) => {
+  try {
+    const pid = req.params.playbackId;
+    const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
+    const words = snap.exists ? snap.data()?.words : null;
+    if (!Array.isArray(words) || !words.length) {
+      return res.json({ status: 'none', message: 'No word-level timing for this track.' });
+    }
+    res.json({ status: 'ready', words });
+  } catch (e) {
+    // On any error, report "none" so the app cleanly falls back to /cues.
+    res.json({ status: 'none', message: e.message });
+  }
+});
+
 // Locate the audio TIMESTAMP for a snippet of transcript text. Used by the
 // app's "Listen" button on a highlighted note: given the highlight's quoted
 // text, find where it was spoken so the player can seek there.
@@ -866,6 +978,60 @@ app.post('/api/transcripts/backfill', async (req, res) => {
       if (data.next_cursor) cursor = data.next_cursor; else break;
     }
     res.json({ started, skipped, failed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// MANUAL backfill: generate Deepgram word-level timings for ready SERMON assets
+// that don't already have a transcriptWords doc. ADDITIVE — only writes the new
+// transcriptWords/{playbackId} collection; never touches Mux captions.
+//
+//   POST /api/transcript-words/backfill           — run it (admin only)
+//   POST /api/transcript-words/backfill?dryRun=1  — just COUNT eligible assets
+//   POST /api/transcript-words/backfill?force=1   — re-process even if data exists
+//   POST /api/transcript-words/backfill?limit=5   — cap how many to process
+// NOT auto-run anywhere. Trigger manually.
+app.post('/api/transcript-words/backfill', adminOnly, async (req, res) => {
+  if (!DEEPGRAM_KEY) return res.status(503).json({ error: 'DEEPGRAM_API_KEY not set' });
+  const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
+  const force = req.query.force === '1' || req.query.force === 'true';
+  const limit = parseInt(req.query.limit, 10) || Infinity;
+  try {
+    const db = admin.firestore();
+    let cursor = null, eligible = [], processed = 0, stored = 0, skipped = 0, failed = 0;
+    // First pass: collect eligible sermon playback ids.
+    while (true) {
+      const data = await mux('GET', cursor
+        ? `/video/v1/assets?limit=100&cursor=${encodeURIComponent(cursor)}`
+        : '/video/v1/assets?limit=100');
+      for (const asset of data.data || []) {
+        if (asset.status !== 'ready') continue;
+        if (!isSermonAsset(asset)) continue;
+        const pid = asset.playback_ids?.[0]?.id;
+        if (!pid) continue;
+        eligible.push({ assetId: asset.id, pid });
+      }
+      if (data.next_cursor) cursor = data.next_cursor; else break;
+    }
+    if (dryRun) {
+      return res.json({ dryRun: true, eligibleSermonAssets: eligible.length });
+    }
+    // Second pass: generate + store (sequential to be gentle on Deepgram).
+    for (const { assetId, pid } of eligible) {
+      if (processed >= limit) break;
+      processed++;
+      try {
+        const r = await generateAndStoreWords(pid, assetId, { force });
+        if (r.ok && r.skipped) skipped++;
+        else if (r.ok) stored++;
+        else { failed++; console.warn(`[words-backfill] ${assetId}: ${r.error}`); }
+      } catch (e) {
+        failed++;
+        console.error(`[words-backfill] ${assetId}: ${e.message}`);
+      }
+    }
+    res.json({ eligibleSermonAssets: eligible.length, processed, stored, skipped, failed, force });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
