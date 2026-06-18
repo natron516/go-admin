@@ -2619,7 +2619,7 @@ tr.dirty .at-save { display: inline-flex !important; }
     </div>
     <p id="thumb-status" style="font-size:12px;color:var(--muted);margin-bottom:12px;"></p>
     <div class="modal-actions">
-      <button class="btn btn-danger btn-sm content-mgmt" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove</button>
+      <button class="btn btn-danger btn-sm admin-only" id="thumb-remove-btn" onclick="removeThumbnail()" style="margin-right:auto;display:none">🗑 Remove</button>
       <button class="btn btn-ghost btn-sm" id="thumb-rescale-btn" onclick="rescaleExistingThumb()" style="display:none">🔍 Rescale</button>
       <button class="btn btn-ghost" onclick="document.getElementById('thumb-modal').classList.remove('open')">Cancel</button>
       <button class="btn btn-primary" id="thumb-upload-btn" onclick="uploadThumbnail()" disabled>⬆️ Upload</button>
@@ -3919,7 +3919,7 @@ function renderFileList() {
         <div><div style="font-size:13px;font-weight:600;">${escHtml(item.file.name)}</div><div style="font-size:11px;color:var(--muted);">${formatSize(item.file.size)}</div></div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="status-${item.uid}">${utBadge(item)}</span>
-          <button class="btn btn-danger btn-sm content-mgmt" onclick="removeFile('${item.uid}')" ${dis?'disabled':''} style="padding:4px 8px;">✕</button>
+          <button class="btn btn-danger btn-sm admin-only" onclick="removeFile('${item.uid}')" ${dis?'disabled':''} style="padding:4px 8px;">✕</button>
         </div>
       </div>
       <div style="margin-bottom:6px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Title</label><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"></div>
@@ -4222,7 +4222,7 @@ function assetRowHtml(a) {
                 return `<button class="btn btn-ghost btn-sm ${trReady ? 'dl-ready' : ''}" onclick="openTranscript('${a.id}','${escAttr(title)}')" title="${trReady ? 'View transcript' : trPrep ? 'Transcribing…' : 'Generate transcript'}" id="tr-${a.id}">${trPrep ? '<span class=dl-pulse>📜</span>' : '📜'}</button>` +
                   (trReady && pid ? `<button class="btn btn-ghost btn-sm" onclick="openScriptureRefs('${a.id}','${camPid}','${escAttr(title)}')" title="Scripture references">📖</button>` : '');
               })() : ''}
-              <span id="del-${a.id}" class="content-mgmt"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
+              <span id="del-${a.id}" class="admin-only"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
             </div>
           </div>
         </div>
@@ -5980,7 +5980,7 @@ function renderBooksTable() {
       <td style="padding:10px 12px;white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('book','${escAttr(b.id)}','${escAttr(b.title)}','${escAttr(b.coverImageUrl||'')}')" id="notify-book-${escAttr(b.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="editBook('${escAttr(b.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm content-mgmt" style="margin-left:4px;" onclick="deleteBook('${escAttr(b.id)}', '${escAttr(b.title)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteBook('${escAttr(b.id)}', '${escAttr(b.title)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -6663,7 +6663,7 @@ function renderArticlesTable() {
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('article','${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.imageUrl||'')}')" id="notify-article-${escAttr(a.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewArticle('${escAttr(a.id)}')">Preview</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editArticle('${escAttr(a.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm content-mgmt" style="margin-left:4px;" onclick="deleteArticle('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteArticle('${escAttr(a.id)}', '${escAttr(a.title)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -6839,7 +6839,7 @@ function renderPodcastsTable() {
         <button class="btn btn-ghost btn-sm" onclick="notifyContent('podcast','${escAttr(p.id)}','${escAttr(p.title)}','${escAttr(p.artworkUrl||'')}')" id="notify-podcast-${escAttr(p.id)}" title="Notify users">🔔</button>
         <button class="btn btn-ghost btn-sm" onclick="previewPodcastEpisodes('${escAttr(p.id)}')">Episodes</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editPodcast('${escAttr(p.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm content-mgmt" style="margin-left:4px;" onclick="deletePodcast('${escAttr(p.id)}', '${escAttr(p.title)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deletePodcast('${escAttr(p.id)}', '${escAttr(p.title)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -7103,7 +7103,7 @@ function renderAudioTable() {
           return `<button class="btn btn-ghost btn-sm ${ready ? 'dl-ready' : ''}" onclick="openAudioTranscript('${escAttr(a.id)}','${escAttr(a.title)}','${escAttr(a.audioUrl||'')}')" title="${tip}" id="tr-audio-${escAttr(a.id)}" style="margin-left:2px;">${prep ? '<span class=dl-pulse>\ud83d\udcdc</span>' : '\ud83d\udcdc'}</button>`;
         })()}
         <button class="btn btn-ghost btn-sm" onclick="editAudio('${escAttr(a.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm content-mgmt" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
+        <button class="btn btn-danger btn-sm admin-only" style="margin-left:4px;" onclick="deleteAudio('${escAttr(a.id)}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -7268,7 +7268,7 @@ function renderSeriesTable() {
         '<button class="btn btn-ghost btn-sm" onclick="notifyContent(\'' + escAttr(s.category === 'audiobook' ? 'audiobook' : 'series') + '\',\'' + escAttr(s.id) + '\',\'' + escAttr(s.title) + '\',\'' + escAttr(s.artworkUrl || '') + '\')" id="notify-' + (s.category === 'audiobook' ? 'audiobook' : 'series') + '-' + escAttr(s.id) + '" title="Notify users">🔔</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="viewSeriesEpisodes(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Episodes</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="editSeries(\'' + escAttr(s.id) + '\')">Edit</button> ' +
-        '<button class="btn btn-danger btn-sm content-mgmt" onclick="deleteSeries(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Delete</button>' +
+        '<button class="btn btn-danger btn-sm admin-only" onclick="deleteSeries(\'' + escAttr(s.id) + '\', \'' + escAttr(s.title) + '\')">Delete</button>' +
       '</td>' +
     '</tr>';
   }).join('');
@@ -7469,7 +7469,7 @@ function renderSeriesEpisodes() {
       '<td style="' + tdStyle + 'color:var(--muted);font-size:12px;white-space:nowrap;">' + fmtDuration(ep.duration) + '</td>' +
       '<td style="' + tdStyle + 'color:var(--muted);font-size:12px;white-space:nowrap;">' + fmtDateShort(ep.createdAt) + '</td>' +
       '<td style="' + tdStyle + '">' +
-        '<button class="btn btn-danger btn-sm content-mgmt" style="font-size:11px;padding:3px 8px;" onclick="deleteSeriesEpisode(\'' + escAttr(ep.id) + '\', \'' + escAttr(ep.title) + '\')">&times;</button>' +
+        '<button class="btn btn-danger btn-sm admin-only" style="font-size:11px;padding:3px 8px;" onclick="deleteSeriesEpisode(\'' + escAttr(ep.id) + '\', \'' + escAttr(ep.title) + '\')">&times;</button>' +
       '</td>' +
       '</tr>';
   });
