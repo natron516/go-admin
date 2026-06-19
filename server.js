@@ -426,10 +426,25 @@ function isSermonAsset(asset) {
   return (pt.category || '').toLowerCase().trim() === 'sermon';
 }
 
-// Kick off Mux subtitle generation for a SERMON asset if it has audio and no text track yet
+// Categories that are NOT spoken word — transcription/highlight is skipped.
+const NON_SPOKEN_CATEGORIES = new Set(['music']);
+
+// Default policy (Isaac, 2026-06-19): transcribe + word-highlight EVERY uploaded
+// asset that carries spoken word, i.e. anything that isn't music. Sermon live
+// recordings always qualify. Music is excluded. Assets with no audio track are
+// skipped downstream where the audio track is required.
+function shouldAutoTranscribe(asset) {
+  if (asset.live_stream_id && SERMON_STREAM_IDS.has(asset.live_stream_id)) return true;
+  const pt = parsePassthrough(asset.passthrough);
+  const cat = (pt.category || '').toLowerCase().trim();
+  return !NON_SPOKEN_CATEGORIES.has(cat);
+}
+
+// Kick off Mux subtitle generation for any spoken-word asset (non-music) if it
+// has audio and no text track yet.
 async function autoTranscribe(asset) {
   const assetId = asset.id;
-  if (!isSermonAsset(asset)) return; // sermons only
+  if (!shouldAutoTranscribe(asset)) return; // spoken word only (skip music)
   const tracks = asset.tracks || [];
   if (tracks.some(t => t.type === 'text')) return; // already has/generating captions
   const audioTrack = tracks.find(t => t.type === 'audio');
@@ -510,7 +525,7 @@ async function generateAndStoreWords(playbackId, assetId, { force = false } = {}
 async function maybeGenerateWords(asset) {
   try {
     if (!DEEPGRAM_KEY) return;
-    if (!isSermonAsset(asset)) return;
+    if (!shouldAutoTranscribe(asset)) return; // spoken word only (skip music)
     const pid = asset.playback_ids?.[0]?.id;
     if (!pid) return;
     const res = await generateAndStoreWords(pid, asset.id);
