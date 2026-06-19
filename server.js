@@ -466,11 +466,14 @@ async function autoTranscribe(asset) {
 // Firestore doc shape (transcriptWords/{playbackId}):
 //   { words: [{ w: "Hello", s: 12.34, e: 12.61 }, ...], assetId, model, updatedAt }
 
-// Call Deepgram's pre-recorded REST API with a remote audio URL (the Mux HLS
-// playback URL). No ffmpeg needed — Deepgram fetches and decodes the URL itself.
+// Call Deepgram's pre-recorded REST API with a remote audio URL. Deepgram
+// CANNOT decode the Mux HLS playlist (.m3u8) — it returns "corrupt or
+// unsupported data". Use the static MP4/M4A rendition instead
+// (https://stream.mux.com/<pid>/audio.m4a), which requires mp4_support:standard
+// (already enabled on ingest). No ffmpeg needed — Deepgram fetches/decodes it.
 async function deepgramWordsForPlayback(playbackId) {
   if (!DEEPGRAM_KEY) throw new Error('DEEPGRAM_API_KEY not set');
-  const audioUrl = `https://stream.mux.com/${playbackId}.m3u8`;
+  const audioUrl = `https://stream.mux.com/${playbackId}/audio.m4a`;
   const params = new URLSearchParams({
     model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
   });
