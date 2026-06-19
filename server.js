@@ -1117,6 +1117,31 @@ app.post('/api/transcript-words/backfill', adminOnly, async (req, res) => {
   }
 });
 
+// Generate Deepgram word-level timings for EXPLICIT playback ids, regardless of
+// the asset's sermon flag. Used to give a series the audio/text-tracking +
+// karaoke highlight feature on demand (e.g. "Kenneth Korby Sermons"), the same
+// way sermon assets get it automatically on upload. (Greg, 2026-06-19)
+//   POST /api/transcript-words/generate   body: { playbackIds: ["...", ...], force?: true }
+app.post('/api/transcript-words/generate', adminOnly, async (req, res) => {
+  if (!DEEPGRAM_KEY) return res.status(503).json({ error: 'DEEPGRAM_API_KEY not set' });
+  const force = req.query.force === '1' || req.query.force === 'true' || req.body?.force === true;
+  const ids = Array.isArray(req.body?.playbackIds) ? req.body.playbackIds.filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ error: 'playbackIds array required' });
+  const results = [];
+  for (const pid of ids) {
+    try {
+      const assetId = await assetIdForPlaybackId(pid);
+      const r = await generateAndStoreWords(pid, assetId, { force });
+      results.push({ playbackId: pid, assetId: assetId || null, ...r });
+      console.log(`[words-generate] ${pid}: ${r.ok ? (r.skipped ? 'skipped (existed)' : `stored ${r.count}`) : 'failed ' + r.error}`);
+    } catch (e) {
+      results.push({ playbackId: pid, ok: false, error: e.message });
+      console.error(`[words-generate] ${pid}: ${e.message}`);
+    }
+  }
+  res.json({ results });
+});
+
 // Cleanup: delete generated caption tracks from NON-sermon assets
 app.post('/api/transcripts/cleanup-non-sermons', async (req, res) => {
   try {
