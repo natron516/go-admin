@@ -812,8 +812,11 @@ app.all('/api/audio-transcript/:playbackId', async (req, res) => {
     if (!clean) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
     // Lectures have no worship intro; buildCleanTranscript only trims when it
     // detects pre-sermon singing, so for these tracks sermonStart is ~0 and the
-    // full lecture text is returned.
-    res.json({ status: 'ready', text: clean.text, trackId: textTrack.id });
+    // full lecture text is returned. Prepend the scripture-reference header so
+    // refs sit at the top (same format as the video-asset transcript path).
+    const note = clean.sermonStart > 0 ? `(Pre-sermon music/singing removed — sermon begins ~${fmtTimestamp(clean.sermonStart)} in the recording)\n\n` : '';
+    const text = (await buildRefsHeader(asset)) + note + clean.text;
+    res.json({ status: 'ready', text, trackId: textTrack.id });
   } catch (e) {
     res.status(500).json({ status: 'errored', error: e.message });
   }
@@ -1538,8 +1541,49 @@ function parseVtt(vtt) {
 }
 
 // Extract scripture references with timestamps from an asset's transcript
+// Extract scripture refs from Deepgram WORD timings (used when a Deepgram
+// transcript override is set — the Mux VTT is unusable for those assets).
+// Builds a rolling text window with each word's start time so refs keep an
+// accurate timestamp, honoring the same manual start as the transcript.
+async function extractScriptureRefsFromWords(playbackId, startSeconds = 0) {
+  const snap = await admin.firestore().collection('transcriptWords').doc(playbackId).get();
+  const words = (snap.exists ? snap.data()?.words : null) || [];
+  const kept = words.filter(w => (w.s ?? 0) >= startSeconds && w.w);
+  if (!kept.length) return [];
+  const text = kept.map(w => w.w).join(' ');
+  // Map a character offset in `text` back to the word's start time.
+  const offsets = []; let pos = 0;
+  for (const w of kept) { offsets.push({ at: pos, t: w.s ?? 0 }); pos += w.w.length + 1; }
+  const tsForOffset = (idx) => {
+    let lo = 0, hi = offsets.length - 1, ans = 0;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (offsets[mid].at <= idx) { ans = offsets[mid].t; lo = mid + 1; } else hi = mid - 1; }
+    return Math.round(ans);
+  };
+  const refs = []; const seen = new Set();
+  SCRIPTURE_RE.lastIndex = 0;
+  let m;
+  while ((m = SCRIPTURE_RE.exec(text)) !== null) {
+    const book = normalizeBook(m[1]);
+    const chapter = +m[2], verse = +m[3], verseEnd = m[4] ? +m[4] : null;
+    const refStr = `${book} ${chapter}:${verse}` + (verseEnd ? `-${verseEnd}` : '');
+    const ts = tsForOffset(m.index);
+    const key = refStr + '|' + Math.floor(ts / 60);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ reference: refStr, book, chapter, verse, verseEnd, timestamp: ts, spoken: m[0] });
+  }
+  return refs;
+}
+
 async function extractScriptureRefs(asset) {
   const pid = asset.playback_ids?.[0]?.id;
+  // Deepgram override assets: scan the Deepgram words instead of the (garbage) VTT.
+  if (pid) {
+    const ov = await getTranscriptOverride(pid);
+    if (ov && ov.source === 'deepgram') {
+      return extractScriptureRefsFromWords(pid, Number(ov.startSeconds) || 0);
+    }
+  }
   const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
   if (!pid || !textTrack) return null; // transcript not ready
   const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
