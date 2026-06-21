@@ -412,6 +412,19 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     maybeGenerateWords(event.data);
   }
 
+  // When a sermon live stream goes IDLE (after Sunday's broadcast ends), make
+  // sure auto-generated LIVE captions are configured for the NEXT broadcast.
+  // Mux only allows configuring generated_subtitles while the stream is idle, so
+  // this is the reliable moment to set it. Safe + idempotent.
+  if (event.type === 'video.live_stream.idle') {
+    try {
+      const sid = event.data?.id;
+      if (sid && SERMON_STREAM_IDS.has(sid)) await ensureLiveCaptions(sid);
+    } catch (err) {
+      console.error('[webhook] ensureLiveCaptions failed:', err.message);
+    }
+  }
+
   res.sendStatus(200);
 });
 
@@ -419,6 +432,29 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
 const SERMON_STREAM_IDS = new Set([
   'ECgSydhoD601OoMqVmiNvfH6y0100m8uENxk6KKJV4NSZQ',
 ]);
+
+// Enable Mux auto-generated LIVE closed captions (English) on a live stream.
+// Mux requires the stream to be IDLE to (re)configure generated_subtitles; if
+// the stream is active this throws and the caller should retry once it's idle.
+// Idempotent: if an "en" generated subtitle is already configured, it's a no-op.
+async function ensureLiveCaptions(streamId) {
+  const cur = await mux('GET', `/video/v1/live-streams/${streamId}`);
+  const stream = cur.data;
+  if (!stream) throw new Error('stream not found');
+  const existing = stream.generated_subtitles || [];
+  if (existing.some(g => (g.language_code || 'en').toLowerCase().startsWith('en'))) {
+    console.log(`[live-captions] ${streamId} already has English generated captions — skip`);
+    return { ok: true, skipped: true };
+  }
+  if (stream.status === 'active') {
+    throw new Error('stream is active; live captions can only be configured while idle');
+  }
+  await mux('PUT', `/video/v1/live-streams/${streamId}/generated-subtitles`, {
+    generated_subtitles: [{ name: 'English (auto)', language_code: 'en' }],
+  });
+  console.log(`[live-captions] Enabled English generated live captions on ${streamId}`);
+  return { ok: true, enabled: true };
+}
 
 function isSermonAsset(asset) {
   if (asset.live_stream_id && SERMON_STREAM_IDS.has(asset.live_stream_id)) return true;
@@ -1993,6 +2029,26 @@ app.get('/api/live-streams', async (req, res) => {
   }
 });
 
+// Enable auto-generated LIVE captions on a sermon live stream (or any stream id).
+// Must be idle (Mux constraint). POST /api/live-streams/:id/live-captions
+// Body: { language_code?: "en" }. With no :id, enables on all sermon streams.
+app.post('/api/live-streams/:id/live-captions', adminOnly, async (req, res) => {
+  try {
+    const r = await ensureLiveCaptions(req.params.id);
+    res.json(r);
+  } catch (e) {
+    res.status(409).json({ error: e.message });
+  }
+});
+app.post('/api/sermon-live-captions/enable-all', adminOnly, async (req, res) => {
+  const results = [];
+  for (const sid of SERMON_STREAM_IDS) {
+    try { results.push({ streamId: sid, ...(await ensureLiveCaptions(sid)) }); }
+    catch (e) { results.push({ streamId: sid, ok: false, error: e.message }); }
+  }
+  res.json({ results });
+});
+
 // Create a new live stream
 app.post('/api/live-streams', async (req, res) => {
   try {
@@ -2005,13 +2061,18 @@ app.post('/api/live-streams', async (req, res) => {
     // Store title in passthrough JSON so it carries over to the VOD asset after the stream ends.
     // Mux copies passthrough to the new asset automatically, but does NOT copy meta.title.
     const passthrough = JSON.stringify({ category: cat, title: resolvedTitle });
-    const data = await mux('POST', '/video/v1/live-streams', {
+    const body = {
       playback_policy: ['public'],
       new_asset_settings: { playback_policy: ['public'], video_quality: 'plus' },
       meta: { title: resolvedTitle },
       passthrough,
       latency_mode: 'standard',
-    });
+    };
+    // Sermon streams get auto-generated English LIVE captions out of the gate.
+    if (cat.toLowerCase().trim() === 'sermon') {
+      body.generated_subtitles = [{ name: 'English (auto)', language_code: 'en' }];
+    }
+    const data = await mux('POST', '/video/v1/live-streams', body);
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
