@@ -1512,6 +1512,65 @@ app.get('/api/assets/:id/transcript.txt', async (req, res) => {
 const BIBLE_BOOKS = '(?:Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|(?:1st|2nd|First|Second|1|2|I|II) Samuel|(?:1st|2nd|First|Second|1|2|I|II) Kings|(?:1st|2nd|First|Second|1|2|I|II) Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song of Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts|Romans|(?:1st|2nd|First|Second|1|2|I|II) Corinthians|Galatians|Ephesians|Philippians|Colossians|(?:1st|2nd|First|Second|1|2|I|II) Thessalonians|(?:1st|2nd|First|Second|1|2|I|II) Timothy|Titus|Philemon|Hebrews|James|(?:1st|2nd|First|Second|1|2|I|II) Peter|(?:1st|2nd|3rd|First|Second|Third|1|2|3|I|II|III) John|Jude|Revelation)';
 const SCRIPTURE_RE = new RegExp('\\b(' + BIBLE_BOOKS + ')\\s+(?:chapter\\s+)?(\\d{1,3})(?:\\s*[:,]\\s*|\\s+(?:and\\s+)?verses?\\s+)(\\d{1,3})(?:\\s*[-\u2013]\\s*(\\d{1,3}))?', 'gi');
 
+// ── Spoken-number scripture parsing ──────────────────────────────────────────
+// Catches refs spoken aloud as words, e.g. "Romans six three", "John chapter
+// three verse sixteen", "first Corinthians thirteen four through seven". Deepgram
+// sometimes leaves chapter/verse as word-numbers; this second pass converts them.
+const NUM_WORDS = {
+  zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9,
+  ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16,
+  seventeen:17, eighteen:18, nineteen:19, twenty:20, thirty:30, forty:40, fifty:50,
+  sixty:60, seventy:70, eighty:80, ninety:90,
+};
+// Parse a run of number-words into an integer (handles "twenty three", "twenty-three",
+// "one hundred", "one hundred nineteen"). Returns { value, wordCount } or null.
+function parseSpokenNumber(tokens, i) {
+  let total = 0, cur = 0, used = 0, sawHundred = false;
+  while (i + used < tokens.length) {
+    const w = tokens[i + used].toLowerCase().replace(/[^a-z]/g, '');
+    if (w in NUM_WORDS) { cur += NUM_WORDS[w]; used++; continue; }
+    if (w === 'hundred' && (cur > 0 || used > 0)) { cur = (cur || 1) * 100; sawHundred = true; used++; continue; }
+    break;
+  }
+  if (!used) return null;
+  total = cur;
+  if (total < 1 || total > 176) return null; // valid chapter/verse range guard
+  return { value: total, wordCount: used };
+}
+// Spoken book pattern reuses BIBLE_BOOKS but tolerates spoken ordinals already inside it.
+const SPOKEN_BOOK_RE = new RegExp('\\b(' + BIBLE_BOOKS + ')\\b', 'gi');
+// Longer words first so e.g. "sixteen" is matched before "six" (alternation is leftmost-first).
+const SPOKEN_NUM_TOKEN = '(?:seventeen|seventy|sixteen|sixty|nineteen|ninety|fourteen|forty|thirteen|thirty|fifteen|fifty|eighteen|eighty|twelve|twenty|eleven|hundred|zero|seven|eight|three|four|five|nine|six|ten|two|one)';
+// book [chapter] <num...> [verse|colon] <num...> [through|to|dash <num...>]
+const SPOKEN_REF_RE = new RegExp(
+  '\\b(' + BIBLE_BOOKS + ')\\s+(?:chapter\\s+)?' +
+  '((?:' + SPOKEN_NUM_TOKEN + '[\\s-]*)+)' +
+  '(?:\\s*(?:verse|verses|colon)\\s+|\\s+)' +
+  '((?:' + SPOKEN_NUM_TOKEN + '[\\s-]*)+)' +
+  '(?:(?:\\s*(?:through|thru|to|[-\u2013])\\s*)((?:' + SPOKEN_NUM_TOKEN + '[\\s-]*)+))?',
+  'gi');
+function wordsToInt(phrase) {
+  const toks = (phrase || '').trim().split(/[\s-]+/).filter(Boolean);
+  const r = parseSpokenNumber(toks, 0);
+  return r ? r.value : null;
+}
+// Scan text for spoken-number refs; returns [{ reference, book, chapter, verse, verseEnd, index, spoken }].
+function matchSpokenRefs(text) {
+  const out = [];
+  SPOKEN_REF_RE.lastIndex = 0;
+  let m;
+  while ((m = SPOKEN_REF_RE.exec(text)) !== null) {
+    const book = normalizeBook(m[1]);
+    const chapter = wordsToInt(m[2]);
+    const verse = wordsToInt(m[3]);
+    const verseEnd = m[4] ? wordsToInt(m[4]) : null;
+    if (!chapter || !verse) continue;
+    const reference = `${book} ${chapter}:${verse}` + (verseEnd ? `-${verseEnd}` : '');
+    out.push({ reference, book, chapter, verse, verseEnd, index: m.index, spoken: m[0] });
+  }
+  return out;
+}
+
 // Normalize spoken book names: "First Peter"/"1st Peter"/"I Peter" → "1 Peter"
 function normalizeBook(book) {
   return book
@@ -1560,18 +1619,27 @@ async function extractScriptureRefsFromWords(playbackId, startSeconds = 0) {
     return Math.round(ans);
   };
   const refs = []; const seen = new Set();
+  const pushRef = (refStr, book, chapter, verse, verseEnd, index, spoken) => {
+    const ts = tsForOffset(index);
+    const key = refStr + '|' + Math.floor(ts / 60);
+    if (seen.has(key)) return;
+    seen.add(key);
+    refs.push({ reference: refStr, book, chapter, verse, verseEnd, timestamp: ts, spoken });
+  };
+  // Pass 1: digit-form refs ("Romans 6:3").
   SCRIPTURE_RE.lastIndex = 0;
   let m;
   while ((m = SCRIPTURE_RE.exec(text)) !== null) {
     const book = normalizeBook(m[1]);
     const chapter = +m[2], verse = +m[3], verseEnd = m[4] ? +m[4] : null;
-    const refStr = `${book} ${chapter}:${verse}` + (verseEnd ? `-${verseEnd}` : '');
-    const ts = tsForOffset(m.index);
-    const key = refStr + '|' + Math.floor(ts / 60);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    refs.push({ reference: refStr, book, chapter, verse, verseEnd, timestamp: ts, spoken: m[0] });
+    pushRef(`${book} ${chapter}:${verse}` + (verseEnd ? `-${verseEnd}` : ''), book, chapter, verse, verseEnd, m.index, m[0]);
   }
+  // Pass 2: spoken-number refs ("Romans six three", "John chapter three verse sixteen").
+  for (const s of matchSpokenRefs(text)) {
+    pushRef(s.reference, s.book, s.chapter, s.verse, s.verseEnd, s.index, s.spoken);
+  }
+  // Order by timestamp so the header reads in sermon order.
+  refs.sort((a, b) => a.timestamp - b.timestamp);
   return refs;
 }
 
@@ -1608,7 +1676,16 @@ async function extractScriptureRefs(asset) {
       seen.add(key);
       refs.push({ reference: refStr, book, chapter, verse, verseEnd, timestamp: Math.round(cues[i].start), spoken: m[0] });
     }
+    // Spoken-number refs in this cue window ("Romans six three").
+    for (const s of matchSpokenRefs(text)) {
+      if (s.index >= cues[i].text.length) continue; // attribute to this cue only
+      const key = s.reference + '|' + Math.floor(cues[i].start / 60);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      refs.push({ reference: s.reference, book: s.book, chapter: s.chapter, verse: s.verse, verseEnd: s.verseEnd, timestamp: Math.round(cues[i].start), spoken: s.spoken });
+    }
   }
+  refs.sort((a, b) => a.timestamp - b.timestamp);
   return refs;
 }
 
