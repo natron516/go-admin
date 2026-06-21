@@ -791,7 +791,19 @@ app.all('/api/audio-transcript/:playbackId', async (req, res) => {
     const tracks = asset.tracks || [];
     const textTrack = tracks.find(t => t.type === 'text' && t.text_type === 'subtitles');
 
+    // Sermons serve from Deepgram by default, so a usable transcript can be
+    // returned even if the Mux caption track is missing/preparing/errored.
+    const tryDeepgram = async () => {
+      if (!isSermonAsset(asset)) return null;
+      const built = await buildBestTranscript(asset);
+      if (!built) return null;
+      const note = built.sermonStart > 0 ? `(Pre-sermon music/singing removed — sermon begins ~${fmtTimestamp(built.sermonStart)} in the recording)\n\n` : '';
+      return { status: 'ready', text: (await buildRefsHeader(asset)) + note + built.text, trackId: textTrack?.id || null };
+    };
+
     if (!textTrack) {
+      const dg = await tryDeepgram();
+      if (dg) return res.json(dg);
       if (req.method !== 'POST') return res.json({ status: 'none', message: 'No transcript yet.' });
       const audioTrack = tracks.find(t => t.type === 'audio');
       if (!audioTrack) return res.json({ status: 'unavailable', message: 'No audio track on this asset.' });
@@ -805,8 +817,16 @@ app.all('/api/audio-transcript/:playbackId', async (req, res) => {
         return res.json({ status: 'errored', message: 'Could not start transcription: ' + e.message });
       }
     }
-    if (textTrack.status === 'preparing') return res.json({ status: 'preparing', message: 'Transcription in progress…' });
-    if (textTrack.status === 'errored') return res.json({ status: 'errored', message: 'Transcription failed.' });
+    if (textTrack.status === 'preparing') {
+      const dg = await tryDeepgram();
+      if (dg) return res.json(dg);
+      return res.json({ status: 'preparing', message: 'Transcription in progress…' });
+    }
+    if (textTrack.status === 'errored') {
+      const dg = await tryDeepgram();
+      if (dg) return res.json(dg);
+      return res.json({ status: 'errored', message: 'Transcription failed.' });
+    }
 
     const clean = await buildBestTranscript(asset);
     if (!clean) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
@@ -1375,27 +1395,75 @@ async function getTranscriptOverride(playbackId) {
   }
 }
 
+// Detect where continuous preaching begins from Deepgram WORD timings. Same
+// idea as detectSermonStart (which works on VTT cues): worship/music produces
+// sparse, short, repetitive word runs per minute; preaching is dense and varied.
+// Returns the start time (s) of the first run of 3 dense "speechy" minutes,
+// walking back over a soft lead-in, or 0 if detection fails (keep everything).
+function detectSermonStartFromWords(words) {
+  if (!Array.isArray(words) || !words.length) return 0;
+  const buckets = {};
+  for (const w of words) {
+    if (!w.w) continue;
+    const b = Math.floor((w.s ?? 0) / 60);
+    (buckets[b] = buckets[b] || []).push(w.w);
+  }
+  // Words-per-minute thresholds: real preaching is ~110-160 wpm; worship/quiet
+  // intros are far sparser. Require a sustained run so a stray dense minute in
+  // the music set doesn't trigger early.
+  const wpm = (b) => (buckets[b] || []).length;
+  const dense = (b) => wpm(b) >= 90;
+  const semiDense = (b) => wpm(b) >= 45;
+  const maxB = Math.max(...Object.keys(buckets).map(Number), 0);
+  for (let b = 0; b <= maxB - 2; b++) {
+    if (dense(b) && dense(b + 1) && dense(b + 2)) {
+      let s = b, gap = 0;
+      for (let k = b - 1; k >= 0 && b - k <= 10; k--) {
+        if (semiDense(k)) { s = k; gap = 0; }
+        else if (++gap > 1) break;
+      }
+      return s * 60;
+    }
+  }
+  return 0;
+}
+
 // Build a cleaned, reflowed transcript from stored Deepgram words, dropping any
 // word that starts before `startSeconds`. Returns { text, sermonStart } or null.
-async function buildTranscriptFromWords(playbackId, startSeconds = 0) {
+// When `startSeconds` is null/undefined, auto-detect the sermon start from the
+// words (trims pre-sermon worship automatically).
+async function buildTranscriptFromWords(playbackId, startSeconds = null) {
   const snap = await admin.firestore().collection('transcriptWords').doc(playbackId).get();
   const words = snap.exists ? snap.data()?.words : null;
   if (!Array.isArray(words) || !words.length) return null;
-  const kept = words.filter(w => (w.s ?? 0) >= startSeconds && w.w);
+  const start = (startSeconds == null) ? detectSermonStartFromWords(words) : startSeconds;
+  const kept = words.filter(w => (w.s ?? 0) >= start && w.w);
   if (!kept.length) return null;
   const blob = kept.map(w => w.w).join(' ').replace(/\s+([.,;:!?])/g, '$1');
-  return { text: reflowSentences(blob), sermonStart: startSeconds };
+  return { text: reflowSentences(blob), sermonStart: start };
 }
 
-// Preferred transcript builder: if a Deepgram override is set for this playback
-// id, build from Deepgram words (with manual start). Otherwise fall back to the
-// Mux VTT path (buildCleanTranscript). Returns { text, sermonStart } or null.
+// Resolve the Deepgram start for an asset: explicit override wins; otherwise
+// auto-detect from words (null signals auto to buildTranscriptFromWords).
+async function resolveDeepgramStart(pid, ov) {
+  if (ov && ov.startSeconds != null && ov.startSeconds !== '') return Number(ov.startSeconds) || 0;
+  return null; // auto-detect
+}
+
+// Preferred transcript builder. Deepgram is the DEFAULT source for sermons
+// (Sunday livestream recordings) because Mux auto-captions routinely mislabel
+// the worship set as "[ Singing ]" and miss the preaching. For sermons we build
+// from Deepgram words with an auto-detected start (or an explicit override).
+// A manual deepgram override forces the Deepgram path for ANY asset. Everything
+// else falls back to the Mux VTT path. Returns { text, sermonStart } or null.
 async function buildBestTranscript(asset) {
   const pid = asset.playback_ids?.[0]?.id;
   if (pid) {
     const ov = await getTranscriptOverride(pid);
-    if (ov && ov.source === 'deepgram') {
-      const fromWords = await buildTranscriptFromWords(pid, Number(ov.startSeconds) || 0);
+    const useDeepgram = (ov && ov.source === 'deepgram') || isSermonAsset(asset);
+    if (useDeepgram) {
+      const start = await resolveDeepgramStart(pid, ov);
+      const fromWords = await buildTranscriptFromWords(pid, start);
       if (fromWords) return fromWords;
     }
   }
@@ -1665,11 +1733,22 @@ async function extractScriptureRefsFromWords(playbackId, startSeconds = 0) {
 
 async function extractScriptureRefs(asset) {
   const pid = asset.playback_ids?.[0]?.id;
-  // Deepgram override assets: scan the Deepgram words instead of the (garbage) VTT.
+  // Sermons (and any explicit Deepgram override): scan the Deepgram words rather
+  // than the Mux VTT, which mislabels worship as singing. Start = override or
+  // auto-detected sermon start (matches the transcript body).
   if (pid) {
     const ov = await getTranscriptOverride(pid);
-    if (ov && ov.source === 'deepgram') {
-      return extractScriptureRefsFromWords(pid, Number(ov.startSeconds) || 0);
+    const useDeepgram = (ov && ov.source === 'deepgram') || isSermonAsset(asset);
+    if (useDeepgram) {
+      let start = await resolveDeepgramStart(pid, ov);
+      if (start == null) {
+        const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
+        const words = snap.exists ? snap.data()?.words : null;
+        start = detectSermonStartFromWords(words || []);
+      }
+      const refs = await extractScriptureRefsFromWords(pid, start);
+      if (refs && refs.length) return refs;
+      // If Deepgram produced no refs (e.g. words not ready yet) fall through to VTT.
     }
   }
   const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
