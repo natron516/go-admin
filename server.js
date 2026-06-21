@@ -1565,6 +1565,7 @@ function matchSpokenRefs(text) {
     const verse = wordsToInt(m[3]);
     const verseEnd = m[4] ? wordsToInt(m[4]) : null;
     if (!chapter || !verse) continue;
+    if (!isPlausibleRef(book, chapter, verse)) continue; // drop mis-heard junk (e.g. "Luke 69:2")
     const reference = `${book} ${chapter}:${verse}` + (verseEnd ? `-${verseEnd}` : '');
     out.push({ reference, book, chapter, verse, verseEnd, index: m.index, spoken: m[0] });
   }
@@ -1580,6 +1581,25 @@ function normalizeBook(book) {
     .replace(/^Psalm$/i, 'Psalms')
     .replace(/\b\w/g, c => c.toUpperCase())
     .replace(/ Of /g, ' of ');
+}
+
+// Chapter counts per book (KJV) — used to reject impossible spoken-number refs
+// like "Luke 69:2" or "Proverbs 38:6" that come from mis-heard number sequences.
+const BOOK_CHAPTERS = {
+  'Genesis':50,'Exodus':40,'Leviticus':27,'Numbers':36,'Deuteronomy':34,'Joshua':24,'Judges':21,'Ruth':4,
+  '1 Samuel':31,'2 Samuel':24,'1 Kings':22,'2 Kings':25,'1 Chronicles':29,'2 Chronicles':36,'Ezra':10,'Nehemiah':13,
+  'Esther':10,'Job':42,'Psalms':150,'Proverbs':31,'Ecclesiastes':12,'Song of Solomon':8,'Isaiah':66,'Jeremiah':52,
+  'Lamentations':5,'Ezekiel':48,'Daniel':12,'Hosea':14,'Joel':3,'Amos':9,'Obadiah':1,'Jonah':4,'Micah':7,'Nahum':3,
+  'Habakkuk':3,'Zephaniah':3,'Haggai':2,'Zechariah':14,'Malachi':4,'Matthew':28,'Mark':16,'Luke':24,'John':21,
+  'Acts':28,'Romans':16,'1 Corinthians':16,'2 Corinthians':13,'Galatians':6,'Ephesians':6,'Philippians':4,
+  'Colossians':4,'1 Thessalonians':5,'2 Thessalonians':3,'1 Timothy':6,'2 Timothy':4,'Titus':3,'Philemon':1,
+  'Hebrews':13,'James':5,'1 Peter':5,'2 Peter':3,'1 John':5,'2 John':1,'3 John':1,'Jude':1,'Revelation':22,
+};
+// True if `book chapter:verse` is a plausible KJV reference (chapter within range).
+function isPlausibleRef(book, chapter, verse) {
+  const max = BOOK_CHAPTERS[book];
+  if (!max) return true; // unknown book name variant — don't over-reject
+  return chapter >= 1 && chapter <= max && verse >= 1 && verse <= 176;
 }
 
 // Parse a Mux VTT transcript into [{start, text}] cues
