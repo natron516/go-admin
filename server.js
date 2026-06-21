@@ -473,7 +473,21 @@ async function autoTranscribe(asset) {
 // (already enabled on ingest). No ffmpeg needed — Deepgram fetches/decodes it.
 async function deepgramWordsForPlayback(playbackId) {
   if (!DEEPGRAM_KEY) throw new Error('DEEPGRAM_API_KEY not set');
-  const audioUrl = `https://stream.mux.com/${playbackId}/audio.m4a`;
+  // Prefer the audio-only m4a rendition; if it isn't generated (Mux only made
+  // video MP4 static renditions), fall back to the smallest video MP4 — Deepgram
+  // extracts the audio track from it just fine.
+  const candidates = [
+    `https://stream.mux.com/${playbackId}/audio.m4a`,
+    `https://stream.mux.com/${playbackId}/low.mp4`,
+    `https://stream.mux.com/${playbackId}/medium.mp4`,
+  ];
+  let audioUrl = candidates[0];
+  for (const url of candidates) {
+    try {
+      const head = await fetch(url, { method: 'HEAD' });
+      if (head.ok) { audioUrl = url; break; }
+    } catch { /* try next */ }
+  }
   const params = new URLSearchParams({
     model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
   });
@@ -484,7 +498,7 @@ async function deepgramWordsForPlayback(playbackId) {
   });
   if (!r.ok) {
     const t = await r.text().catch(() => '');
-    throw new Error(`Deepgram ${r.status}: ${t.slice(0, 200)}`);
+    throw new Error(`Deepgram ${r.status} (src ${audioUrl.split('/').pop()}): ${t.slice(0, 200)}`);
   }
   const json = await r.json();
   const alt = json?.results?.channels?.[0]?.alternatives?.[0];
