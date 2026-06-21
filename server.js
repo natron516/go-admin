@@ -407,9 +407,43 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     } catch (err) {
       console.error('[webhook] Auto-transcribe failed:', err.message);
     }
+    // Deepgram needs a static MP4/audio rendition to read. For sermons, make
+    // sure mp4_support is enabled so renditions generate; the Deepgram word
+    // generation then runs on the video.asset.static_renditions.ready event
+    // below (renditions aren't ready at asset.ready time for long recordings,
+    // which caused 404s + missing transcripts). Non-sermon spoken word still
+    // tries words now (uploads usually already have a usable rendition).
+    try {
+      if (isSermonAsset(event.data) && event.data?.mp4_support !== 'standard') {
+        await mux('PUT', `/video/v1/assets/${event.data.id}/mp4-support`, { mp4_support: 'standard' });
+        console.log(`[webhook] Enabled mp4_support for sermon ${event.data.id} (asset.ready)`);
+      }
+    } catch (e) {
+      console.error(`[webhook] mp4_support enable failed: ${e.message}`);
+    }
     // ADDITIVE: also generate Deepgram word-level timings (fire-and-forget,
-    // fully guarded). Does not block or affect the Mux caption path above.
+    // fully guarded). For sermons this often no-ops here (rendition not ready)
+    // and succeeds on static_renditions.ready instead.
     maybeGenerateWords(event.data);
+  }
+
+  // Static renditions (MP4/audio) finished generating — NOW Deepgram can read
+  // the audio. This is the reliable trigger for sermon word-level transcripts
+  // on long live recordings (asset.ready fires before renditions exist).
+  if (event.type === 'video.asset.static_renditions.ready' ||
+      event.type === 'video.asset.static_renditions.preparing') {
+    if (event.type === 'video.asset.static_renditions.ready') {
+      try {
+        // event.data is the asset; ensure we have full asset (with playback id).
+        const assetId = event.data?.id || event.object?.id;
+        if (assetId) {
+          const full = (await mux('GET', `/video/v1/assets/${assetId}`)).data;
+          if (full) maybeGenerateWords(full);
+        }
+      } catch (err) {
+        console.error('[webhook] static_renditions.ready words failed:', err.message);
+      }
+    }
   }
 
   // When a sermon live stream goes IDLE (after Sunday's broadcast ends), make
