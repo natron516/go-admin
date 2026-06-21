@@ -1294,6 +1294,66 @@ app.post('/api/transcript-redo', adminOnly, async (req, res) => {
   }
 });
 
+// Ensure the MOST RECENT sermon recording has a Deepgram transcript.
+// Idempotent safety-net for the Sunday-afternoon cron (in case the webhook
+// pipeline misses an event). Steps: find newest sermon asset → if it already
+// has Deepgram words, done → else enable mp4_support and, once the audio
+// rendition is ready, generate words (Deepgram). Returns a status the caller
+// can use to decide whether to retry or announce.
+//   POST /api/sermons/ensure-latest-transcript  body: { sinceHours?: 12 }
+//   -> { status: 'ready'|'preparing'|'generating'|'none', ... }
+app.post('/api/sermons/ensure-latest-transcript', adminOnly, async (req, res) => {
+  if (!DEEPGRAM_KEY) return res.status(503).json({ error: 'DEEPGRAM_API_KEY not set' });
+  const sinceHours = Number(req.body?.sinceHours) || 12;
+  const cutoff = Date.now() / 1000 - sinceHours * 3600;
+  try {
+    // Find the newest sermon asset within the window.
+    const data = await mux('GET', '/video/v1/assets?limit=20');
+    const sermons = (data.data || [])
+      .filter(a => isSermonAsset(a) && Number(a.created_at) >= cutoff)
+      .sort((x, y) => Number(y.created_at) - Number(x.created_at));
+    if (!sermons.length) return res.json({ status: 'none', message: `No sermon asset in the last ${sinceHours}h.` });
+    const asset = sermons[0];
+    const pid = asset.playback_ids?.[0]?.id;
+    if (!pid) return res.json({ status: 'none', message: 'Sermon asset has no playback id.' });
+
+    // Already transcribed?
+    const existing = await admin.firestore().collection('transcriptWords').doc(pid).get();
+    if (existing.exists && (existing.data()?.words || []).length) {
+      const built = await buildTranscriptFromWords(pid, null);
+      return res.json({ status: 'ready', playbackId: pid, assetId: asset.id,
+        words: existing.data().words.length, chars: built?.text?.length || 0 });
+    }
+
+    // Make sure mp4_support is on so a rendition will generate.
+    if (asset.mp4_support !== 'standard') {
+      await mux('PUT', `/video/v1/assets/${asset.id}/mp4-support`, { mp4_support: 'standard' });
+    }
+    // Is an audio-capable rendition ready yet? (Deepgram reads audio.m4a/low.mp4.)
+    let renditionReady = false;
+    for (const f of ['audio.m4a', 'low.mp4', 'medium.mp4']) {
+      try {
+        const head = await fetch(`https://stream.mux.com/${pid}/${f}`, { method: 'HEAD' });
+        if (head.ok) { renditionReady = true; break; }
+      } catch { /* keep checking */ }
+    }
+    if (!renditionReady) {
+      return res.json({ status: 'preparing', playbackId: pid, assetId: asset.id,
+        message: 'mp4 rendition still preparing; retry shortly.' });
+    }
+    // Rendition ready — generate Deepgram words now (sermons default to Deepgram
+    // transcript with auto-detected start, so no override needed).
+    const r = await generateAndStoreWords(pid, asset.id, { force: true });
+    if (!r.ok) return res.status(502).json({ status: 'error', playbackId: pid, error: r.error });
+    const built = await buildTranscriptFromWords(pid, null);
+    console.log(`[ensure-sermon-transcript] ${pid}: words=${r.count} chars=${built?.text?.length || 0}`);
+    return res.json({ status: 'ready', playbackId: pid, assetId: asset.id,
+      words: r.count, chars: built?.text?.length || 0 });
+  } catch (e) {
+    res.status(500).json({ status: 'error', error: e.message });
+  }
+});
+
 // Cleanup: delete generated caption tracks from NON-sermon assets
 app.post('/api/transcripts/cleanup-non-sermons', async (req, res) => {
   try {
