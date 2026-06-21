@@ -742,8 +742,8 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
       return res.json({ status: 'errored', message: 'Transcription failed for this asset.' });
     }
 
-    // Ready — build cleaned transcript (music + singing removed) with refs header
-    const clean = await buildCleanTranscript(asset);
+    // Ready — build cleaned transcript (Deepgram override if set, else Mux VTT)
+    const clean = await buildBestTranscript(asset);
     if (!clean) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
     const note = clean.sermonStart > 0 ? `(Pre-sermon music/singing removed — sermon begins ~${fmtTimestamp(clean.sermonStart)} in the recording)\n\n` : '';
     const text = (await buildRefsHeader(asset)) + note + clean.text;
@@ -794,7 +794,7 @@ app.all('/api/audio-transcript/:playbackId', async (req, res) => {
     if (textTrack.status === 'preparing') return res.json({ status: 'preparing', message: 'Transcription in progress…' });
     if (textTrack.status === 'errored') return res.json({ status: 'errored', message: 'Transcription failed.' });
 
-    const clean = await buildCleanTranscript(asset);
+    const clean = await buildBestTranscript(asset);
     if (!clean) return res.json({ status: 'errored', message: 'Transcript file not retrievable yet — try again shortly.' });
     // Lectures have no worship intro; buildCleanTranscript only trims when it
     // detects pre-sermon singing, so for these tracks sermonStart is ~0 and the
@@ -1160,6 +1160,33 @@ app.post('/api/transcript-words/generate', adminOnly, async (req, res) => {
   res.json({ results });
 });
 
+// Force a full transcript REDO from Deepgram for one playback id, with a manual
+// start time. Use when Mux auto-captions are garbage (e.g. labeled the whole
+// service "[ Singing ]"). Regenerates Deepgram words, stores a Deepgram override
+// with the given start, and the transcript endpoints then serve the rebuilt text.
+//   POST /api/transcript-redo  body: { playbackId, startSeconds? }
+app.post('/api/transcript-redo', adminOnly, async (req, res) => {
+  if (!DEEPGRAM_KEY) return res.status(503).json({ error: 'DEEPGRAM_API_KEY not set' });
+  const pid = req.body?.playbackId;
+  if (!pid) return res.status(400).json({ error: 'playbackId required' });
+  const startSeconds = Math.max(0, Number(req.body?.startSeconds) || 0);
+  try {
+    const assetId = await assetIdForPlaybackId(pid);
+    const r = await generateAndStoreWords(pid, assetId, { force: true });
+    if (!r.ok) return res.status(502).json({ error: 'Deepgram failed: ' + r.error });
+    await admin.firestore().collection('transcriptOverrides').doc(pid).set({
+      startSeconds, source: 'deepgram', assetId: assetId || null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    delete _startOverrideCache[pid];
+    const built = await buildTranscriptFromWords(pid, startSeconds);
+    console.log(`[transcript-redo] ${pid}: words=${r.count} startSeconds=${startSeconds} chars=${built?.text?.length || 0}`);
+    res.json({ ok: true, playbackId: pid, assetId, words: r.count, startSeconds, chars: built?.text?.length || 0, preview: (built?.text || '').slice(0, 400) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Cleanup: delete generated caption tracks from NON-sermon assets
 app.post('/api/transcripts/cleanup-non-sermons', async (req, res) => {
   try {
@@ -1310,6 +1337,54 @@ async function buildCleanTranscript(asset) {
   return { text: reflowSentences(cleanTranscript(kept.map(c => c.text).join('\n'))), sermonStart };
 }
 
+// ── Per-asset transcript start override + Deepgram-built transcript ───────────
+// Some livestreams confuse Mux auto-captioning (e.g. it labels the whole 2-hour
+// service as "[ Singing ]" and only captures the closing prayer). For those we
+// rebuild the transcript from Deepgram WORD timings (which actually transcribe
+// the spoken sermon) and optionally force a manual start time so the pre-sermon
+// worship is dropped. Overrides live in Firestore: transcriptOverrides/{pid}
+//   { startSeconds: <number>, source: 'deepgram'|'auto' }
+const _startOverrideCache = {}; // pid -> { startSeconds, source } | null  (5 min TTL)
+async function getTranscriptOverride(playbackId) {
+  const c = _startOverrideCache[playbackId];
+  if (c && Date.now() - c._t < 5 * 60 * 1000) return c.val;
+  try {
+    const snap = await admin.firestore().collection('transcriptOverrides').doc(playbackId).get();
+    const val = snap.exists ? (snap.data() || null) : null;
+    _startOverrideCache[playbackId] = { val, _t: Date.now() };
+    return val;
+  } catch {
+    return null;
+  }
+}
+
+// Build a cleaned, reflowed transcript from stored Deepgram words, dropping any
+// word that starts before `startSeconds`. Returns { text, sermonStart } or null.
+async function buildTranscriptFromWords(playbackId, startSeconds = 0) {
+  const snap = await admin.firestore().collection('transcriptWords').doc(playbackId).get();
+  const words = snap.exists ? snap.data()?.words : null;
+  if (!Array.isArray(words) || !words.length) return null;
+  const kept = words.filter(w => (w.s ?? 0) >= startSeconds && w.w);
+  if (!kept.length) return null;
+  const blob = kept.map(w => w.w).join(' ').replace(/\s+([.,;:!?])/g, '$1');
+  return { text: reflowSentences(blob), sermonStart: startSeconds };
+}
+
+// Preferred transcript builder: if a Deepgram override is set for this playback
+// id, build from Deepgram words (with manual start). Otherwise fall back to the
+// Mux VTT path (buildCleanTranscript). Returns { text, sermonStart } or null.
+async function buildBestTranscript(asset) {
+  const pid = asset.playback_ids?.[0]?.id;
+  if (pid) {
+    const ov = await getTranscriptOverride(pid);
+    if (ov && ov.source === 'deepgram') {
+      const fromWords = await buildTranscriptFromWords(pid, Number(ov.startSeconds) || 0);
+      if (fromWords) return fromWords;
+    }
+  }
+  return buildCleanTranscript(asset);
+}
+
 // Reflow caption-cue lines into complete sentences and readable paragraphs.
 // Cue boundaries split sentences mid-stream; join everything, then break on
 // sentence endings, grouping ~4 sentences per paragraph.
@@ -1403,7 +1478,7 @@ app.get('/api/assets/:id/transcript.txt', async (req, res) => {
     const pid = asset?.playback_ids?.[0]?.id;
     const textTrack = (asset?.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
     if (!pid || !textTrack) return res.status(404).send('Transcript not ready');
-    const clean = await buildCleanTranscript(asset);
+    const clean = await buildBestTranscript(asset);
     if (!clean) return res.status(404).send('Transcript not ready');
     const header = await buildRefsHeader(asset);
     const note = clean.sermonStart > 0 ? `(Pre-sermon music/singing removed — sermon begins ~${fmtTimestamp(clean.sermonStart)} in the recording)\n\n` : '';
