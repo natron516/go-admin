@@ -832,7 +832,71 @@ app.patch('/api/assets/:id/thumbnail', async (req, res) => {
   }
 });
 
-// ── Transcripts ───────────────────────────────────────────────────────────────
+// Set or clear the viewer START OFFSET (seconds) for an asset. Stored in
+// passthrough so the app begins playback past the pre-stream graphic WITHOUT
+// creating a new clip. PATCH /api/assets/:id/start-offset  body: { seconds }
+// (null/0/empty clears it). Used by the admin portal for manual adjustment.
+app.patch('/api/assets/:id/start-offset', async (req, res) => {
+  try {
+    const raw = req.body?.seconds;
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const pt = parsePassthrough(current.data?.passthrough);
+    const secs = Math.max(0, Math.round(Number(raw) || 0));
+    if (secs > 0) pt.startOffset = String(secs);
+    else delete pt.startOffset;
+    const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
+      passthrough: serializePassthrough(pt),
+    });
+    res.json({ ok: true, startOffset: secs, asset: data.data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Auto-set the start offset on the latest Sunday sermon recording so playback
+// begins when the pre-stream graphic comes down (~10:00 AM Pacific), minus a
+// safety margin. Time-anchored: offset = (10:00 AM Pacific - stream start) -
+// margin, clamped to >= 0. No new clip is created. Runs from the Sunday 1 PM
+// cron. POST /api/sermons/set-sunday-start-offset  body: { sinceHours?, marginSeconds?, targetHour?, targetMinute? }
+app.post('/api/sermons/set-sunday-start-offset', adminOnly, async (req, res) => {
+  const sinceHours = Number(req.body?.sinceHours) || 12;
+  const marginSeconds = req.body?.marginSeconds != null ? Math.max(0, Number(req.body.marginSeconds)) : 30;
+  const targetHour = req.body?.targetHour != null ? Number(req.body.targetHour) : 10;
+  const targetMinute = req.body?.targetMinute != null ? Number(req.body.targetMinute) : 0;
+  const cutoff = Date.now() / 1000 - sinceHours * 3600;
+  try {
+    const data = await mux('GET', '/video/v1/assets?limit=20&order_direction=desc');
+    const sermons = (data.data || [])
+      .filter(a => isSermonAsset(a) && Number(a.created_at) >= cutoff)
+      .sort((x, y) => Number(y.created_at) - Number(x.created_at));
+    if (!sermons.length) return res.json({ status: 'none', message: `No sermon asset in the last ${sinceHours}h.` });
+    const asset = sermons[0];
+
+    // Compute where targetHour:targetMinute Pacific falls in the recording.
+    const startMs = Number(asset.created_at) * 1000;
+    const startPacific = new Date(new Date(startMs).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const targetPacific = new Date(startPacific);
+    targetPacific.setHours(targetHour, targetMinute, 0, 0);
+    let offsetSeconds = Math.round((targetPacific - startPacific) / 1000) - marginSeconds;
+    offsetSeconds = Math.max(0, offsetSeconds);
+    const dur = Number(asset.duration) || Infinity;
+    if (offsetSeconds >= dur) {
+      return res.json({ status: 'skipped', assetId: asset.id, message: `Computed offset ${offsetSeconds}s >= duration; not set.` });
+    }
+
+    const pt = parsePassthrough(asset.passthrough);
+    pt.startOffset = String(offsetSeconds);
+    await mux('PATCH', `/video/v1/assets/${asset.id}`, { passthrough: serializePassthrough(pt) });
+    // Bust the cached asset list so the app/portal see the new offset.
+    _assetsCache = { data: null, at: 0 };
+    console.log(`[sunday-start-offset] ${asset.id}: startOffset=${offsetSeconds}s (target ${targetHour}:${String(targetMinute).padStart(2,'0')} PT - ${marginSeconds}s margin)`);
+    res.json({ status: 'set', assetId: asset.id, playbackId: asset.playback_ids?.[0]?.id || null, startOffset: offsetSeconds });
+  } catch (e) {
+    res.status(500).json({ status: 'error', error: e.message });
+  }
+});
+
+// ── Transcripts ───────────────────────────────────────────────────────────
 // Get or generate a transcript for an asset using Mux auto-generated captions.
 // POST returns { status: 'ready', text } | { status: 'preparing' } | { status: 'errored'|'unavailable', message }
 app.post('/api/assets/:id/transcript', async (req, res) => {

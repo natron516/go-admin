@@ -4174,6 +4174,7 @@ function assetRowHtml(a) {
   const category    = edits.category ?? rawCat.trim();
   const customThumb = ptData.thumbnail || null;
   const thumbTime   = ptData.thumbnail_time || 10;
+  const startOffset = Number(ptData.startOffset) || 0;
   const thumbUrl    = customThumb || (hasVideo && pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=480&time=${thumbTime}` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
@@ -4215,6 +4216,7 @@ function assetRowHtml(a) {
               <button class="btn btn-ghost btn-sm ${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'dl-ready' : ''}" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' ? 'Download MP4' : 'No MP4 available'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '✅' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
               ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
               ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
+              ${a.status === 'ready' ? `<span class="start-offset-wrap" title="Viewer start time — playback begins here (skips pre-stream graphic). Enter seconds or mm:ss."><span style="font-size:11px;color:var(--muted);">▶ start</span><input class="at-input start-offset-input" id="soff-${a.id}" type="text" value="${startOffset ? fmtDur(startOffset) : ''}" placeholder="0:00" style="width:58px;padding:4px 6px;font-size:12px;"><button class="btn btn-ghost btn-sm" onclick="saveStartOffset('${a.id}')" title="Save start time">⏱️</button></span>` : ''}
               ${a.status === 'ready' ? (() => {
                 const tt = (a.tracks || []).find(t => t.type === 'text');
                 const trReady = tt && tt.status === 'ready';
@@ -4322,6 +4324,42 @@ async function saveAsset(id) {
 }
 
 function fmtDur(s) { const m = Math.floor(s/60), sec = Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}`; }
+
+// Parse "90", "1:30", or "1:02:03" into seconds. Blank -> 0 (clears offset).
+function parseTimecodeToSeconds(v) {
+  const s = (v || '').toString().trim();
+  if (!s) return 0;
+  if (s.includes(':')) {
+    const parts = s.split(':').map(p => Number(p) || 0);
+    return parts.reduce((acc, p) => acc * 60 + p, 0);
+  }
+  return Math.max(0, Math.round(Number(s) || 0));
+}
+
+// Save the viewer start offset (skip pre-stream graphic) for an asset.
+async function saveStartOffset(id) {
+  const input = document.getElementById('soff-' + id);
+  if (!input) return;
+  const seconds = parseTimecodeToSeconds(input.value);
+  try {
+    const r = await fetch(`/api/assets/${id}/start-offset`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seconds })
+    });
+    if (!r.ok) throw new Error('save failed');
+    // Reflect in local cache so re-renders keep the value.
+    const a = allAssets.find(x => x.id === id);
+    if (a) {
+      const pt = parsePassthrough(a.passthrough);
+      if (seconds > 0) pt.startOffset = String(seconds); else delete pt.startOffset;
+      a.passthrough = JSON.stringify(pt);
+    }
+    input.value = seconds > 0 ? fmtDur(seconds) : '';
+    toast(seconds > 0 ? `Start set to ${fmtDur(seconds)} ✓` : 'Start cleared ✓');
+  } catch (e) {
+    toast('Start save failed ✕');
+  }
+}
 
 function confirmDelete(id) {
   const wrap = document.getElementById('del-'+id); if (!wrap) return;
