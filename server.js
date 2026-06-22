@@ -663,38 +663,82 @@ function serializePassthrough(pt) {
 // Track assets with MP4 generation in progress (server-side, survives client navigation)
 const _mp4Preparing = {}; // { assetId: { title, startedAt } }
 
+// Server-side cache of the full Mux asset list. Paginating the Mux API is the
+// slowest part of a cold app launch, so we cache it briefly and serve from RAM.
+let _assetsCache = { data: null, at: 0 };
+const ASSETS_CACHE_MS = 60 * 1000;
+
+async function fetchAllMuxAssets() {
+  const now = Date.now();
+  if (_assetsCache.data && now - _assetsCache.at < ASSETS_CACHE_MS) {
+    return _assetsCache.data;
+  }
+  let allAssets = [];
+  let cursor = null;
+  while (true) {
+    const data = await mux('GET', cursor
+      ? `/video/v1/assets?limit=100&order_direction=desc&cursor=${encodeURIComponent(cursor)}`
+      : '/video/v1/assets?limit=100&order_direction=desc');
+    if (data.data) allAssets.push(...data.data);
+    if (data.next_cursor) { cursor = data.next_cursor; } else { break; }
+  }
+  // Augment with server-tracked MP4 preparation state.
+  const t = Date.now();
+  for (const a of allAssets) {
+    if (_mp4Preparing[a.id]) {
+      if (t - _mp4Preparing[a.id].startedAt > 10 * 60 * 1000) delete _mp4Preparing[a.id];
+      else a._mp4Preparing = true;
+    }
+  }
+  _assetsCache = { data: allAssets, at: now };
+  return allAssets;
+}
+
+// Helper: read a Firestore collection ordered by sortOrder (falls back to
+// unordered if the composite index is missing). Returns [] on error so one slow
+// or failing collection can't break the aggregated /api/home response.
+async function readCollection(name) {
+  const db = admin.firestore();
+  try {
+    const snap = await db.collection(name).orderBy('sortOrder', 'asc').get();
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+    return out;
+  } catch (e) {
+    try {
+      const snap = await db.collection(name).get();
+      const out = [];
+      snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+      return out;
+    } catch { return []; }
+  }
+}
+
+// Aggregated home payload: ONE request returns everything the home/featured
+// screen needs (videos + audio/series/podcasts/books/articles + live stream),
+// instead of the app firing ~8 separate calls and paginating Mux client-side.
+// Mux assets are served from a 60s server cache, so this is fast and cheap.
+app.get('/api/home', async (req, res) => {
+  try {
+    const [assets, audio, series, podcasts, books, articles, live] = await Promise.all([
+      fetchAllMuxAssets().catch(() => []),
+      readCollection('audioAssets'),
+      readCollection('series'),
+      readCollection('podcasts'),
+      readCollection('books'),
+      readCollection('articles'),
+      mux('GET', '/video/v1/live-streams').then(r => r.data || []).catch(() => []),
+    ]);
+    res.set('Cache-Control', 'public, max-age=30');
+    res.json({ assets, audio, series, podcasts, books, articles, liveStreams: live });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/assets', async (req, res) => {
   try {
-    // Paginate through ALL Mux assets
-    let allAssets = [];
-    let page = 1;
-    let cursor = null;
-    while (true) {
-      const url = cursor
-        ? `/video/v1/assets?limit=100&order_direction=desc&page=${page}`
-        : '/video/v1/assets?limit=100&order_direction=desc';
-      const data = await mux('GET', cursor
-        ? `/video/v1/assets?limit=100&order_direction=desc&cursor=${encodeURIComponent(cursor)}`
-        : '/video/v1/assets?limit=100&order_direction=desc');
-      if (data.data) allAssets.push(...data.data);
-      if (data.next_cursor) {
-        cursor = data.next_cursor;
-        page++;
-      } else {
-        break;
-      }
-    }
-    // Augment assets with server-tracked MP4 preparation state
-    const now = Date.now();
-    for (const a of allAssets) {
-      if (_mp4Preparing[a.id]) {
-        if (now - _mp4Preparing[a.id].startedAt > 10 * 60 * 1000) {
-          delete _mp4Preparing[a.id];
-        } else {
-          a._mp4Preparing = true;
-        }
-      }
-    }
+    const allAssets = await fetchAllMuxAssets();
     res.json({ data: allAssets });
   } catch (e) {
     res.status(500).json({ error: e.message });
