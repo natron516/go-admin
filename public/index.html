@@ -2699,11 +2699,23 @@ tr.dirty .at-save { display: inline-flex !important; }
       <button class="btn btn-ghost btn-sm" onclick="transcriptPrev()" title="Previous match (Shift+Enter)">▲</button>
       <button class="btn btn-ghost btn-sm" onclick="transcriptNext()" title="Next match (Enter)">▼</button>
     </div>
+    <div id="transcript-source-bar" style="display:none;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;">
+      <span style="color:var(--muted);font-size:13px;">Source:</span>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="radio" name="tsrc" value="generated" onchange="setTranscriptSource('generated')"> Generated</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="radio" name="tsrc" value="custom" onchange="setTranscriptSource('custom')"> My own (uploaded/edited)</label>
+      <span style="flex:1;"></span>
+      <button class="btn btn-ghost btn-sm" id="transcript-edit-btn" onclick="toggleTranscriptEdit()" style="display:none;">✏️ Edit</button>
+      <button class="btn btn-ghost btn-sm" id="transcript-upload-btn" onclick="document.getElementById('transcript-file-input').click()">⬆️ Upload .txt</button>
+      <input type="file" id="transcript-file-input" accept=".txt,.vtt,.srt,text/plain" style="display:none;" onchange="uploadTranscriptFile(event)">
+    </div>
     <div id="transcript-body" style="max-height:56vh;overflow-y:auto;white-space:pre-wrap;line-height:1.6;font-size:14px;background:rgba(0,0,0,0.2);border-radius:8px;padding:16px;margin-top:10px;"></div>
+    <textarea id="transcript-editor" style="display:none;width:100%;box-sizing:border-box;max-height:56vh;min-height:300px;line-height:1.6;font-size:14px;background:rgba(0,0,0,0.25);border:1px solid var(--border2);border-radius:8px;padding:16px;margin-top:10px;color:var(--text);font-family:inherit;resize:vertical;"></textarea>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn btn-ghost" onclick="closeTranscriptModal()">Close</button>
       <button class="btn btn-ghost" id="transcript-copy-btn" onclick="copyTranscript()" style="display:none;">📋 Copy</button>
       <a class="btn btn-primary" id="transcript-dl-btn" href="#" style="display:none;">⬇️ Download .txt</a>
+      <button class="btn btn-ghost" id="transcript-revert-btn" onclick="revertTranscript()" style="display:none;">↩️ Revert to generated</button>
+      <button class="btn btn-primary" id="transcript-save-btn" onclick="saveTranscriptEdit()" style="display:none;">💾 Save transcript</button>
     </div>
   </div>
 </div>
@@ -4612,6 +4624,22 @@ let trimState = { assetId: null, playbackId: null, duration: 0, startTime: 0, en
 // ── Transcripts ───────────────────────────
 const _transcriptPolls = {};
 let _transcriptText = '';
+let _transcriptAssetId = null;   // video asset id (asset-id endpoints) OR null for audio
+let _transcriptPid = null;       // audio playback id (pid endpoints) OR null for video
+let _transcriptSource = 'generated';
+// Build the right endpoints depending on whether the modal opened a video asset
+// (keyed by asset id) or an audio track (keyed by playback id).
+function _tsrcUrls() {
+  if (_transcriptAssetId) return {
+    source: '/api/assets/' + _transcriptAssetId + '/transcript-source',
+    custom: '/api/assets/' + _transcriptAssetId + '/custom-transcript',
+  };
+  if (_transcriptPid) return {
+    source: '/api/transcript-source/' + _transcriptPid,
+    custom: '/api/custom-transcript/' + _transcriptPid,
+  };
+  return null;
+}
 
 async function openTranscript(assetId, title) {
   const modal = document.getElementById('transcript-modal');
@@ -4622,9 +4650,136 @@ async function openTranscript(assetId, title) {
   document.getElementById('transcript-search-bar').style.display = 'none';
   document.getElementById('transcript-search').value = '';
   document.getElementById('transcript-search-count').textContent = '';
+  // Reset edit/source UI for this asset.
+  _transcriptAssetId = assetId;
+  _transcriptPid = null;
+  resetTranscriptEditUI();
+  document.getElementById('transcript-source-bar').style.display = 'flex';
   body.textContent = 'Checking transcript status…';
   modal.classList.add('open');
+  loadTranscriptSource();
   await fetchTranscript(assetId);
+}
+
+// Re-fetch the transcript text for whichever mode the modal is in.
+async function _refetchCurrentTranscript() {
+  if (_transcriptAssetId) return fetchTranscript(_transcriptAssetId);
+  if (_transcriptPid) return fetchAudioTranscript(_transcriptPid);
+}
+
+// ── Transcript edit / upload / source toggle (video assets) ───────────────
+function resetTranscriptEditUI() {
+  const ed = document.getElementById('transcript-editor');
+  ed.style.display = 'none';
+  ed.value = '';
+  document.getElementById('transcript-body').style.display = '';
+  document.getElementById('transcript-edit-btn').textContent = '✏️ Edit';
+  document.getElementById('transcript-edit-btn').style.display = 'none';
+  document.getElementById('transcript-save-btn').style.display = 'none';
+  document.getElementById('transcript-revert-btn').style.display = 'none';
+}
+
+async function loadTranscriptSource() {
+  const urls = _tsrcUrls(); if (!urls) return;
+  try {
+    const r = await fetch(urls.source);
+    const d = await r.json();
+    _transcriptSource = d.source || 'generated';
+    const gen = document.querySelector('input[name=tsrc][value=generated]');
+    const cus = document.querySelector('input[name=tsrc][value=custom]');
+    if (gen) gen.checked = _transcriptSource === 'generated';
+    if (cus) cus.checked = _transcriptSource === 'custom';
+    // Edit button is available once we have text; revert only when a custom exists.
+    document.getElementById('transcript-edit-btn').style.display = '';
+    document.getElementById('transcript-revert-btn').style.display = d.hasCustom ? '' : 'none';
+  } catch (e) { /* leave defaults */ }
+}
+
+function toggleTranscriptEdit() {
+  const ed = document.getElementById('transcript-editor');
+  const body = document.getElementById('transcript-body');
+  const editing = ed.style.display !== 'none';
+  if (editing) {
+    // Cancel editing -> back to read view.
+    resetTranscriptEditUI();
+    loadTranscriptSource();
+  } else {
+    ed.value = _transcriptText || '';
+    ed.style.display = '';
+    body.style.display = 'none';
+    document.getElementById('transcript-edit-btn').textContent = '✕ Cancel';
+    document.getElementById('transcript-save-btn').style.display = '';
+  }
+}
+
+function uploadTranscriptFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const ed = document.getElementById('transcript-editor');
+    ed.value = (e.target.result || '').toString();
+    ed.style.display = '';
+    document.getElementById('transcript-body').style.display = 'none';
+    document.getElementById('transcript-edit-btn').textContent = '✕ Cancel';
+    document.getElementById('transcript-save-btn').style.display = '';
+    toast('Loaded ' + file.name + ' — review then Save');
+  };
+  reader.readAsText(file);
+}
+
+async function saveTranscriptEdit() {
+  const urls = _tsrcUrls(); if (!urls) return;
+  const text = document.getElementById('transcript-editor').value;
+  if (!text.trim()) { toast('Nothing to save'); return; }
+  try {
+    const r = await fetch(urls.custom, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (!r.ok) throw new Error('save failed');
+    _transcriptText = text;
+    _transcriptSource = 'custom';
+    resetTranscriptEditUI();
+    document.getElementById('transcript-body').textContent = text;
+    loadTranscriptSource();
+    toast('Transcript saved — now using your version ✓');
+  } catch (e) { toast('Save failed ✕'); }
+}
+
+async function revertTranscript() {
+  const urls = _tsrcUrls(); if (!urls) return;
+  if (!confirm('Clear your custom transcript and go back to the generated one?')) return;
+  try {
+    const r = await fetch(urls.custom, { method: 'DELETE' });
+    if (!r.ok) throw new Error('revert failed');
+    _transcriptSource = 'generated';
+    resetTranscriptEditUI();
+    document.getElementById('transcript-body').textContent = 'Reloading generated transcript…';
+    await _refetchCurrentTranscript();
+    loadTranscriptSource();
+    toast('Reverted to generated transcript ✓');
+  } catch (e) { toast('Revert failed ✕'); }
+}
+
+// Radio toggle: 'custom' only makes sense if a custom exists; otherwise prompt edit.
+async function setTranscriptSource(src) {
+  const urls = _tsrcUrls(); if (!urls) return;
+  if (src === 'custom') {
+    const r = await fetch(urls.source).then(x => x.json()).catch(() => ({}));
+    if (!r.hasCustom) {
+      toast('No custom transcript yet — edit or upload one, then Save');
+      toggleTranscriptEdit();
+      const gen = document.querySelector('input[name=tsrc][value=generated]');
+      if (gen) gen.checked = true;
+      return;
+    }
+    await _refetchCurrentTranscript();
+  } else {
+    // Switching to generated = clear the custom override.
+    await revertTranscript();
+  }
 }
 
 async function fetchTranscript(assetId) {
@@ -4676,8 +4831,13 @@ async function openAudioTranscript(assetId, title, audioUrl) {
   const m = /stream\.mux\.com\/([^.\/?]+)/.exec(audioUrl || '');
   if (!m) { body.textContent = '\u274c No playback ID on this audio asset.'; modal.classList.add('open'); return; }
   const pid = m[1];
+  _transcriptAssetId = null;
+  _transcriptPid = pid;
+  resetTranscriptEditUI();
+  document.getElementById('transcript-source-bar').style.display = 'flex';
   body.textContent = 'Checking transcript status\u2026';
   modal.classList.add('open');
+  loadTranscriptSource();
   await fetchAudioTranscript(pid);
 }
 
@@ -4717,6 +4877,9 @@ async function fetchAudioTranscript(pid) {
 function closeTranscriptModal() {
   document.getElementById('transcript-modal').classList.remove('open');
   Object.keys(_transcriptPolls).forEach(k => { clearInterval(_transcriptPolls[k]); delete _transcriptPolls[k]; });
+  document.getElementById('transcript-source-bar').style.display = 'none';
+  resetTranscriptEditUI();
+  _transcriptAssetId = null; _transcriptPid = null;
 }
 
 function copyTranscript() {

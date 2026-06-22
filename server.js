@@ -908,6 +908,14 @@ app.post('/api/assets/:id/transcript', async (req, res) => {
     const pid = asset.playback_ids?.[0]?.id;
     if (!pid) return res.status(400).json({ error: 'No playback ID' });
 
+    // A custom/edited transcript (admin portal) wins over Mux/Deepgram entirely.
+    {
+      const ov = await getTranscriptOverride(pid);
+      if (ov && ov.source === 'custom' && (ov.customText || '').trim()) {
+        return res.json({ status: 'ready', text: ov.customText, source: 'custom' });
+      }
+    }
+
     const tracks = asset.tracks || [];
     const textTrack = tracks.find(t => t.type === 'text' && t.text_type === 'subtitles');
 
@@ -965,6 +973,14 @@ app.all('/api/audio-transcript/:playbackId', async (req, res) => {
     const current = await mux('GET', `/video/v1/assets/${assetId}`);
     const asset = current.data;
     if (!asset) return res.status(404).json({ status: 'unavailable', message: 'Asset not found.' });
+
+    // A custom/edited transcript (admin portal) wins over Mux/Deepgram entirely.
+    {
+      const ov = await getTranscriptOverride(req.params.playbackId);
+      if (ov && ov.source === 'custom' && (ov.customText || '').trim()) {
+        return res.json({ status: 'ready', text: ov.customText, source: 'custom' });
+      }
+    }
 
     const tracks = asset.tracks || [];
     const textTrack = tracks.find(t => t.type === 'text' && t.text_type === 'subtitles');
@@ -1375,6 +1391,117 @@ app.post('/api/transcript-words/generate', adminOnly, async (req, res) => {
   res.json({ results });
 });
 
+// Transcript SOURCE + custom-transcript management (admin portal).
+// transcriptOverrides/{pid} gains:
+//   source: 'custom' → serve customText verbatim (uploaded or hand-edited)
+//   customText: the user's transcript
+//   generatedFallback unaffected: clearing custom reverts to deepgram/auto.
+
+// Current transcript source/state for an asset so the portal can show the right
+// toggle + prefill the editor. GET /api/assets/:id/transcript-source
+app.get('/api/assets/:id/transcript-source', async (req, res) => {
+  try {
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const pid = current.data?.playback_ids?.[0]?.id;
+    if (!pid) return res.status(400).json({ error: 'No playback ID' });
+    const ov = await getTranscriptOverride(pid);
+    const isCustom = !!(ov && ov.source === 'custom' && (ov.customText || '').trim());
+    res.json({
+      playbackId: pid,
+      source: isCustom ? 'custom' : 'generated',
+      hasCustom: !!(ov && (ov.customText || '').trim()),
+      customText: ov?.customText || '',
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Save a custom/edited transcript and switch the asset to use it.
+// PUT /api/assets/:id/custom-transcript  body: { text }
+app.put('/api/assets/:id/custom-transcript', adminOnly, async (req, res) => {
+  const text = (req.body?.text || '').toString();
+  if (!text.trim()) return res.status(400).json({ error: 'text required (empty would clear — use DELETE instead)' });
+  try {
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const pid = current.data?.playback_ids?.[0]?.id;
+    if (!pid) return res.status(400).json({ error: 'No playback ID' });
+    await admin.firestore().collection('transcriptOverrides').doc(pid).set({
+      source: 'custom', customText: text, assetId: req.params.id,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    delete _startOverrideCache[pid];
+    console.log(`[custom-transcript] ${pid}: saved ${text.length} chars`);
+    res.json({ ok: true, playbackId: pid, source: 'custom', chars: text.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Clear the custom transcript and revert to the generated source.
+// DELETE /api/assets/:id/custom-transcript
+app.delete('/api/assets/:id/custom-transcript', adminOnly, async (req, res) => {
+  try {
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const pid = current.data?.playback_ids?.[0]?.id;
+    if (!pid) return res.status(400).json({ error: 'No playback ID' });
+    const ref = admin.firestore().collection('transcriptOverrides').doc(pid);
+    const snap = await ref.get();
+    if (snap.exists) {
+      const data = snap.data() || {};
+      // Revert source: if a deepgram start override existed keep it, else clear source.
+      const revertSource = (data.startSeconds != null && data.startSeconds !== '') ? 'deepgram' : admin.firestore.FieldValue.delete();
+      await ref.set({
+        source: revertSource,
+        customText: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    delete _startOverrideCache[pid];
+    console.log(`[custom-transcript] ${pid}: cleared`);
+    res.json({ ok: true, playbackId: pid, source: 'generated' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PID-keyed variants of the custom-transcript endpoints, for AUDIO tracks in
+// the app/portal that only carry a Mux playback id (no asset id on hand).
+app.get('/api/transcript-source/:pid', async (req, res) => {
+  try {
+    const ov = await getTranscriptOverride(req.params.pid);
+    const isCustom = !!(ov && ov.source === 'custom' && (ov.customText || '').trim());
+    res.json({ playbackId: req.params.pid, source: isCustom ? 'custom' : 'generated',
+      hasCustom: !!(ov && (ov.customText || '').trim()), customText: ov?.customText || '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/api/custom-transcript/:pid', adminOnly, async (req, res) => {
+  const text = (req.body?.text || '').toString();
+  if (!text.trim()) return res.status(400).json({ error: 'text required' });
+  try {
+    await admin.firestore().collection('transcriptOverrides').doc(req.params.pid).set({
+      source: 'custom', customText: text,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    delete _startOverrideCache[req.params.pid];
+    res.json({ ok: true, playbackId: req.params.pid, source: 'custom', chars: text.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/custom-transcript/:pid', adminOnly, async (req, res) => {
+  try {
+    const ref = admin.firestore().collection('transcriptOverrides').doc(req.params.pid);
+    const snap = await ref.get();
+    if (snap.exists) {
+      const data = snap.data() || {};
+      const revertSource = (data.startSeconds != null && data.startSeconds !== '') ? 'deepgram' : admin.firestore.FieldValue.delete();
+      await ref.set({ source: revertSource, customText: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    delete _startOverrideCache[req.params.pid];
+    res.json({ ok: true, playbackId: req.params.pid, source: 'generated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Force a full transcript REDO from Deepgram for one playback id, with a manual
 // start time. Use when Mux auto-captions are garbage (e.g. labeled the whole
 // service "[ Singing ]"). Regenerates Deepgram words, stores a Deepgram override
@@ -1698,6 +1825,12 @@ async function buildBestTranscript(asset) {
   const pid = asset.playback_ids?.[0]?.id;
   if (pid) {
     const ov = await getTranscriptOverride(pid);
+    // A custom/edited transcript (uploaded or hand-edited in the admin portal)
+    // wins over everything. Stored as source:'custom' + customText. sermonStart
+    // 0 so no "music removed" note is prepended to user-authored text.
+    if (ov && ov.source === 'custom' && (ov.customText || '').trim()) {
+      return { text: ov.customText, sermonStart: 0 };
+    }
     const useDeepgram = (ov && ov.source === 'deepgram') || isSermonAsset(asset);
     if (useDeepgram) {
       const start = await resolveDeepgramStart(pid, ov);
