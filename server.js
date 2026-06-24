@@ -2104,6 +2104,14 @@ async function extractScriptureRefsFromWords(playbackId, startSeconds = 0) {
 
 async function extractScriptureRefs(asset) {
   const pid = asset.playback_ids?.[0]?.id;
+  // Scripture-reference header is a SUNDAY SERMON-only feature. For any other
+  // content (audiobooks, series episodes, podcasts, etc.) never compile a refs
+  // header — even if Mux captions happen to mention verses. Only proceed when
+  // this is a sermon asset or has an explicit Deepgram override.
+  {
+    const ov = pid ? await getTranscriptOverride(pid) : null;
+    if (!isSermonAsset(asset) && !(ov && ov.source === 'deepgram')) return null;
+  }
   // Sermons (and any explicit Deepgram override): scan the Deepgram words rather
   // than the Mux VTT, which mislabels worship as singing. Start = override or
   // auto-detected sermon start (matches the transcript body).
