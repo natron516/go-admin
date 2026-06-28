@@ -777,6 +777,15 @@ tr.dirty .at-save { display: inline-flex !important; }
 .users-table tbody tr:hover { background: rgba(255,255,255,.025); }
 .users-table tbody tr.blocked { background: rgba(239,68,68,.05); }
 .users-table td { padding: 9px 12px; vertical-align: middle; font-size: 13px; }
+.uchk { display:inline-flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; user-select:none; font-size:15px; padding:2px; }
+.uchk .box { width:18px; height:18px; border:1.5px solid var(--border); border-radius:5px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:transparent; transition:all .12s; background:rgba(255,255,255,.03); }
+.uchk.on .box { background:var(--blue,#3b82f6); border-color:var(--blue,#3b82f6); color:#fff; }
+.uchk.on.danger .box { background:#ef4444; border-color:#ef4444; }
+.uchk.on.private .box { background:#a855f7; border-color:#a855f7; }
+.uchk.on.pastor .box { background:#38bdf8; border-color:#38bdf8; }
+.uchk.on.editor .box { background:#f59e0b; border-color:#f59e0b; }
+.uchk:hover .box { border-color:rgba(255,255,255,.4); }
+.uchk.disabled { opacity:.35; cursor:not-allowed; }
 .user-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--border); }
 .user-name { font-weight: 600; font-size: 13px; }
 .user-email { font-size: 12px; color: var(--muted); }
@@ -1722,7 +1731,10 @@ tr.dirty .at-save { display: inline-flex !important; }
               <th class="sort-th" id="th-joined" onclick="setUserSort('joined')">Joined <span class="sort-arrow">↕</span></th>
               <th class="sort-th" id="th-lastSignIn" onclick="setUserSort('lastSignIn')">Last Sign In <span class="sort-arrow">↕</span></th>
               <th>Status</th>
-              <th>Actions</th>
+              <th style="text-align:center">Block</th>
+              <th style="text-align:center">Private</th>
+              <th style="text-align:center">Pastor/Elder</th>
+              <th style="text-align:center">Editor</th>
             </tr></thead>
             <tbody id="users-tbody">
               <tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>
@@ -5306,15 +5318,13 @@ function renderUsers(users) {
     const lastIn = fmtDt(u.lastSignIn);
     const providerLabel = { 'google.com':'🔵 Google', 'apple.com':'⚫ Apple', 'password':'✉️ Email', 'phone':'📞 Phone' }[u.provider] || u.provider;
     const avatar = u.photoURL ? `<img class="user-avatar" src="${escHtml(u.photoURL)}" onerror="this.style.display='none'">` : `<div class="user-avatar" style="display:inline-flex;align-items:center;justify-content:center;font-size:14px;">👤</div>`;
-    const blockBtn = u.disabled
-      ? `<button class="btn btn-ghost btn-sm" onclick="setUserBlocked('${u.uid}',false)">✅ Unblock</button>`
-      : `<button class="btn btn-danger btn-sm" onclick="setUserBlocked('${u.uid}',true)">🚫 Block</button>`;
-    const privateBtn = u.privateAccess
-      ? `<button class="btn btn-ghost btn-sm" onclick="setUserPrivateAccess('${u.uid}',false)" title="Revoke private content access">🔓 Revoke Private</button>`
-      : `<button class="btn btn-primary btn-sm" onclick="setUserPrivateAccess('${u.uid}',true)" title="Grant private content access">🔒 Grant Private</button>`;
-    const pastorBtn = isAdmin() ? (u.pastorElder
-      ? `<button class="btn btn-ghost btn-sm" onclick="setUserPastorElder('${u.uid}',false)" title="Remove Pastor/Elder role" style="color:var(--orange)">⛪ Pastor/Elder</button>`
-      : `<button class="btn btn-ghost btn-sm" onclick="setUserPastorElder('${u.uid}',true)" title="Make Pastor/Elder (shows in My Highlights share list)">⛪ Make Pastor/Elder</button>`) : '';
+    const chk = (on, cls, icon, onclick, title, dis) =>
+      `<span class="uchk ${on?'on':''} ${cls} ${dis?'disabled':''}" ${dis?'':`onclick="${onclick}"`} title="${title}"><span class="box">✓</span>${icon}</span>`;
+    const blockChk = chk(u.disabled, 'danger', '🚫', `setUserBlocked('${u.uid}',${u.disabled?'false':'true'})`, u.disabled?'Unblock user':'Block user', false);
+    const privateChk = chk(u.privateAccess, 'private', '🔒', `setUserPrivateAccess('${u.uid}',${u.privateAccess?'false':'true'})`, u.privateAccess?'Revoke private access':'Grant private access', false);
+    const pastorChk = chk(u.pastorElder, 'pastor', '⛪', `setUserPastorElder('${u.uid}',${u.pastorElder?'false':'true'})`, u.pastorElder?'Remove Pastor/Elder role':'Make Pastor/Elder', !isAdmin());
+    const isEd = !!portalEditorMap[u.uid];
+    const editorChk = chk(isEd, 'editor', '✏️', isEd?`revokeEditorAccess('${u.uid}')`:`grantEditorAccess('${u.uid}')`, isEd?'Revoke portal editor access':'Make portal editor', !isAdmin());
     const approveBtn = u.pendingApproval && !u.disabled
       ? `<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="approveUser('${u.uid}')" title="Approve this registration">✅ Approve</button>`
       : '';
@@ -5327,12 +5337,15 @@ function renderUsers(users) {
       <td style="font-size:13px;color:var(--text)">${u.appMinutes ? (u.appMinutes >= 60 ? Math.floor(u.appMinutes/60) + 'h ' + (u.appMinutes%60) + 'm' : u.appMinutes + ' min') + ' <span style="font-size:11px;color:var(--muted)">(' + u.sessionCount + ' sessions)</span>' : '—'}</td>
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
-      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}${u.pastorElder ? '<span style="font-size:11px;font-weight:700;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:99px;padding:2px 8px;margin-left:4px">⛪ Pastor/Elder</span>' : ''}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">${approveBtn}${blockBtn}${privateBtn}${pastorBtn}${isAdmin() ? (portalEditorMap[u.uid] ? `<button class="btn btn-ghost btn-sm" onclick="revokeEditorAccess('${u.uid}')" title="Revoke portal editor access" style="color:var(--orange)">✏️ Editor</button>` : `<button class="btn btn-ghost btn-sm" onclick="grantEditorAccess('${u.uid}')" title="Grant portal editor access">✏️ Make Editor</button>`) : ''}</td>
+      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}${u.pastorElder ? '<span style="font-size:11px;font-weight:700;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:99px;padding:2px 8px;margin-left:4px">⛪ Pastor/Elder</span>' : ''}${approveBtn ? '<div style="margin-top:4px">'+approveBtn+'</div>' : ''}</td>
+      <td style="text-align:center">${blockChk}</td>
+      <td style="text-align:center">${privateChk}</td>
+      <td style="text-align:center">${pastorChk}</td>
+      <td style="text-align:center">${editorChk}</td>
     </tr>`;
   };
 
-  const sectionHeaderRow = (label, count) => `<tr><td colspan="10" style="background:rgba(168,85,247,.10);color:#c084fc;font-weight:700;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:8px 12px;border-top:1px solid rgba(168,85,247,.25)">${label} (${count})</td></tr>`;
+  const sectionHeaderRow = (label, count) => `<tr><td colspan="13" style="background:rgba(168,85,247,.10);color:#c084fc;font-weight:700;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:8px 12px;border-top:1px solid rgba(168,85,247,.25)">${label} (${count})</td></tr>`;
 
   let tbodyHtml = '';
   if (privateUsers.length) {
