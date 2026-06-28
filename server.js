@@ -2870,15 +2870,17 @@ app.get('/api/users', async (req, res) => {
       console.warn('Mux watch time lookup failed:', e.message);
     }
 
-    // Look up privateAccess + pendingApproval from Firestore users collection
+    // Look up privateAccess + pendingApproval + pastorElder from Firestore users collection
     const privateMap = {};
     const pendingMap = {};
+    const pastorElderMap = {};
     try {
       const privateSnap = await admin.firestore().collection('users').get();
       privateSnap.forEach(doc => {
         const d = doc.data();
         if (d.privateAccess) privateMap[doc.id] = true;
         if (d.pendingApproval) pendingMap[doc.id] = true;
+        if (d.pastorElder) pastorElderMap[doc.id] = true;
       });
     } catch (e) {
       console.warn('Private access lookup failed:', e.message);
@@ -2889,6 +2891,7 @@ app.get('/api/users', async (req, res) => {
       u.minutesWatched = watchMap[u.uid] || 0;
       u.privateAccess = !!privateMap[u.uid];
       u.pendingApproval = !!pendingMap[u.uid];
+      u.pastorElder = !!pastorElderMap[u.uid];
       u.appVersion = appVersionMap[u.uid] || null;
       u.appMinutes = Math.round((sessionTimeMap[u.uid] || 0) / 60);
       u.sessionCount = sessionCountMap[u.uid] || 0;
@@ -3033,6 +3036,44 @@ app.patch('/api/users/:uid/private-access', async (req, res) => {
       { merge: true }
     );
     res.json({ ok: true, uid: req.params.uid, privateAccess: !!access });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Grant or revoke Pastor/Elder role (independent of admin/private access).
+// Only affects who appears in the Pastor "My Highlights" share list.
+app.patch('/api/users/:uid/pastor-elder', adminOnly, async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { pastorElder } = req.body; // true = grant, false = revoke
+    await admin.firestore().collection('users').doc(req.params.uid).set(
+      { pastorElder: !!pastorElder },
+      { merge: true }
+    );
+    res.json({ ok: true, uid: req.params.uid, pastorElder: !!pastorElder });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List Pastor/Elder users (for the My Highlights share recipient picker in-app).
+app.get('/api/pastor-elders', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const snap = await admin.firestore().collection('users')
+      .where('pastorElder', '==', true).get();
+    const ids = [];
+    snap.forEach(doc => ids.push(doc.id));
+    const out = [];
+    for (const uid of ids) {
+      try {
+        const u = await admin.auth().getUser(uid);
+        out.push({ uid, email: u.email || '', displayName: u.displayName || '' });
+      } catch (_) { out.push({ uid, email: '', displayName: '' }); }
+    }
+    out.sort((a, b) => (a.displayName || a.email).localeCompare(b.displayName || b.email));
+    res.json({ pastorElders: out });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
