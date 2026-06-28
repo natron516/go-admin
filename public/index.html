@@ -887,6 +887,14 @@ tr.dirty .at-save { display: inline-flex !important; }
 }
 .feat-chip.dragging { opacity: .4; }
 .feat-chip-title { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feat-reorder { display: inline-flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+.feat-arrow {
+  background: var(--surface); border: 1px solid var(--border2); color: var(--text);
+  cursor: pointer; font-size: 9px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+.feat-arrow:hover:not(:disabled) { border-color: var(--blue, #3b82f6); color: var(--blue, #3b82f6); }
+.feat-arrow:disabled { opacity: .25; cursor: default; }
 .feat-chip-x {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 13px; padding: 2px 4px; border-radius: 4px; flex-shrink: 0;
@@ -5966,8 +5974,16 @@ function renderFeaturedGroups() {
       const title = item ? item.title : '(missing item)';
       const badge = item ? (FEAT_TYPE_BADGES[item.type] || '') : '⚠️';
       const thumb = item && item.thumb ? `<img src="${escHtml(item.thumb)}" loading="lazy" alt="" style="width:52px;height:30px;object-fit:cover;border-radius:4px;background:#222;">` : `<div style="width:52px;height:30px;border-radius:4px;background:#222;"></div>`;
+      const idx = keys.indexOf(k);
+      const upDis = idx <= 0 ? 'disabled' : '';
+      const downDis = idx >= keys.length - 1 ? 'disabled' : '';
       return `<div class="feat-chip" draggable="true" data-group="${g}" data-key="${escHtml(k)}"
-          ondragstart="featChipDragStart(event)" ondragover="featChipDragOver(event)" ondrop="featChipDrop(event)" ondragend="featChipDragEnd(event)">
+          ondragstart="featChipDragStart(event)" ondragover="featChipDragOver(event)" ondrop="featChipDrop(event)" ondragend="featChipDragEnd(event)"
+          ontouchstart="featChipTouchStart(event)" ontouchmove="featChipTouchMove(event)" ontouchend="featChipTouchEnd(event)">
+        <span class="feat-reorder">
+          <button class="feat-arrow" title="Move up" ${upDis} onclick="featMove('${g}','${escHtml(k)}',-1)">▲</button>
+          <button class="feat-arrow" title="Move down" ${downDis} onclick="featMove('${g}','${escHtml(k)}',1)">▼</button>
+        </span>
         ${thumb}
         <span style="font-size:12px;">${badge}</span>
         <span class="feat-chip-title">${escHtml(title)}</span>
@@ -5979,7 +5995,7 @@ function renderFeaturedGroups() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
         <div>
           <div style="font-size:15px;font-weight:700;">${meta.label}</div>
-          <div style="font-size:12px;color:var(--muted);">${meta.hint} · ${keys.length} item${keys.length===1?'':'s'} · drag to reorder</div>
+          <div style="font-size:12px;color:var(--muted);">${meta.hint} · ${keys.length} item${keys.length===1?'':'s'} · use ▲▼ or drag to reorder</div>
         </div>
         <button class="btn btn-primary btn-sm" onclick="openFeatPicker('${g}')">➕ Add</button>
       </div>
@@ -6099,6 +6115,55 @@ function featChipDrop(e) {
 function featChipDragEnd(e) {
   document.querySelectorAll('.feat-chip.dragging').forEach(c => c.classList.remove('dragging'));
   featDragKey = null; featDragGroup = null;
+}
+
+// ── Arrow up/down reorder (reliable on touch + desktop) ──
+function featMove(group, key, dir) {
+  const list = featuredDoc[group] || [];
+  const from = list.indexOf(key);
+  if (from < 0) return;
+  const to = from + dir;
+  if (to < 0 || to >= list.length) return;
+  list.splice(to, 0, list.splice(from, 1)[0]);
+  featuredDoc[group] = list;
+  renderFeaturedGroups();
+  featScheduleSave();
+}
+
+// ── Touch drag-to-reorder (HTML5 drag events don't fire on iPad/touch) ──
+let featTouchKey = null, featTouchGroup = null, featTouchEl = null, featTouchMoved = false;
+function featChipTouchStart(e) {
+  const chip = e.currentTarget;
+  // Ignore touches that start on a button (arrows / remove) so they still work.
+  if (e.target.closest('button')) return;
+  featTouchKey = chip.dataset.key;
+  featTouchGroup = chip.dataset.group;
+  featTouchEl = chip;
+  featTouchMoved = false;
+}
+function featChipTouchMove(e) {
+  if (!featTouchKey) return;
+  featTouchMoved = true;
+  if (featTouchEl) featTouchEl.classList.add('dragging');
+  e.preventDefault(); // stop the page from scrolling while reordering
+  const t = e.touches[0];
+  const over = document.elementFromPoint(t.clientX, t.clientY);
+  const targetChip = over && over.closest && over.closest('.feat-chip');
+  if (!targetChip || targetChip.dataset.group !== featTouchGroup) return;
+  const targetKey = targetChip.dataset.key;
+  if (targetKey === featTouchKey) return;
+  const list = featuredDoc[featTouchGroup] || [];
+  const from = list.indexOf(featTouchKey);
+  const to = list.indexOf(targetKey);
+  if (from < 0 || to < 0) return;
+  list.splice(to, 0, list.splice(from, 1)[0]);
+  featuredDoc[featTouchGroup] = list;
+  renderFeaturedGroups();
+}
+function featChipTouchEnd(e) {
+  if (featTouchKey && featTouchMoved) featScheduleSave();
+  document.querySelectorAll('.feat-chip.dragging').forEach(c => c.classList.remove('dragging'));
+  featTouchKey = null; featTouchGroup = null; featTouchEl = null; featTouchMoved = false;
 }
 
 
