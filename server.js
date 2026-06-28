@@ -663,16 +663,17 @@ function serializePassthrough(pt) {
 // Track assets with MP4 generation in progress (server-side, survives client navigation)
 const _mp4Preparing = {}; // { assetId: { title, startedAt } }
 
-// Server-side cache of the full Mux asset list. Paginating the Mux API is the
-// slowest part of a cold app launch, so we cache it briefly and serve from RAM.
+// Server-side cache of the full Mux asset list. Paginating the Mux API (~220
+// assets / 3 pages) is the slowest part of a cold app launch (~8s), so we cache
+// it in RAM and serve stale-while-revalidate: a request past the TTL gets the
+// last good copy INSTANTLY while a single background refresh runs. A periodic
+// timer also keeps the cache warm so the very first user of the hour isn't slow.
 let _assetsCache = { data: null, at: 0 };
-const ASSETS_CACHE_MS = 60 * 1000;
+let _assetsRefreshing = null; // in-flight refresh promise (dedupes concurrent rebuilds)
+const ASSETS_CACHE_MS = 5 * 60 * 1000;       // serve from cache without refresh
+const ASSETS_STALE_MS = 30 * 60 * 1000;      // hard limit: must block & rebuild past this
 
-async function fetchAllMuxAssets() {
-  const now = Date.now();
-  if (_assetsCache.data && now - _assetsCache.at < ASSETS_CACHE_MS) {
-    return _assetsCache.data;
-  }
+async function _rebuildMuxAssets() {
   let allAssets = [];
   let cursor = null;
   while (true) {
@@ -690,9 +691,33 @@ async function fetchAllMuxAssets() {
       else a._mp4Preparing = true;
     }
   }
-  _assetsCache = { data: allAssets, at: now };
+  _assetsCache = { data: allAssets, at: Date.now() };
   return allAssets;
 }
+
+function _refreshMuxAssetsInBackground() {
+  if (_assetsRefreshing) return _assetsRefreshing;
+  _assetsRefreshing = _rebuildMuxAssets()
+    .catch(e => { console.warn('Mux asset refresh failed:', e.message); return _assetsCache.data; })
+    .finally(() => { _assetsRefreshing = null; });
+  return _assetsRefreshing;
+}
+
+async function fetchAllMuxAssets() {
+  const now = Date.now();
+  const age = now - _assetsCache.at;
+  if (_assetsCache.data) {
+    // Fresh: serve as-is.
+    if (age < ASSETS_CACHE_MS) return _assetsCache.data;
+    // Stale-but-usable: serve instantly, refresh in background.
+    if (age < ASSETS_STALE_MS) { _refreshMuxAssetsInBackground(); return _assetsCache.data; }
+  }
+  // No cache or too stale: must wait for a (deduped) rebuild.
+  return _refreshMuxAssetsInBackground();
+}
+
+// Keep the cache warm so no user pays the cold-pagination cost.
+setInterval(() => { _refreshMuxAssetsInBackground(); }, ASSETS_CACHE_MS).unref?.();
 
 // Helper: read a Firestore collection ordered by sortOrder (falls back to
 // unordered if the composite index is missing). Returns [] on error so one slow
@@ -729,7 +754,7 @@ app.get('/api/home', async (req, res) => {
       readCollection('articles'),
       mux('GET', '/video/v1/live-streams').then(r => r.data || []).catch(() => []),
     ]);
-    res.set('Cache-Control', 'public, max-age=30');
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     res.json({ assets, audio, series, podcasts, books, articles, liveStreams: live });
   } catch (e) {
     res.status(500).json({ error: e.message });
