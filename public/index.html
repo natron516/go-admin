@@ -769,8 +769,11 @@ tr.dirty .at-save { display: inline-flex !important; }
   padding: 9px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border);
-  background: rgba(0,0,0,.2);
+  background: var(--surface2);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 .users-table tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
 .users-table tbody tr:last-child { border-bottom: none; }
