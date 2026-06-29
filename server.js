@@ -1171,7 +1171,8 @@ app.get('/api/sermons/search-transcripts', async (req, res) => {
       const date = asset.created_at ? new Date(asset.created_at * 1000).toISOString().slice(0, 10) : null;
       const cues = await cuesForAsset(asset);
       let lastNorm = null, lastStart = -999;
-      for (const c of cues) {
+      for (let i = 0; i < cues.length; i++) {
+        const c = cues[i];
         const norm = normForMatch(c.text);
         if (!norm.includes(needle)) { continue; }
         // Mux VTT emits many short, overlapping rolling-caption cues, so the same
@@ -1182,7 +1183,11 @@ app.get('/api/sermons/search-transcripts', async (req, res) => {
           && (norm === lastNorm || norm.includes(lastNorm) || lastNorm.includes(norm));
         lastNorm = norm; lastStart = c.start;
         if (dup) continue;
-        results.push({ playbackId: pid, title, date, start: c.start, sentence: c.text.trim() });
+        // FULL SENTENCE CONTEXT (Isaac, 6/29): VTT cues are short rolling
+        // fragments, so expand around the match to the surrounding sentence by
+        // walking neighboring cues out to sentence-ending punctuation (. ! ?).
+        const sentence = expandToSentence(cues, i, needle);
+        results.push({ playbackId: pid, title, date, start: c.start, sentence });
         if (results.length >= cap) break;
       }
       if (results.length >= cap) break;
@@ -1227,6 +1232,45 @@ function normForMatch(s) {
     .replace(/[^a-z0-9\s]/g, ' ')   // drop punctuation
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Build the FULL sentence around the matching cue. VTT rolling-caption cues are
+// short fragments, so we stitch the matched cue with neighbors until we hit
+// sentence-ending punctuation on each side (or a small cue budget). Returns a
+// cleaned single-sentence (or two) string containing the searched term.
+// (Isaac, 6/29)
+function expandToSentence(cues, idx, needle) {
+  const MAX_SPAN = 6; // cap how many cues out we reach each direction
+  const endsSentence = (t) => /[.!?]\s*$/.test((t || '').trim());
+  const startsSentence = (prevText) => endsSentence(prevText);
+  // Walk LEFT: include earlier cues until the previous cue ends a sentence.
+  let lo = idx;
+  for (let k = 1; k <= MAX_SPAN; k++) {
+    const prev = cues[idx - k];
+    if (!prev) break;
+    if (endsSentence(prev.text)) break; // previous cue completed a sentence
+    lo = idx - k;
+  }
+  // Walk RIGHT: include later cues until THIS/last included cue ends a sentence.
+  let hi = idx;
+  if (!endsSentence(cues[idx].text)) {
+    for (let k = 1; k <= MAX_SPAN; k++) {
+      const cur = cues[idx + k];
+      if (!cur) break;
+      hi = idx + k;
+      if (endsSentence(cur.text)) break;
+    }
+  }
+  let joined = '';
+  for (let i = lo; i <= hi; i++) {
+    const piece = (cues[i]?.text || '').trim();
+    if (!piece) continue;
+    joined += (joined && !/\s$/.test(joined) ? ' ' : '') + piece;
+  }
+  joined = joined.replace(/\s+/g, ' ').trim();
+  // Safety: if expansion somehow lost the term, fall back to the raw cue.
+  if (!normForMatch(joined).includes(needle)) return (cues[idx]?.text || '').trim();
+  return joined;
 }
 
 app.get('/api/audio-transcript/:playbackId/locate', async (req, res) => {
