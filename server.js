@@ -1166,11 +1166,20 @@ app.get('/api/sermons/search-transcripts', async (req, res) => {
       const title = pt.title || asset.meta?.title || 'Sermon';
       const date = asset.created_at ? new Date(asset.created_at * 1000).toISOString().slice(0, 10) : null;
       const cues = await cuesForAsset(asset);
+      let lastNorm = null, lastStart = -999;
       for (const c of cues) {
-        if (normForMatch(c.text).includes(needle)) {
-          results.push({ playbackId: pid, title, date, start: c.start, sentence: c.text.trim() });
-          if (results.length >= cap) break;
-        }
+        const norm = normForMatch(c.text);
+        if (!norm.includes(needle)) { continue; }
+        // Mux VTT emits many short, overlapping rolling-caption cues, so the same
+        // sentence containing the word appears repeatedly a fraction of a second
+        // apart. Collapse near-duplicate consecutive hits (same/contained text
+        // within ~6s) so each is one clean occurrence. (Isaac, 6/29)
+        const dup = lastNorm != null && (c.start - lastStart) < 6
+          && (norm === lastNorm || norm.includes(lastNorm) || lastNorm.includes(norm));
+        lastNorm = norm; lastStart = c.start;
+        if (dup) continue;
+        results.push({ playbackId: pid, title, date, start: c.start, sentence: c.text.trim() });
+        if (results.length >= cap) break;
       }
       if (results.length >= cap) break;
     }
