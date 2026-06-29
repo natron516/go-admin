@@ -1771,6 +1771,45 @@ app.post('/api/transcript-redo', adminOnly, async (req, res) => {
   }
 });
 
+// Regenerate the MUX caption (subtitle) track for one playback id: delete the
+// existing text track(s) then start a fresh generate-subtitles pass. The sermon
+// SEARCH reads cue timings from this Mux VTT, so use this when a week's search
+// results show misaligned timestamps (e.g. 6/28, whose track came from the
+// corrupted live-caption feed). Fresh Mux subtitles realign the cue times.
+// Also clears the cached cues for that pid. (Isaac, 6/29)
+//   POST /api/sermons/regenerate-captions  body: { playbackId }
+app.post('/api/sermons/regenerate-captions', adminOnly, async (req, res) => {
+  const pid = req.body?.playbackId;
+  if (!pid) return res.status(400).json({ error: 'playbackId required' });
+  try {
+    const assetId = await assetIdForPlaybackId(pid);
+    if (!assetId) return res.status(404).json({ error: 'No asset for that playback id' });
+    const asset = (await mux('GET', `/video/v1/assets/${assetId}`)).data;
+    const tracks = asset?.tracks || [];
+    const textTracks = tracks.filter(t => t.type === 'text' && t.text_type === 'subtitles');
+    let deleted = 0;
+    for (const t of textTracks) {
+      try { await mux('DELETE', `/video/v1/assets/${assetId}/tracks/${t.id}`); deleted++; }
+      catch (e) { /* non-fatal */ }
+    }
+    const audioTrack = tracks.find(t => t.type === 'audio');
+    if (!audioTrack) return res.status(422).json({ error: 'No audio track on asset' });
+    // Ensure mp4 rendition for good measure (Deepgram path + downloads).
+    if (asset.mp4_support !== 'standard') {
+      try { await mux('PUT', `/video/v1/assets/${assetId}/mp4-support`, { mp4_support: 'standard' }); } catch (e) {}
+    }
+    await mux('POST', `/video/v1/assets/${assetId}/tracks/${audioTrack.id}/generate-subtitles`, {
+      generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+    });
+    _sermonCuesCache.delete(pid);
+    console.log(`[regenerate-captions] ${pid}: deleted ${deleted} old text track(s), started fresh subtitles`);
+    res.json({ ok: true, playbackId: pid, assetId, deletedTracks: deleted,
+      note: 'Fresh Mux subtitles generating (~minutes). Search timings realign once status=ready.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Ensure the MOST RECENT sermon recording has a Deepgram transcript.
 // Idempotent safety-net for the Sunday-afternoon cron (in case the webhook
 // pipeline misses an event). Steps: find newest sermon asset → if it already
