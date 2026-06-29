@@ -1107,6 +1107,79 @@ app.get('/api/audio-transcript/:playbackId/cues', async (req, res) => {
   }
 });
 
+// ── Cross-sermon transcript SEARCH ─────────────────────────────────────────
+// Isaac (2026-06-29): a search box at the top of the Sermons list that searches
+// EVERY sermon's transcript for a word and returns each hit with the sermon, a
+// timestamp, and the full sentence it was said in (tap -> play that moment).
+//
+// Implementation: build sentence-level cues per sermon (same source as the
+// per-sermon /cues endpoint) and scan them. Cues are cached per playbackId so
+// repeat searches don't re-fetch every VTT from Mux.
+const _sermonCuesCache = new Map(); // pid -> { cues:[{start,end,text}], at }
+const SERMON_CUES_TTL = 60 * 60 * 1000; // 1h; sermon transcripts don't change
+
+async function cuesForAsset(asset) {
+  const pid = asset.playback_ids?.[0]?.id;
+  if (!pid) return [];
+  const hit = _sermonCuesCache.get(pid);
+  if (hit && Date.now() - hit.at < SERMON_CUES_TTL) return hit.cues;
+  const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
+  if (!textTrack) { _sermonCuesCache.set(pid, { cues: [], at: Date.now() }); return []; }
+  try {
+    const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+    if (!r.ok) { _sermonCuesCache.set(pid, { cues: [], at: Date.now() }); return []; }
+    const { kept } = trimCues(parseVtt(await r.text()));
+    const cues = kept.map((c, i) => ({
+      start: Math.round(c.start * 1000) / 1000,
+      end: Math.round((kept[i + 1] ? kept[i + 1].start : c.start + 6) * 1000) / 1000,
+      text: c.text,
+    }));
+    _sermonCuesCache.set(pid, { cues, at: Date.now() });
+    return cues;
+  } catch {
+    _sermonCuesCache.set(pid, { cues: [], at: Date.now() });
+    return [];
+  }
+}
+
+// GET /api/sermons/search-transcripts?q=<word or phrase>&limit=<n>
+// -> { ok:true, query, results:[ { playbackId, title, date, start, sentence } ] }
+//    sorted newest-sermon-first, then by timestamp within a sermon.
+app.get('/api/sermons/search-transcripts', async (req, res) => {
+  try {
+    const raw = (req.query.q || '').toString().trim();
+    if (raw.length < 2) return res.json({ ok: false, message: 'Query too short.', results: [] });
+    const needle = normForMatch(raw);
+    if (!needle) return res.json({ ok: false, message: 'Query too short.', results: [] });
+    const cap = Math.min(parseInt(req.query.limit, 10) || 200, 500);
+
+    const all = await fetchAllMuxAssets();
+    const sermons = (all || [])
+      .filter(a => isSermonAsset(a) && (a.tracks || []).some(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready'))
+      .sort((x, y) => Number(y.created_at) - Number(x.created_at));
+
+    const results = [];
+    for (const asset of sermons) {
+      const pid = asset.playback_ids?.[0]?.id;
+      if (!pid) continue;
+      const pt = parsePassthrough(asset.passthrough);
+      const title = pt.title || asset.meta?.title || 'Sermon';
+      const date = asset.created_at ? new Date(asset.created_at * 1000).toISOString().slice(0, 10) : null;
+      const cues = await cuesForAsset(asset);
+      for (const c of cues) {
+        if (normForMatch(c.text).includes(needle)) {
+          results.push({ playbackId: pid, title, date, start: c.start, sentence: c.text.trim() });
+          if (results.length >= cap) break;
+        }
+      }
+      if (results.length >= cap) break;
+    }
+    res.json({ ok: true, query: raw, count: results.length, results });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message, results: [] });
+  }
+});
+
 // Per-WORD timings for accurate karaoke highlight + mid-track seeking (ADDITIVE).
 // Reads the NEW transcriptWords/{playbackId} Firestore doc populated by Deepgram.
 // This does NOT touch the Mux caption path. The app calls this OPTIONALLY: if the
