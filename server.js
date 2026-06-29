@@ -215,6 +215,8 @@ function editorOrAdmin(req, res, next) {
 app.use((req, res, next) => {
   // Public routes
   if (req.method === 'GET' && req.path.startsWith('/api/thumbnails/')) return next();
+  // Deepgram WebVTT caption files must be fetchable by Mux (unauthenticated).
+  if (req.method === 'GET' && req.path.startsWith('/api/deepgram-vtt/')) return next();
   if (req.path === '/webhooks/mux') return next();
   if (req.path === '/api/fcm-token' && req.method === 'POST') return next();
   if (req.path === '/api/build') return next();
@@ -622,6 +624,13 @@ async function maybeGenerateWords(asset) {
     const res = await generateAndStoreWords(pid, asset.id);
     if (res.ok) console.log(`[words] Stored ${res.count} word timings for ${asset.id} (pid ${pid})${res.skipped ? ' [skipped, existed]' : ''}`);
     else console.warn(`[words] Skipped word timings for ${asset.id}: ${res.error}`);
+    // SERMONS: replace Mux's auto-captions (which mislabel speech as "[Music]")
+    // with a Deepgram-built caption track by default once words exist. (Isaac,
+    // 6/29) Guarded + fire-and-forget; non-sermon assets keep Mux captions.
+    if (res.ok && isSermonAsset(asset)) {
+      try { await swapToDeepgramCaptions(pid, asset.id); }
+      catch (e) { console.warn(`[deepgram-cc] swap failed for ${pid}: ${e.message}`); }
+    }
   } catch (e) {
     console.error(`[words] Word-timing generation failed for ${asset?.id}: ${e.message}`);
   }
@@ -1121,6 +1130,106 @@ app.get('/api/audio-transcript/:playbackId/cues', async (req, res) => {
 // repeat searches don't re-fetch every VTT from Mux.
 const _sermonCuesCache = new Map(); // pid -> { cues:[{start,end,text}], at }
 const SERMON_CUES_TTL = 60 * 60 * 1000; // 1h; sermon transcripts don't change
+
+// Build SHORT caption cues (for an on-video WebVTT) from Deepgram words: ~7-word
+// chunks broken on punctuation so lines fit the screen + advance naturally.
+// (Isaac, 6/29 — replace Mux's mislabeled "[Music]" captions with Deepgram.)
+async function deepgramCaptionCues(pid, maxWords = 7) {
+  try {
+    const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
+    const words = snap.exists ? snap.data()?.words : null;
+    if (!Array.isArray(words) || !words.length) return [];
+    const cues = [];
+    let buf = [], startT = null, lastE = null;
+    const flush = () => {
+      if (!buf.length) return;
+      const text = buf.join(' ').replace(/\s+([.,;:!?])/g, '$1').trim();
+      if (text) cues.push({ start: startT ?? 0, end: (lastE ?? startT ?? 0), text });
+      buf = []; startT = null;
+    };
+    for (const w of words) {
+      const tok = w.w; if (!tok) continue;
+      if (startT == null) startT = w.s ?? 0;
+      buf.push(tok);
+      lastE = w.e ?? w.s ?? startT;
+      if (/[.!?]$/.test(tok) || buf.length >= maxWords) flush();
+    }
+    flush();
+    return cues;
+  } catch { return []; }
+}
+
+function vttTimestamp(sec) {
+  const s = Math.max(0, sec || 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = Math.floor(s % 60);
+  const ms = Math.round((s - Math.floor(s)) * 1000);
+  const p = (n, l = 2) => String(n).padStart(l, '0');
+  return `${p(h)}:${p(m)}:${p(ss)}.${p(ms, 3)}`;
+}
+
+// Public WebVTT built from Deepgram words. Mux ingests this URL as a caption
+// track (see /api/sermons/use-deepgram-captions). Public on purpose so Mux can
+// fetch it; contains only transcript text. (Isaac, 6/29)
+app.get('/api/deepgram-vtt/:pid.vtt', async (req, res) => {
+  try {
+    const cues = await deepgramCaptionCues(req.params.pid);
+    res.set('Content-Type', 'text/vtt; charset=utf-8');
+    if (!cues.length) return res.send('WEBVTT\n\n');
+    let out = 'WEBVTT\n\n';
+    for (let i = 0; i < cues.length; i++) {
+      const c = cues[i];
+      const end = c.end > c.start ? c.end : c.start + 2;
+      out += `${i + 1}\n${vttTimestamp(c.start)} --> ${vttTimestamp(end)}\n${c.text}\n\n`;
+    }
+    res.send(out);
+  } catch (e) {
+    res.status(500).send('WEBVTT\n\n');
+  }
+});
+
+// Replace an asset's mislabeled Mux auto-captions with a Deepgram-built caption
+// track: delete existing text track(s), then add a text track sourced from our
+// public Deepgram VTT URL. The on-video CC then shows real speech instead of
+// "[Music]". (Isaac, 6/29)
+// Shared helper: swap an asset's Mux caption track(s) for a Deepgram-built one.
+async function swapToDeepgramCaptions(pid, assetId) {
+  if (!assetId) assetId = await assetIdForPlaybackId(pid);
+  if (!assetId) throw new Error('No asset for that playback id');
+  const cues = await deepgramCaptionCues(pid);
+  if (!cues.length) throw new Error('No Deepgram words for this asset yet');
+  const asset = (await mux('GET', `/video/v1/assets/${assetId}`)).data;
+  const tracks = asset?.tracks || [];
+  // If a Deepgram caption track is already present (our name 'English' + our
+  // VTT), skip to keep this idempotent.
+  let deleted = 0;
+  for (const t of tracks.filter(t => t.type === 'text' && t.text_type === 'subtitles')) {
+    try { await mux('DELETE', `/video/v1/assets/${assetId}/tracks/${t.id}`); deleted++; } catch (e) {}
+  }
+  const base = (process.env.PUBLIC_BASE_URL || 'https://go-admin-production-6be4.up.railway.app').replace(/\/$/, '');
+  const vttUrl = `${base}/api/deepgram-vtt/${pid}.vtt`;
+  const added = await mux('POST', `/video/v1/assets/${assetId}/tracks`, {
+    url: vttUrl, type: 'text', text_type: 'subtitles',
+    language_code: 'en', name: 'English', closed_captions: true,
+  });
+  _sermonCuesCache.delete(pid);
+  console.log(`[deepgram-cc] ${pid}: deleted ${deleted} old track(s), added Deepgram VTT (${cues.length} cues)`);
+  return { assetId, deletedTracks: deleted, cues: cues.length, vttUrl, track: added?.data?.id || null };
+}
+
+//   POST /api/sermons/use-deepgram-captions  body: { playbackId }
+app.post('/api/sermons/use-deepgram-captions', adminOnly, async (req, res) => {
+  const pid = req.body?.playbackId;
+  if (!pid) return res.status(400).json({ error: 'playbackId required' });
+  try {
+    const r = await swapToDeepgramCaptions(pid, null);
+    res.json({ ok: true, playbackId: pid, ...r,
+      note: 'Deepgram caption track ingesting (~minutes). On-video CC will show real speech once ready.' });
+  } catch (e) {
+    res.status(422).json({ error: e.message });
+  }
+});
 
 // Build timed SENTENCE cues from stored Deepgram words (transcriptWords/{pid}).
 // Used as the search source when the Mux VTT is sparse/mislabeled (e.g. 6/14,
