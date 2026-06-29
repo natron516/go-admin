@@ -1122,28 +1122,65 @@ app.get('/api/audio-transcript/:playbackId/cues', async (req, res) => {
 const _sermonCuesCache = new Map(); // pid -> { cues:[{start,end,text}], at }
 const SERMON_CUES_TTL = 60 * 60 * 1000; // 1h; sermon transcripts don't change
 
+// Build timed SENTENCE cues from stored Deepgram words (transcriptWords/{pid}).
+// Used as the search source when the Mux VTT is sparse/mislabeled (e.g. 6/14,
+// whose VTT had only 3 cues even though Deepgram has thousands of words). Groups
+// words into sentences on .!? boundaries (with a length cap so run-ons split).
+// (Isaac, 6/29)
+async function deepgramSentenceCues(pid) {
+  try {
+    const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
+    const words = snap.exists ? snap.data()?.words : null;
+    if (!Array.isArray(words) || !words.length) return [];
+    const cues = [];
+    let buf = [], startT = null;
+    const flush = (endT) => {
+      if (!buf.length) return;
+      const text = buf.join(' ').replace(/\s+([.,;:!?])/g, '$1').trim();
+      if (text) cues.push({ start: Math.round((startT ?? 0) * 1000) / 1000,
+                            end: Math.round((endT ?? startT ?? 0) * 1000) / 1000, text });
+      buf = []; startT = null;
+    };
+    for (const w of words) {
+      const tok = w.w; if (!tok) continue;
+      if (startT == null) startT = w.s ?? 0;
+      buf.push(tok);
+      const endsSentence = /[.!?]$/.test(tok);
+      if (endsSentence || buf.length >= 30) flush(w.e ?? w.s ?? startT);
+    }
+    flush(words[words.length - 1]?.e);
+    return cues;
+  } catch { return []; }
+}
+
 async function cuesForAsset(asset) {
   const pid = asset.playback_ids?.[0]?.id;
   if (!pid) return [];
   const hit = _sermonCuesCache.get(pid);
   if (hit && Date.now() - hit.at < SERMON_CUES_TTL) return hit.cues;
+  // Prefer Deepgram-word sentence cues (rich + accurate). Mux VTT is the
+  // fallback, but for sermons it's often sparse/mislabeled, so if Deepgram has
+  // MORE cues we use it. This is what makes the cross-sermon search find words
+  // (e.g. "children") that the thin VTT missed. (Isaac, 6/29)
+  const dgCues = await deepgramSentenceCues(pid);
+  let vttCues = [];
   const textTrack = (asset.tracks || []).find(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready');
-  if (!textTrack) { _sermonCuesCache.set(pid, { cues: [], at: Date.now() }); return []; }
-  try {
-    const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
-    if (!r.ok) { _sermonCuesCache.set(pid, { cues: [], at: Date.now() }); return []; }
-    const { kept } = trimCues(parseVtt(await r.text()));
-    const cues = kept.map((c, i) => ({
-      start: Math.round(c.start * 1000) / 1000,
-      end: Math.round((kept[i + 1] ? kept[i + 1].start : c.start + 6) * 1000) / 1000,
-      text: c.text,
-    }));
-    _sermonCuesCache.set(pid, { cues, at: Date.now() });
-    return cues;
-  } catch {
-    _sermonCuesCache.set(pid, { cues: [], at: Date.now() });
-    return [];
+  if (textTrack) {
+    try {
+      const r = await fetch(`https://stream.mux.com/${pid}/text/${textTrack.id}.vtt`);
+      if (r.ok) {
+        const { kept } = trimCues(parseVtt(await r.text()));
+        vttCues = kept.map((c, i) => ({
+          start: Math.round(c.start * 1000) / 1000,
+          end: Math.round((kept[i + 1] ? kept[i + 1].start : c.start + 6) * 1000) / 1000,
+          text: c.text,
+        }));
+      }
+    } catch { /* ignore; fall back to Deepgram */ }
   }
+  const cues = (dgCues.length > vttCues.length) ? dgCues : vttCues;
+  _sermonCuesCache.set(pid, { cues, at: Date.now() });
+  return cues;
 }
 
 // GET /api/sermons/search-transcripts?q=<word or phrase>&limit=<n>
@@ -1159,7 +1196,12 @@ app.get('/api/sermons/search-transcripts', async (req, res) => {
 
     const all = await fetchAllMuxAssets();
     const sermons = (all || [])
-      .filter(a => isSermonAsset(a) && (a.tracks || []).some(t => t.type === 'text' && t.text_type === 'subtitles' && t.status === 'ready'))
+      // Include EVERY sermon (not just ones with a ready Mux caption track) so
+      // sermons whose VTT is sparse/preparing but have Deepgram words are still
+      // searched. cuesForAsset prefers Deepgram cues + falls back to VTT, and
+      // returns [] if neither exists. (Isaac, 6/29: 6/14 missed because its VTT
+      // was nearly empty.)
+      .filter(a => isSermonAsset(a))
       .sort((x, y) => Number(y.created_at) - Number(x.created_at));
 
     const results = [];
