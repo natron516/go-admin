@@ -1601,6 +1601,43 @@ app.post('/api/transcripts/backfill-all', (req, res) => {
 
 app.get('/api/transcripts/backfill-all/status', (req, res) => res.json(_backfillStatus));
 
+// Backfill: swap EVERY sermon that has Deepgram words over to the Deepgram
+// caption track (fixes existing sermons whose on-video CC says "[Music]").
+// Async + status-pollable like the transcript backfill. (Isaac, 6/29)
+let _ccSwapStatus = { running: false, startedAt: null, finishedAt: null, progress: null, summary: null };
+async function _runDeepgramCcBackfill() {
+  _ccSwapStatus = { running: true, startedAt: new Date().toISOString(), finishedAt: null, progress: null, summary: null };
+  try {
+    const all = await fetchAllMuxAssets();
+    const sermons = (all || []).filter(a => isSermonAsset(a));
+    let scanned = 0, swapped = 0, noWords = 0, errors = 0;
+    const total = sermons.length;
+    for (const a of sermons) {
+      scanned++; _ccSwapStatus.progress = `${scanned}/${total}`;
+      const pid = a.playback_ids?.[0]?.id;
+      if (!pid) { errors++; continue; }
+      try {
+        await swapToDeepgramCaptions(pid, a.id);
+        swapped++;
+      } catch (e) {
+        if (/No Deepgram words/.test(e.message)) noWords++; else errors++;
+      }
+    }
+    const summary = { scanned, swapped, noWords, errors };
+    console.log('[deepgram-cc-backfill] DONE', JSON.stringify(summary));
+    _ccSwapStatus = { running: false, startedAt: _ccSwapStatus.startedAt, finishedAt: new Date().toISOString(), progress: `${total}/${total}`, summary };
+  } catch (e) {
+    console.error('[deepgram-cc-backfill] FAILED', e.message);
+    _ccSwapStatus = { ..._ccSwapStatus, running: false, finishedAt: new Date().toISOString(), summary: { error: e.message } };
+  }
+}
+app.post('/api/sermons/use-deepgram-captions/backfill-all', adminOnly, (req, res) => {
+  if (_ccSwapStatus.running) return res.json({ ok: true, alreadyRunning: true, progress: _ccSwapStatus.progress });
+  _runDeepgramCcBackfill();
+  res.json({ ok: true, started: true, note: 'Swapping all sermons to Deepgram captions in background. Poll GET .../backfill-all/status.' });
+});
+app.get('/api/sermons/use-deepgram-captions/backfill-all/status', (req, res) => res.json(_ccSwapStatus));
+
 app.post('/api/audio-transcripts/korby', async (req, res) => {
   try {
     const db = admin.firestore();
