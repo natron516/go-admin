@@ -1328,8 +1328,15 @@ app.post('/api/audio-transcripts/generate', async (req, res) => {
 // freshly-enabled mp4 assets may need a second run once renditions finish
 // (rendition prep is async) — the per-asset webhook also retries on
 // static_renditions.ready.
-// POST /api/transcripts/backfill-all   (adminOnly)
-app.post('/api/transcripts/backfill-all', async (req, res) => {
+// The sweep touches ~220 assets with Mux+Deepgram calls each, far longer than
+// Railway's HTTP gateway timeout. So we run it in the BACKGROUND and return
+// immediately; progress + final summary go to the server log and an in-memory
+// status readable at GET /api/transcripts/backfill-all/status.
+// POST /api/transcripts/backfill-all
+let _backfillStatus = { running: false, startedAt: null, finishedAt: null, progress: null, summary: null };
+
+async function _runBackfillAll() {
+  _backfillStatus = { running: true, startedAt: new Date().toISOString(), finishedAt: null, progress: null, summary: null };
   try {
     let assets = [];
     let cursor = null;
@@ -1343,19 +1350,19 @@ app.post('/api/transcripts/backfill-all', async (req, res) => {
     let scanned = 0, mp4Enabled = 0, captionsStarted = 0, captionsHad = 0,
         wordsStored = 0, wordsHad = 0, wordsPending = 0, skippedMusic = 0,
         noAudio = 0, errors = 0;
+    const total = assets.length;
     for (const asset of assets) {
       scanned++;
+      _backfillStatus.progress = `${scanned}/${total}`;
       try {
         if (!shouldAutoTranscribe(asset)) { skippedMusic++; continue; }
         const tracks = asset.tracks || [];
         const audioTrack = tracks.find(t => t.type === 'audio');
         if (!audioTrack) { noAudio++; continue; }
-        // 1) mp4_support so Deepgram has a static rendition.
         if (asset.mp4_support !== 'standard') {
           try { await mux('PUT', `/video/v1/assets/${asset.id}/mp4-support`, { mp4_support: 'standard' }); mp4Enabled++; }
           catch (e) { /* non-fatal */ }
         }
-        // 2) captions if no text track yet.
         if (tracks.some(t => t.type === 'text')) { captionsHad++; }
         else {
           try {
@@ -1365,27 +1372,39 @@ app.post('/api/transcripts/backfill-all', async (req, res) => {
             captionsStarted++;
           } catch (e) { /* non-fatal */ }
         }
-        // 3) Deepgram word-timings (idempotent; needs the static rendition).
         const pid = asset.playback_ids?.[0]?.id;
         if (DEEPGRAM_KEY && pid) {
           try {
             const r = await generateAndStoreWords(pid, asset.id);
             if (r.ok && r.skipped) wordsHad++;
             else if (r.ok) wordsStored++;
-            else wordsPending++; // rendition likely not ready yet; webhook will retry
+            else wordsPending++;
           } catch (e) { wordsPending++; }
         }
       } catch (e) { errors++; }
     }
     const summary = { scanned, mp4Enabled, captionsStarted, captionsHad,
       wordsStored, wordsHad, wordsPending, skippedMusic, noAudio, errors };
-    console.log('[backfill-all]', JSON.stringify(summary));
-    res.json({ ok: true, ...summary,
-      note: 'wordsPending assets had mp4 just enabled; re-run after a few min once renditions finish (or rely on the static_renditions.ready webhook).' });
+    console.log('[backfill-all] DONE', JSON.stringify(summary));
+    _backfillStatus = { running: false, startedAt: _backfillStatus.startedAt,
+      finishedAt: new Date().toISOString(), progress: `${total}/${total}`, summary };
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[backfill-all] FAILED', e.message);
+    _backfillStatus = { ..._backfillStatus, running: false, finishedAt: new Date().toISOString(), summary: { error: e.message } };
   }
+}
+
+app.post('/api/transcripts/backfill-all', (req, res) => {
+  if (_backfillStatus.running) {
+    return res.json({ ok: true, alreadyRunning: true, progress: _backfillStatus.progress,
+      note: 'Backfill already in progress. Poll GET /api/transcripts/backfill-all/status.' });
+  }
+  _runBackfillAll(); // fire-and-forget
+  res.json({ ok: true, started: true,
+    note: 'Backfill running in background. Poll GET /api/transcripts/backfill-all/status for progress + summary.' });
 });
+
+app.get('/api/transcripts/backfill-all/status', (req, res) => res.json(_backfillStatus));
 
 app.post('/api/audio-transcripts/korby', async (req, res) => {
   try {
