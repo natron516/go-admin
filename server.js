@@ -413,10 +413,14 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     // below (renditions aren't ready at asset.ready time for long recordings,
     // which caused 404s + missing transcripts). Non-sermon spoken word still
     // tries words now (uploads usually already have a usable rendition).
+    // Enable mp4_support (standard) for EVERY non-music asset so a static
+    // audio.m4a rendition exists for Deepgram word-timing generation. Was
+    // sermon-only, which left audiobooks/other spoken word without follow-along
+    // word-sync. (Isaac, 6/29: transcript + timings by default for all non-music.)
     try {
-      if (isSermonAsset(event.data) && event.data?.mp4_support !== 'standard') {
+      if (shouldAutoTranscribe(event.data) && event.data?.mp4_support !== 'standard') {
         await mux('PUT', `/video/v1/assets/${event.data.id}/mp4-support`, { mp4_support: 'standard' });
-        console.log(`[webhook] Enabled mp4_support for sermon ${event.data.id} (asset.ready)`);
+        console.log(`[webhook] Enabled mp4_support for ${event.data.id} (asset.ready, non-music)`);
       }
     } catch (e) {
       console.error(`[webhook] mp4_support enable failed: ${e.message}`);
@@ -1310,6 +1314,74 @@ app.post('/api/audio-transcripts/generate', async (req, res) => {
     }
     console.log(`[audio-transcripts/generate match=${raw}] started=${started} already=${already} noAsset=${noAsset} failed=${failed}`);
     res.json({ match: raw, total: matched.length, started, already, noAsset, failed, detail });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// COMPREHENSIVE BACKFILL (Isaac, 6/29): for EVERY non-music Mux asset, ensure
+// transcript + word-timings exist by default. For each asset:
+//   1) enable mp4_support:standard (so a static audio.m4a rendition exists for
+//      Deepgram), 2) start Mux generate-subtitles if no text track yet,
+//   3) generate + store Deepgram word-level timings (idempotent).
+// Safe to re-run; skips music + assets without an audio track. Word-timing for
+// freshly-enabled mp4 assets may need a second run once renditions finish
+// (rendition prep is async) — the per-asset webhook also retries on
+// static_renditions.ready.
+// POST /api/transcripts/backfill-all   (adminOnly)
+app.post('/api/transcripts/backfill-all', async (req, res) => {
+  try {
+    let assets = [];
+    let cursor = null;
+    while (true) {
+      const data = await mux('GET', cursor
+        ? `/video/v1/assets?limit=100&order_direction=desc&cursor=${encodeURIComponent(cursor)}`
+        : '/video/v1/assets?limit=100&order_direction=desc');
+      if (data.data) assets.push(...data.data);
+      if (data.next_cursor) cursor = data.next_cursor; else break;
+    }
+    let scanned = 0, mp4Enabled = 0, captionsStarted = 0, captionsHad = 0,
+        wordsStored = 0, wordsHad = 0, wordsPending = 0, skippedMusic = 0,
+        noAudio = 0, errors = 0;
+    for (const asset of assets) {
+      scanned++;
+      try {
+        if (!shouldAutoTranscribe(asset)) { skippedMusic++; continue; }
+        const tracks = asset.tracks || [];
+        const audioTrack = tracks.find(t => t.type === 'audio');
+        if (!audioTrack) { noAudio++; continue; }
+        // 1) mp4_support so Deepgram has a static rendition.
+        if (asset.mp4_support !== 'standard') {
+          try { await mux('PUT', `/video/v1/assets/${asset.id}/mp4-support`, { mp4_support: 'standard' }); mp4Enabled++; }
+          catch (e) { /* non-fatal */ }
+        }
+        // 2) captions if no text track yet.
+        if (tracks.some(t => t.type === 'text')) { captionsHad++; }
+        else {
+          try {
+            await mux('POST', `/video/v1/assets/${asset.id}/tracks/${audioTrack.id}/generate-subtitles`, {
+              generated_subtitles: [{ language_code: 'en', name: 'English (generated)' }],
+            });
+            captionsStarted++;
+          } catch (e) { /* non-fatal */ }
+        }
+        // 3) Deepgram word-timings (idempotent; needs the static rendition).
+        const pid = asset.playback_ids?.[0]?.id;
+        if (DEEPGRAM_KEY && pid) {
+          try {
+            const r = await generateAndStoreWords(pid, asset.id);
+            if (r.ok && r.skipped) wordsHad++;
+            else if (r.ok) wordsStored++;
+            else wordsPending++; // rendition likely not ready yet; webhook will retry
+          } catch (e) { wordsPending++; }
+        }
+      } catch (e) { errors++; }
+    }
+    const summary = { scanned, mp4Enabled, captionsStarted, captionsHad,
+      wordsStored, wordsHad, wordsPending, skippedMusic, noAudio, errors };
+    console.log('[backfill-all]', JSON.stringify(summary));
+    res.json({ ok: true, ...summary,
+      note: 'wordsPending assets had mp4 just enabled; re-run after a few min once renditions finish (or rely on the static_renditions.ready webhook).' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
