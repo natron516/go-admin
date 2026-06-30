@@ -1337,8 +1337,10 @@ app.get('/api/sermons/search-transcripts', async (req, res) => {
         // FULL SENTENCE CONTEXT (Isaac, 6/29): VTT cues are short rolling
         // fragments, so expand around the match to the surrounding sentence by
         // walking neighboring cues out to sentence-ending punctuation (. ! ?).
-        const sentence = expandToSentence(cues, i, needle);
-        results.push({ playbackId: pid, title, date, start: c.start, sentence });
+        const exp = expandToSentence(cues, i, needle);
+        // Start at the BEGINNING of the matched sentence (Isaac, 6/29), not the
+        // cue where the word happens to land mid-sentence.
+        results.push({ playbackId: pid, title, date, start: exp.start, sentence: exp.text });
         if (results.length >= cap) break;
       }
       if (results.length >= cap) break;
@@ -1419,9 +1421,13 @@ function expandToSentence(cues, idx, needle) {
     joined += (joined && !/\s$/.test(joined) ? ' ' : '') + piece;
   }
   joined = joined.replace(/\s+/g, ' ').trim();
+  // Start time = first cue of the sentence so playback begins at the sentence start.
+  const sentenceStart = cues[lo]?.start ?? cues[idx]?.start ?? 0;
   // Safety: if expansion somehow lost the term, fall back to the raw cue.
-  if (!normForMatch(joined).includes(needle)) return (cues[idx]?.text || '').trim();
-  return joined;
+  if (!normForMatch(joined).includes(needle)) {
+    return { text: (cues[idx]?.text || '').trim(), start: cues[idx]?.start ?? 0 };
+  }
+  return { text: joined, start: sentenceStart };
 }
 
 app.get('/api/audio-transcript/:playbackId/locate', async (req, res) => {
