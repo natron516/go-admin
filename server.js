@@ -2827,10 +2827,20 @@ app.post('/api/assets/:id/clip', async (req, res) => {
 // Delete an asset
 app.delete('/api/assets/:id', adminOnly, async (req, res) => {
   try {
-    await fetch(`https://api.mux.com/video/v1/assets/${req.params.id}`, {
+    const r = await fetch(`https://api.mux.com/video/v1/assets/${req.params.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Basic ${MUX_AUTH}` },
     });
+    // Mux refuses some deletes (e.g. an asset still being recorded by an ACTIVE
+    // live stream). Surface the real reason instead of silently claiming ok.
+    if (!r.ok) {
+      let detail = `Mux returned ${r.status}`;
+      try {
+        const j = await r.json();
+        detail = j?.error?.messages?.join('; ') || j?.error?.message || detail;
+      } catch {}
+      return res.status(r.status === 400 ? 409 : r.status).json({ error: detail });
+    }
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

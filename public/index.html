@@ -4406,9 +4406,22 @@ function cancelDelete(id) {
 }
 async function deleteAsset(id) {
   const a = allAssets.find(x => x.id === id);
-  await fetch(`/api/assets/${id}`, { method:'DELETE' });
-  toast(`Deleted "${a?.meta?.title || id}"`);
-  loadAssets();
+  try {
+    const r = await fetch(`/api/assets/${id}`, { method:'DELETE' });
+    if (!r.ok) {
+      let msg = 'Delete failed';
+      try { msg = (await r.json()).error || msg; } catch {}
+      if (/live|active/i.test(msg)) msg = 'Can\'t delete: this clip\'s live stream is still active. Stop the stream first.';
+      toast(msg, true);
+      cancelDelete(id);
+      return;
+    }
+    toast(`Deleted "${a?.meta?.title || id}"`);
+    loadAssets();
+  } catch {
+    toast('Delete failed — network error', true);
+    cancelDelete(id);
+  }
 }
 
 // ── Live stream modal ─────────────────────────────────────
