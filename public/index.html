@@ -4043,7 +4043,7 @@ function renderLive(streams) {
     let currentCat = '';
     try { const pt = JSON.parse(s.passthrough||''); currentCat = pt.category||''; } catch { currentCat = s.passthrough||''; }
     return `<div class="stream-card ${isLive?'live':''}">
-      <div class="stream-title">${escHtml(title)}</div>
+      <div class="stream-title" id="st-title-${s.id}">${escHtml(title)} <button class="copy-btn" title="Rename" onclick="editStreamTitle('${s.id}','${escAttr(title)}')">✏️</button></div>
       <span class="stream-status status-${s.status}">${isLive?'🔴 LIVE':s.status==='idle'?'⚪ IDLE':'⛔ DISABLED'}</span>
       <div class="key-row"><div class="key-label">Category</div><div class="key-box"><select class="at-select" onchange="updateStreamCat('${s.id}',this.value)">${streamCatOptions(currentCat)}</select></div></div>
       <div class="key-row"><div class="key-label">RTMP Server</div><div class="key-box"><span class="key-value">${RTMP_SERVER}</span><button class="copy-btn" onclick="copyText('${RTMP_SERVER}',this)">📋</button></div></div>
@@ -4055,6 +4055,16 @@ function renderLive(streams) {
 function streamCatOptions(selected) {
   const opts = [{value:'',label:'None'}, ...CATEGORIES];
   return opts.map(c => `<option value="${c.value}"${c.value===selected?' selected':''}>${c.label}</option>`).join('');
+}
+
+async function editStreamTitle(id, current) {
+  const t = prompt('Stream name:', current);
+  if (t === null || !t.trim() || t.trim() === current) return;
+  try {
+    const r = await fetch(`/api/live-streams/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: t.trim() }) });
+    if (!r.ok) throw new Error();
+    toast('Renamed!'); loadLive();
+  } catch { toast('Rename failed', true); }
 }
 
 async function updateStreamCat(id, category) {

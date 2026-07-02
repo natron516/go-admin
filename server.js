@@ -2910,13 +2910,16 @@ app.post('/api/live-streams', async (req, res) => {
 // Update live stream passthrough (category) — preserves title and other JSON keys
 app.patch('/api/live-streams/:id', async (req, res) => {
   try {
-    const { category } = req.body;
+    const { category, title } = req.body;
     const current = await mux('GET', `/video/v1/live-streams/${req.params.id}`);
     const existing = parsePassthrough(current.data?.passthrough);
-    existing.category = category || '';
-    const data = await mux('PATCH', `/video/v1/live-streams/${req.params.id}`, {
-      passthrough: serializePassthrough(existing),
-    });
+    if (category !== undefined) existing.category = category || '';
+    // Title lives in BOTH passthrough JSON (carries to the VOD asset) and
+    // meta.title (shows in dashboards). Keep them in sync. (Nate, 7/01)
+    if (title !== undefined && title.trim()) existing.title = title.trim();
+    const patch = { passthrough: serializePassthrough(existing) };
+    if (title !== undefined && title.trim()) patch.meta = { title: title.trim() };
+    const data = await mux('PATCH', `/video/v1/live-streams/${req.params.id}`, patch);
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
