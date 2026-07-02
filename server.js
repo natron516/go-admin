@@ -836,10 +836,15 @@ app.patch('/api/assets/:id', async (req, res) => {
     const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
     const existing = parsePassthrough(current.data?.passthrough);
     existing.category = category || '';
-    // Never clobber a real title with 'Untitled'. Only update meta.title when a
+    // Never clobber a real title with 'Untitled'. Only update the title when a
     // non-empty title is explicitly provided; otherwise keep the current one.
-    const curTitle = current.data?.meta?.title;
+    // Mux DROPS meta.title on assets a few seconds after PATCH (observed 7/01:
+    // meta comes back null), so the title RESETS on refresh. Passthrough JSON
+    // persists reliably, so store the title there (and mirror to meta for the
+    // Mux dashboard). Reads prefer pt.title. (Nate, 7/01)
+    const curTitle = existing.title || current.data?.meta?.title;
     const newTitle = (title && title.trim() && title.trim() !== 'Untitled') ? title.trim() : (curTitle || '');
+    if (newTitle) existing.title = newTitle; else delete existing.title;
     const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
       meta: { title: newTitle },
       passthrough: serializePassthrough(existing),

@@ -4099,8 +4099,8 @@ function sortAssets(assets) {
   return [...assets].sort((a, b) => {
     let av, bv;
     if (field === 'title') {
-      av = (a.meta?.title || '').toLowerCase();
-      bv = (b.meta?.title || '').toLowerCase();
+      av = (parsePassthrough(a.passthrough).title || a.meta?.title || '').toLowerCase();
+      bv = (parsePassthrough(b.passthrough).title || b.meta?.title || '').toLowerCase();
       return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
     } else if (field === 'category') {
       const getCat = x => { try { return JSON.parse(x.passthrough)?.category || ''; } catch { return x.passthrough || ''; } };
@@ -4168,9 +4168,9 @@ function filterAssets() {
   const exBtn = document.getElementById('exclude-btn');
   if (exBtn) exBtn.textContent = excluded.length ? `🚫 Exclude (${excluded.length}) ▾` : '🚫 Exclude ▾';
   const filtered = allAssets.filter(a => {
-    const title   = (a.meta?.title || '').toLowerCase();
-    const pt      = (a.passthrough || '').trim().toLowerCase();
     const ptData  = parsePassthrough(a.passthrough);
+    const title   = (ptData.title || a.meta?.title || '').toLowerCase();
+    const pt      = (a.passthrough || '').trim().toLowerCase();
     const assetCat = (ptData.category || a.passthrough || '').trim().toLowerCase();
     if (hideSeries && !assetCat) return false;
     // Multi-exclude: hide any checked categories ('uncategorized' = empty category)
@@ -4211,10 +4211,10 @@ function renderAssets(assets) {
 
 function assetRowHtml(a) {
   const edits       = assetEdits[a.id] || {};
-  const title       = edits.title ?? (a.meta?.title || '');
+  const ptData      = parsePassthrough(a.passthrough);
+  const title       = edits.title ?? (ptData.title || a.meta?.title || '');
   const pid         = a.playback_ids?.[0]?.id;
   const hasVideo    = (a.tracks || []).some(t => t.type === 'video');
-  const ptData      = parsePassthrough(a.passthrough);
   const rawCat      = ptData.category || (!a.passthrough?.startsWith('{') ? a.passthrough : '') || '';
   const category    = edits.category ?? rawCat.trim();
   const customThumb = ptData.thumbnail || null;
@@ -4305,7 +4305,7 @@ function setEdit(id, key, val) {
     const a = allAssets.find(x => x.id === id);
     const pt = parsePassthrough(a?.passthrough);
     const cat = pt.category || (!a?.passthrough?.startsWith('{') ? a?.passthrough : '') || '';
-    assetEdits[id] = { title: a?.meta?.title || '', category: cat.trim() };
+    assetEdits[id] = { title: pt.title || a?.meta?.title || '', category: cat.trim() };
   }
   assetEdits[id][key] = val;
   const row = document.getElementById('arow-'+id);
@@ -4354,6 +4354,7 @@ async function saveAsset(id) {
       a.meta.title = edits.title;
       const pt = parsePassthrough(a.passthrough);
       pt.category = edits.category || '';
+      if (edits.title && edits.title.trim()) pt.title = edits.title.trim();
       a.passthrough = JSON.stringify(pt);
     }
     if (row) { row.classList.remove('saving'); row.classList.add('saved'); }
