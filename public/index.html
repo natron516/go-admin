@@ -1739,6 +1739,7 @@ tr.dirty .at-save { display: inline-flex !important; }
               <th>Version</th>
               <th class="sort-th" id="th-minutes" onclick="setUserSort('minutes')">Video Min <span class="sort-arrow">↕</span></th>
               <th class="sort-th" id="th-appMinutes" onclick="setUserSort('appMinutes')">App Time <span class="sort-arrow">↕</span></th>
+              <th class="sort-th" id="th-musicMinutes" onclick="setUserSort('musicMinutes')">Music Time <span class="sort-arrow">↕</span></th>
               <th class="sort-th" id="th-joined" onclick="setUserSort('joined')">Joined <span class="sort-arrow">↕</span></th>
               <th class="sort-th" id="th-lastSignIn" onclick="setUserSort('lastSignIn')">Last Sign In <span class="sort-arrow">↕</span></th>
               <th>Status</th>
@@ -1748,7 +1749,7 @@ tr.dirty .at-save { display: inline-flex !important; }
               <th style="text-align:center">Editor</th>
             </tr></thead>
             <tbody id="users-tbody">
-              <tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>
+              <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>
             </tbody>
           </table>
         </div>
@@ -5284,6 +5285,9 @@ function sortedUsers(users) {
     } else if (field === 'appMinutes') {
       av = a.appMinutes || 0;
       bv = b.appMinutes || 0;
+    } else if (field === 'musicMinutes') {
+      av = a.musicMinutes || 0;
+      bv = b.musicMinutes || 0;
     } else {
       av = a.lastSignIn ? new Date(a.lastSignIn).getTime() : 0;
       bv = b.lastSignIn ? new Date(b.lastSignIn).getTime() : 0;
@@ -5302,7 +5306,7 @@ async function loadUsers() {
     if (st) st.textContent = d.pin ? `Current: ${d.pin}` : 'No PIN set';
   } catch {}
 
-  document.getElementById('users-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
+  document.getElementById('users-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Loading…</td></tr>';
   try {
     const r = await fetch('/api/users');
     const d = await r.json();
@@ -5319,7 +5323,7 @@ async function loadUsers() {
     updateSortHeaders();
     renderUsers(sortedUsers(allUsers));
   } catch(e) {
-    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="10" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="11" style="color:var(--red);padding:16px">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -5334,7 +5338,7 @@ function filterUsers(q) {
 function renderUsers(users) {
   const cardsEl = document.getElementById('users-cards');
   if (!users.length) {
-    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
+    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
     if (cardsEl) cardsEl.innerHTML = '<p style="text-align:center;padding:32px;color:var(--muted)">No users found</p>';
     return;
   }
@@ -5370,6 +5374,7 @@ function renderUsers(users) {
       <td style="font-size:12px;color:var(--muted)">${u.appVersion || '—'}</td>
       <td style="font-size:13px;color:var(--text)">${u.minutesWatched ? u.minutesWatched + ' min' : '—'}</td>
       <td style="font-size:13px;color:var(--text)">${u.appMinutes ? (u.appMinutes >= 60 ? Math.floor(u.appMinutes/60) + 'h ' + (u.appMinutes%60) + 'm' : u.appMinutes + ' min') + ' <span style="font-size:11px;color:var(--muted)">(' + u.sessionCount + ' sessions)</span>' : '—'}</td>
+      <td style="font-size:13px;color:var(--text)">${u.musicMinutes ? (u.musicMinutes >= 60 ? Math.floor(u.musicMinutes/60) + 'h ' + (u.musicMinutes%60) + 'm' : u.musicMinutes + ' min') : '—'}</td>
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
       <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}${u.pastorElder ? '<span style="font-size:11px;font-weight:700;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:99px;padding:2px 8px;margin-left:4px">⛪ Pastor/Elder</span>' : ''}${approveBtn ? '<div style="margin-top:4px">'+approveBtn+'</div>' : ''}</td>
@@ -5380,7 +5385,7 @@ function renderUsers(users) {
     </tr>`;
   };
 
-  const sectionHeaderRow = (label, count) => `<tr><td colspan="13" style="background:rgba(168,85,247,.10);color:#c084fc;font-weight:700;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:8px 12px;border-top:1px solid rgba(168,85,247,.25)">${label} (${count})</td></tr>`;
+  const sectionHeaderRow = (label, count) => `<tr><td colspan="14" style="background:rgba(168,85,247,.10);color:#c084fc;font-weight:700;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:8px 12px;border-top:1px solid rgba(168,85,247,.25)">${label} (${count})</td></tr>`;
 
   let tbodyHtml = '';
   if (privateUsers.length) {
@@ -5422,6 +5427,7 @@ function renderUsers(users) {
         : '';
       const watchInfo = u.minutesWatched ? `<span>🎬 ${u.minutesWatched} min</span>` : '';
       const appInfo = u.appMinutes ? `<span>📱 ${u.appMinutes >= 60 ? Math.floor(u.appMinutes/60) + 'h ' + (u.appMinutes%60) + 'm' : u.appMinutes + 'm'}</span>` : '';
+      const musicInfo = u.musicMinutes ? `<span>🎵 ${u.musicMinutes >= 60 ? Math.floor(u.musicMinutes/60) + 'h ' + (u.musicMinutes%60) + 'm' : u.musicMinutes + 'm'}</span>` : '';
       const joined = u.createdAt ? `<span>Joined ${fmtDt(u.createdAt)}</span>` : '';
       return `<div class="user-card ${u.disabled?'blocked':''}">
         <div class="user-card-header">
@@ -5436,7 +5442,7 @@ function renderUsers(users) {
           <span>${providerLabel}</span>
           ${platformBadges}
           ${u.appVersion ? `<span>v${u.appVersion}</span>` : ''}
-          ${watchInfo}${appInfo}
+          ${watchInfo}${appInfo}${musicInfo}
           ${joined}
         </div>
         <div class="user-card-actions">

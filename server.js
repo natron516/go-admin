@@ -3393,6 +3393,23 @@ app.get('/api/users', async (req, res) => {
       console.warn('Private access lookup failed:', e.message);
     }
 
+    // Look up music-listening time (Apple Music / MusicKit) per user.
+    // The app logs cumulative seconds to users/{uid}/stats/music.musicSeconds
+    // (Mux doesn't see MusicKit playback). (Misha, 7/02)
+    const musicMap = {};
+    try {
+      const musicSnap = await admin.firestore().collectionGroup('stats')
+        .where('musicSeconds', '>', 0).get();
+      musicSnap.forEach(doc => {
+        if (doc.id !== 'music') return;
+        // Path: users/{uid}/stats/music → parent.parent is the user doc.
+        const uid = doc.ref.parent.parent?.id;
+        if (uid) musicMap[uid] = doc.data().musicSeconds || 0;
+      });
+    } catch (e) {
+      console.warn('Music time lookup failed:', e.message);
+    }
+
     users.forEach(u => {
       u.platforms = platformsMap[u.uid] ? [...platformsMap[u.uid]] : [];
       u.minutesWatched = watchMap[u.uid] || 0;
@@ -3402,6 +3419,7 @@ app.get('/api/users', async (req, res) => {
       u.appVersion = appVersionMap[u.uid] || null;
       u.appMinutes = Math.round((sessionTimeMap[u.uid] || 0) / 60);
       u.sessionCount = sessionCountMap[u.uid] || 0;
+      u.musicMinutes = Math.round((musicMap[u.uid] || 0) / 60);
     });
 
     // Sort newest first
