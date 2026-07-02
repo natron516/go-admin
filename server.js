@@ -732,6 +732,17 @@ async function fetchAllMuxAssets() {
 // Keep the cache warm so no user pays the cold-pagination cost.
 setInterval(() => { _refreshMuxAssetsInBackground(); }, ASSETS_CACHE_MS).unref?.();
 
+// Merge fresh fields into the cached copy of one asset after a Mux mutation, so
+// the /api/assets list reflects the change IMMEDIATELY instead of showing the
+// stale cached title/passthrough for up to 5 minutes (the cache TTL). Without
+// this, a rename "looks broken": Mux saved it, but the list kept the old name.
+function _updateCachedAsset(id, fresh) {
+  if (!_assetsCache.data || !id || !fresh) return;
+  const i = _assetsCache.data.findIndex(a => a.id === id);
+  if (i === -1) return;
+  _assetsCache.data[i] = { ..._assetsCache.data[i], ...fresh };
+}
+
 // Helper: read a Firestore collection ordered by sortOrder (falls back to
 // unordered if the composite index is missing). Returns [] on error so one slow
 // or failing collection can't break the aggregated /api/home response.
@@ -849,6 +860,7 @@ app.patch('/api/assets/:id', async (req, res) => {
       meta: { title: newTitle },
       passthrough: serializePassthrough(existing),
     });
+    _updateCachedAsset(req.params.id, data.data);
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -869,6 +881,7 @@ app.patch('/api/assets/:id/thumbnail', async (req, res) => {
     const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
       passthrough: serializePassthrough(pt),
     });
+    _updateCachedAsset(req.params.id, data.data);
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -890,6 +903,7 @@ app.patch('/api/assets/:id/start-offset', async (req, res) => {
     const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
       passthrough: serializePassthrough(pt),
     });
+    _updateCachedAsset(req.params.id, data.data);
     res.json({ ok: true, startOffset: secs, asset: data.data });
   } catch (e) {
     res.status(500).json({ error: e.message });
