@@ -241,8 +241,15 @@ function render() {
       if (s.titlePos === 'overlay') {
         const bar = document.createElement('div');
         bar.className = 'titlebar';
-        bar.style.padding = `${s.titleVPad}px ${s.titleHPad}px`;
         const textH = s.titleSize * 2.4 + s.titleVPad * 2;
+        // Bar element must be tall enough to CONTAIN the fade zone, otherwise
+        // the fade renders outside the element and is invisible.
+        bar.style.height = (textH + s.fadeHeight) + 'px';
+        bar.style.display = 'flex';
+        bar.style.flexDirection = 'column';
+        bar.style.justifyContent = 'flex-end';
+        bar.style.boxSizing = 'border-box';
+        bar.style.padding = `0 ${s.titleHPad}px ${s.titleVPad}px`;
         bar.style.background = `linear-gradient(to top, rgba(${r},${g},${b},${op}) ${textH}px, rgba(${r},${g},${b},0) ${textH + s.fadeHeight}px)`;
         const txt = document.createElement('div');
         txt.className = 'txt';
@@ -284,11 +291,33 @@ $('copyBtn').addEventListener('click', () => {
 - Continue bar: ${s.continueOn ? 'on, height ' + s.continueH : 'off'}; bottom padding ${s.bottomPad}
 
 JSON: ${JSON.stringify(s)}`;
-  navigator.clipboard.writeText(summary).then(() => {
+  const ok = () => {
     $('copied').textContent = '✓ Copied to clipboard';
     setTimeout(() => $('copied').textContent = '', 2000);
-  });
+  };
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = summary; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove(); ok();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(summary).then(ok).catch(fallback);
+  } else fallback();
 });
+
+// Persist state in the URL hash so tweaks survive reload and are shareable.
+function saveHash() {
+  try { location.hash = btoa(JSON.stringify(getState())); } catch (e) {}
+}
+function loadHash() {
+  try {
+    if (location.hash.length > 1) { setState(JSON.parse(atob(location.hash.slice(1)))); }
+  } catch (e) {}
+}
+document.querySelectorAll('#controls input, #controls select').forEach(el => {
+  el.addEventListener('input', saveHash);
+});
+loadHash();
 render();
 </script>
 </body>
