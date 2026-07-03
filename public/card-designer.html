@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Featured Card Designer — GO Media</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1c1c1e; color: #eee; display: flex; min-height: 100vh;
+  }
+  #controls {
+    width: 340px; min-width: 300px; padding: 18px 20px 40px; overflow-y: auto;
+    background: #232326; border-right: 1px solid #333; height: 100vh; position: sticky; top: 0;
+  }
+  #controls h1 { font-size: 17px; margin: 0 0 4px; }
+  #controls .sub { font-size: 12px; color: #999; margin-bottom: 14px; }
+  fieldset { border: 1px solid #3a3a3d; border-radius: 8px; margin: 0 0 14px; padding: 10px 12px 12px; }
+  legend { font-size: 12px; font-weight: 700; color: #f0b429; padding: 0 6px; text-transform: uppercase; letter-spacing: .5px; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 12.5px; }
+  .row label { flex: 1; color: #ccc; }
+  .row input[type=range] { flex: 1.3; accent-color: #f0b429; }
+  .row .val { width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: #fff; font-size: 12px; }
+  .row select, .row input[type=color] { background: #2c2c2e; color: #fff; border: 1px solid #444; border-radius: 5px; padding: 3px 6px; font-size: 12px; }
+  .row input[type=color] { padding: 0; width: 40px; height: 24px; }
+  .row input[type=checkbox] { accent-color: #f0b429; transform: scale(1.15); }
+  button.btn {
+    width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+    background: #f0b429; color: #1c1c1e; cursor: pointer; margin-top: 4px;
+  }
+  button.btn.secondary { background: #3a3a3d; color: #eee; margin-top: 8px; }
+  button.btn:active { opacity: .8; }
+  #copied { text-align: center; font-size: 12px; color: #6fdc8c; height: 16px; margin-top: 6px; }
+  #previewWrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  /* Phone frame */
+  #phone {
+    width: 393px; height: 852px; background: #121212; border-radius: 42px;
+    border: 6px solid #000; box-shadow: 0 20px 60px rgba(0,0,0,.6);
+    overflow: hidden; display: flex; flex-direction: column; position: relative;
+  }
+  #banner {
+    height: 92px; flex-shrink: 0; background: linear-gradient(135deg,#2b2b2b,#1a1a1a);
+    display: flex; align-items: flex-end; padding: 0 16px 10px; border-bottom: 1px solid #222;
+  }
+  #banner .logo { font-weight: 800; font-size: 22px; color: #fff; letter-spacing: .5px; }
+  #banner .logo span { color: #f0b429; }
+  #continueBar {
+    flex-shrink: 0; background: #1e1e1e; display: flex; align-items: center; gap: 12px; padding: 0 16px;
+    border-bottom: 1px solid #262626;
+  }
+  #continueBar img { width: 64px; height: 40px; object-fit: cover; border-radius: 6px; }
+  #continueBar .ct { flex: 1; min-width: 0; }
+  #continueBar .ct .t1 { font-size: 12px; color: #aaa; }
+  #continueBar .ct .t2 { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #continueBar .play { width: 34px; height: 34px; border-radius: 50%; background: #f0b429; color: #121212; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  #sections { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .section-header { display: flex; align-items: center; gap: 8px; color: #fff; font-weight: 700; }
+  .section-header .ico { font-size: 0.9em; }
+  .cardrow { display: flex; overflow: hidden; }
+  .card { position: relative; flex-shrink: 0; overflow: hidden; background: #222; }
+  .card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .titlebar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; }
+  .card .titlebar .txt {
+    width: 100%; font-weight: 700; color: #fff;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    line-height: 1.2;
+  }
+  .card-below-title {
+    font-weight: 700; color: #fff; line-height: 1.2; margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  #tabbar {
+    height: 74px; flex-shrink: 0; background: #181818; border-top: 1px solid #262626;
+    display: flex; align-items: flex-start; padding-top: 8px;
+  }
+  #tabbar .tab { flex: 1; text-align: center; font-size: 10px; color: #777; }
+  #tabbar .tab .i { font-size: 20px; display: block; margin-bottom: 2px; }
+  #tabbar .tab.active { color: #f0b429; }
+  @media (max-width: 860px) { body { flex-direction: column; } #controls { width: 100%; height: auto; position: static; } }
+</style>
+</head>
+<body>
+<div id="controls">
+  <h1>Featured Card Designer</h1>
+  <div class="sub">Tweak values live, then hit “Copy values” and paste in chat.</div>
+
+  <fieldset><legend>Card</legend>
+    <div class="row"><label>Aspect ratio (w:h)</label><input type="range" id="aspect" min="1" max="2.2" step="0.01" value="1.3333"><span class="val" id="aspect_v"></span></div>
+    <div class="row"><label>Card height scale</label><input type="range" id="cardScale" min="0.5" max="1.5" step="0.01" value="1"><span class="val" id="cardScale_v"></span></div>
+    <div class="row"><label>Corner radius</label><input type="range" id="radius" min="0" max="32" step="1" value="8"><span class="val" id="radius_v"></span></div>
+    <div class="row"><label>Card spacing</label><input type="range" id="cardSpacing" min="0" max="32" step="1" value="17"><span class="val" id="cardSpacing_v"></span></div>
+    <div class="row"><label>Page side padding</label><input type="range" id="pagePad" min="0" max="32" step="1" value="16"><span class="val" id="pagePad_v"></span></div>
+  </fieldset>
+
+  <fieldset><legend>Section headers</legend>
+    <div class="row"><label>Title size</label><input type="range" id="headerSize" min="12" max="32" step="1" value="21"><span class="val" id="headerSize_v"></span></div>
+    <div class="row"><label>Section top padding</label><input type="range" id="sectionPad" min="0" max="40" step="1" value="18"><span class="val" id="sectionPad_v"></span></div>
+    <div class="row"><label>Header bottom padding</label><input type="range" id="headerBottomPad" min="0" max="20" step="1" value="4"><span class="val" id="headerBottomPad_v"></span></div>
+    <div class="row"><label>Header ↔ cards spacing</label><input type="range" id="headerCardGap" min="0" max="24" step="1" value="8"><span class="val" id="headerCardGap_v"></span></div>
+  </fieldset>
+
+  <fieldset><legend>Card titles</legend>
+    <div class="row"><label>Position</label>
+      <select id="titlePos"><option value="overlay" selected>Overlay on card</option><option value="below">Below card</option></select></div>
+    <div class="row"><label>Font size</label><input type="range" id="titleSize" min="9" max="20" step="0.5" value="13"><span class="val" id="titleSize_v"></span></div>
+    <div class="row"><label>Alignment</label>
+      <select id="titleAlign"><option value="center" selected>Center</option><option value="left">Left</option></select></div>
+    <div class="row"><label>Horizontal padding</label><input type="range" id="titleHPad" min="0" max="24" step="1" value="8"><span class="val" id="titleHPad_v"></span></div>
+    <div class="row"><label>Vertical padding</label><input type="range" id="titleVPad" min="0" max="24" step="1" value="8"><span class="val" id="titleVPad_v"></span></div>
+    <div class="row"><label>Bar color</label><input type="color" id="barColor" value="#141414"></div>
+    <div class="row"><label>Bar opacity</label><input type="range" id="barOpacity" min="0" max="100" step="1" value="80"><span class="val" id="barOpacity_v"></span></div>
+    <div class="row"><label>Fade height</label><input type="range" id="fadeHeight" min="0" max="40" step="1" value="12"><span class="val" id="fadeHeight_v"></span></div>
+  </fieldset>
+
+  <fieldset><legend>Layout</legend>
+    <div class="row"><label>Continue-playing bar</label><input type="checkbox" id="continueOn" checked></div>
+    <div class="row"><label>Continue bar height</label><input type="range" id="continueH" min="40" max="100" step="1" value="64"><span class="val" id="continueH_v"></span></div>
+    <div class="row"><label>Bottom padding</label><input type="range" id="bottomPad" min="0" max="40" step="1" value="18"><span class="val" id="bottomPad_v"></span></div>
+  </fieldset>
+
+  <button class="btn" id="copyBtn">📋 Copy values</button>
+  <button class="btn secondary" id="resetBtn">↩︎ Reset to app defaults</button>
+  <div id="copied"></div>
+</div>
+
+<div id="previewWrap">
+  <div id="phone">
+    <div id="banner"><div class="logo">GO <span>Media</span></div></div>
+    <div id="continueBar">
+      <img src="https://picsum.photos/seed/continue1/128/80" alt="">
+      <div class="ct"><div class="t1">Continue playing</div><div class="t2">Sunday Sermon — The Good Shepherd</div></div>
+      <div class="play">▶</div>
+    </div>
+    <div id="sections"></div>
+    <div id="tabbar">
+      <div class="tab active"><span class="i">★</span>Featured</div>
+      <div class="tab"><span class="i">▤</span>Browse</div>
+      <div class="tab"><span class="i">♪</span>Music</div>
+      <div class="tab"><span class="i">⚙</span>Settings</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULTS = {
+  aspect: 1.3333, cardScale: 1, radius: 8, cardSpacing: 17, pagePad: 16,
+  headerSize: 21, sectionPad: 18, headerBottomPad: 4, headerCardGap: 8,
+  titlePos: 'overlay', titleSize: 13, titleAlign: 'center', titleHPad: 8, titleVPad: 8,
+  barColor: '#141414', barOpacity: 80, fadeHeight: 12,
+  continueOn: true, continueH: 64, bottomPad: 18,
+};
+const SECTIONS = [
+  { icon: '🎬', title: 'Latest Sermons', seed: 'sermon' },
+  { icon: '📖', title: 'Bible Studies', seed: 'study' },
+  { icon: '🎵', title: 'Worship Music', seed: 'music' },
+];
+const TITLES = [
+  'The Good Shepherd', 'Walking in Faith Through Trials', 'Grace Abounds',
+  'Psalms of Praise', 'Living Water', 'A Heart of Worship',
+];
+
+function $(id) { return document.getElementById(id); }
+function getState() {
+  const s = {};
+  for (const k of Object.keys(DEFAULTS)) {
+    const el = $(k);
+    if (el.type === 'checkbox') s[k] = el.checked;
+    else if (el.tagName === 'SELECT' || el.type === 'color') s[k] = el.value;
+    else s[k] = parseFloat(el.value);
+  }
+  return s;
+}
+function setState(s) {
+  for (const k of Object.keys(s)) {
+    const el = $(k);
+    if (!el) continue;
+    if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k];
+  }
+}
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function render() {
+  const s = getState();
+  // labels
+  const fmt = {
+    aspect: v => v.toFixed(2), cardScale: v => v.toFixed(2), titleSize: v => v + 'pt',
+    headerSize: v => v + 'pt', barOpacity: v => v + '%',
+  };
+  for (const k of Object.keys(DEFAULTS)) {
+    const lv = $(k + '_v');
+    if (lv) lv.textContent = (fmt[k] ? fmt[k](s[k]) : s[k]);
+  }
+  $('continueBar').style.display = s.continueOn ? 'flex' : 'none';
+  $('continueBar').style.height = s.continueH + 'px';
+
+  const phoneH = 852, bannerH = 92, tabH = 74;
+  const avail = phoneH - bannerH - tabH - (s.continueOn ? s.continueH : 0);
+  const perSectionOverhead = s.sectionPad + s.headerSize * 1.5 + s.headerBottomPad + s.headerCardGap;
+  let cardH = (avail - s.bottomPad - 3 * perSectionOverhead) / 3;
+  cardH = Math.max(140 * s.cardScale, cardH * s.cardScale);
+  if (s.titlePos === 'below') cardH -= (s.titleSize * 2.4 + 4); // leave room for title below
+  const cardW = cardH * s.aspect;
+
+  const [r, g, b] = hexToRgb(s.barColor);
+  const op = s.barOpacity / 100;
+
+  const wrap = $('sections');
+  wrap.innerHTML = '';
+  SECTIONS.forEach((sec, si) => {
+    const secEl = document.createElement('div');
+    secEl.style.paddingTop = s.sectionPad + 'px';
+    const h = document.createElement('div');
+    h.className = 'section-header';
+    h.style.fontSize = s.headerSize + 'px';
+    h.style.padding = `0 ${s.pagePad}px ${s.headerBottomPad}px`;
+    h.innerHTML = `<span class="ico">${sec.icon}</span><span>${sec.title}</span>`;
+    secEl.appendChild(h);
+    const row = document.createElement('div');
+    row.className = 'cardrow';
+    row.style.gap = s.cardSpacing + 'px';
+    row.style.padding = `${s.headerCardGap}px ${s.pagePad}px 0`;
+    for (let i = 0; i < 4; i++) {
+      const holder = document.createElement('div');
+      holder.style.flexShrink = '0';
+      holder.style.width = cardW + 'px';
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.width = cardW + 'px';
+      card.style.height = cardH + 'px';
+      card.style.borderRadius = s.radius + 'px';
+      const img = document.createElement('img');
+      img.src = `https://picsum.photos/seed/${sec.seed}${i}/400/300`;
+      img.alt = '';
+      card.appendChild(img);
+      const titleText = TITLES[(si * 2 + i) % TITLES.length];
+      if (s.titlePos === 'overlay') {
+        const bar = document.createElement('div');
+        bar.className = 'titlebar';
+        bar.style.padding = `${s.titleVPad}px ${s.titleHPad}px`;
+        const textH = s.titleSize * 2.4 + s.titleVPad * 2;
+        bar.style.background = `linear-gradient(to top, rgba(${r},${g},${b},${op}) ${textH}px, rgba(${r},${g},${b},0) ${textH + s.fadeHeight}px)`;
+        const txt = document.createElement('div');
+        txt.className = 'txt';
+        txt.style.fontSize = s.titleSize + 'px';
+        txt.style.textAlign = s.titleAlign;
+        txt.textContent = titleText;
+        bar.appendChild(txt);
+        card.appendChild(bar);
+        holder.appendChild(card);
+      } else {
+        holder.appendChild(card);
+        const below = document.createElement('div');
+        below.className = 'card-below-title';
+        below.style.fontSize = s.titleSize + 'px';
+        below.style.textAlign = s.titleAlign;
+        below.style.padding = `0 ${s.titleHPad}px`;
+        below.textContent = titleText;
+        holder.appendChild(below);
+      }
+      row.appendChild(holder);
+    }
+    secEl.appendChild(row);
+    wrap.appendChild(secEl);
+  });
+}
+
+document.querySelectorAll('#controls input, #controls select').forEach(el => {
+  el.addEventListener('input', render);
+});
+$('resetBtn').addEventListener('click', () => { setState(DEFAULTS); render(); });
+$('copyBtn').addEventListener('click', () => {
+  const s = getState();
+  const summary =
+`Featured Card Design values:
+- Card: aspect ${s.aspect.toFixed(2)}:1, height scale ${s.cardScale.toFixed(2)}, corner radius ${s.radius}, spacing ${s.cardSpacing}, page padding ${s.pagePad}
+- Section header: ${s.headerSize}pt bold, top pad ${s.sectionPad}, bottom pad ${s.headerBottomPad}, header↔cards gap ${s.headerCardGap}
+- Title: ${s.titleSize}pt, ${s.titleAlign}, ${s.titlePos}, h-pad ${s.titleHPad}, v-pad ${s.titleVPad}
+- Title bar: color ${s.barColor} @ ${s.barOpacity}% opacity, fade height ${s.fadeHeight}
+- Continue bar: ${s.continueOn ? 'on, height ' + s.continueH : 'off'}; bottom padding ${s.bottomPad}
+
+JSON: ${JSON.stringify(s)}`;
+  navigator.clipboard.writeText(summary).then(() => {
+    $('copied').textContent = '✓ Copied to clipboard';
+    setTimeout(() => $('copied').textContent = '', 2000);
+  });
+});
+render();
+</script>
+</body>
+</html>
