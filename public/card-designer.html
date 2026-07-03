@@ -112,6 +112,9 @@
     <div class="row"><label>Bar color</label><input type="color" id="barColor" value="#141414"></div>
     <div class="row"><label>Bar opacity</label><input type="range" id="barOpacity" min="0" max="100" step="1" value="80"><span class="val" id="barOpacity_v"></span></div>
     <div class="row"><label>Fade height</label><input type="range" id="fadeHeight" min="0" max="40" step="1" value="12"><span class="val" id="fadeHeight_v"></span></div>
+    <div class="row"><label>Bar height (0 = auto/text)</label><input type="range" id="barH" min="0" max="120" step="1" value="0"><span class="val" id="barH_v"></span></div>
+    <div class="row"><label>Text vertical align</label>
+      <select id="titleVAlign"><option value="bottom" selected>Bottom</option><option value="center">Center</option><option value="top">Top</option></select></div>
   </fieldset>
 
   <fieldset><legend>Layout</legend>
@@ -148,7 +151,7 @@ const DEFAULTS = {
   aspect: 1.3333, cardScale: 1, radius: 8, cardSpacing: 17, pagePad: 16,
   headerSize: 21, sectionPad: 18, headerBottomPad: 4, headerCardGap: 8,
   titlePos: 'overlay', titleSize: 13, titleAlign: 'center', titleHPad: 8, titleVPad: 8,
-  barColor: '#141414', barOpacity: 80, fadeHeight: 12,
+  barColor: '#141414', barOpacity: 80, fadeHeight: 12, barH: 0, titleVAlign: 'bottom',
   continueOn: true, continueH: 64, bottomPad: 18,
 };
 const SECTIONS = [
@@ -241,16 +244,21 @@ function render() {
       if (s.titlePos === 'overlay') {
         const bar = document.createElement('div');
         bar.className = 'titlebar';
-        const textH = s.titleSize * 2.4 + s.titleVPad * 2;
+        // Solid region: auto (text height) or manual override via Bar height.
+        const autoH = s.titleSize * 2.4 + s.titleVPad * 2;
+        const solidH = s.barH > 0 ? s.barH : autoH;
         // Bar element must be tall enough to CONTAIN the fade zone, otherwise
         // the fade renders outside the element and is invisible.
-        bar.style.height = (textH + s.fadeHeight) + 'px';
+        bar.style.height = (solidH + s.fadeHeight) + 'px';
         bar.style.display = 'flex';
         bar.style.flexDirection = 'column';
-        bar.style.justifyContent = 'flex-end';
+        const vAlignMap = { bottom: 'flex-end', center: 'center', top: 'flex-start' };
+        bar.style.justifyContent = vAlignMap[s.titleVAlign] || 'flex-end';
         bar.style.boxSizing = 'border-box';
-        bar.style.padding = `0 ${s.titleHPad}px ${s.titleVPad}px`;
-        bar.style.background = `linear-gradient(to top, rgba(${r},${g},${b},${op}) ${textH}px, rgba(${r},${g},${b},0) ${textH + s.fadeHeight}px)`;
+        // Top padding keeps the text inside the SOLID region (below the fade)
+        // for center/top alignment.
+        bar.style.padding = `${s.fadeHeight + (s.titleVAlign === 'top' ? s.titleVPad : 0)}px ${s.titleHPad}px ${s.titleVPad}px`;
+        bar.style.background = `linear-gradient(to top, rgba(${r},${g},${b},${op}) ${solidH}px, rgba(${r},${g},${b},0) ${solidH + s.fadeHeight}px)`;
         const txt = document.createElement('div');
         txt.className = 'txt';
         txt.style.fontSize = s.titleSize + 'px';
@@ -287,7 +295,7 @@ $('copyBtn').addEventListener('click', () => {
 - Card: aspect ${s.aspect.toFixed(2)}:1, height scale ${s.cardScale.toFixed(2)}, corner radius ${s.radius}, spacing ${s.cardSpacing}, page padding ${s.pagePad}
 - Section header: ${s.headerSize}pt bold, top pad ${s.sectionPad}, bottom pad ${s.headerBottomPad}, header↔cards gap ${s.headerCardGap}
 - Title: ${s.titleSize}pt, ${s.titleAlign}, ${s.titlePos}, h-pad ${s.titleHPad}, v-pad ${s.titleVPad}
-- Title bar: color ${s.barColor} @ ${s.barOpacity}% opacity, fade height ${s.fadeHeight}
+- Title bar: color ${s.barColor} @ ${s.barOpacity}% opacity, fade height ${s.fadeHeight}, bar height ${s.barH > 0 ? s.barH : 'auto'}, text v-align ${s.titleVAlign}
 - Continue bar: ${s.continueOn ? 'on, height ' + s.continueH : 'off'}; bottom padding ${s.bottomPad}
 
 JSON: ${JSON.stringify(s)}`;
