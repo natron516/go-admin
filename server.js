@@ -247,6 +247,17 @@ app.get('/api/role', (req, res) => {
   res.json({ role: req.userRole });
 });
 
+// GET /api/stats/share-button — total share-button taps from the app players (Isaac, 7/05)
+app.get('/api/stats/share-button', adminOnly, async (req, res) => {
+  try {
+    const doc = await admin.firestore().collection('stats').doc('shareButton').get();
+    const d = doc.exists ? doc.data() : {};
+    res.json({ count: d.count || 0, daily: d.daily || {} });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Portal Editor Management (admin only) ─────────────────────────────────
 // GET /api/portal-editors — list all portal editors
 app.get('/api/portal-editors', adminOnly, async (req, res) => {

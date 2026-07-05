@@ -2788,9 +2788,10 @@ async function loadDashboard() {
   statsEl.innerHTML = '<div class="spinner"></div>';
   recentEl.innerHTML = '<div class="spinner"></div>';
   try {
-    const [assetsRes, usersRes] = await Promise.all([
+    const [assetsRes, usersRes, shareRes] = await Promise.all([
       fetch('/api/assets').then(r => r.json()).catch(() => ({ data: [] })),
       fetch('/api/users').then(r => r.json()).catch(() => ({ users: [] })),
+      fetch('/api/stats/share-button').then(r => r.json()).catch(() => ({ count: 0 })),
     ]);
     const assets = assetsRes.data || [];
     const users = usersRes.users || [];
@@ -2812,6 +2813,10 @@ async function loadDashboard() {
       <div class="stat-card orange">
         <div class="stat-value">${assets.length - readyCount}</div>
         <div class="stat-label">Processing</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-value">${shareRes.count || 0}</div>
+        <div class="stat-label">Share Button Taps</div>
       </div>`;
 
     // Recent uploads
