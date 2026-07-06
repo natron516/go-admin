@@ -4226,6 +4226,7 @@ function assetRowHtml(a) {
   const customThumb = ptData.thumbnail || null;
   const thumbTime   = ptData.thumbnail_time || 10;
   const startOffset = Number(ptData.startOffset) || 0;
+  const transcriptPublic = ptData.transcriptPublic !== 'false'; // absence = true (default visible)
   const thumbUrl    = customThumb || (hasVideo && pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=480&time=${thumbTime}` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
@@ -4273,7 +4274,8 @@ function assetRowHtml(a) {
                 const trReady = tt && tt.status === 'ready';
                 const trPrep = tt && tt.status === 'preparing';
                 return `<button class="btn btn-ghost btn-sm ${trReady ? 'dl-ready' : ''}" onclick="openTranscript('${a.id}','${escAttr(title)}')" title="${trReady ? 'View transcript' : trPrep ? 'Transcribing…' : 'Generate transcript'}" id="tr-${a.id}">${trPrep ? '<span class=dl-pulse>📜</span>' : '📜'}</button>` +
-                  (trReady && pid ? `<button class="btn btn-ghost btn-sm" onclick="openScriptureRefs('${a.id}','${camPid}','${escAttr(title)}')" title="Scripture references">📖</button>` : '');
+                  (trReady && pid ? `<button class="btn btn-ghost btn-sm" onclick="openScriptureRefs('${a.id}','${camPid}','${escAttr(title)}')" title="Scripture references">📖</button>` : '') +
+                  `<button class="btn btn-ghost btn-sm" onclick="toggleTranscriptVisibility('${a.id}', ${transcriptPublic})" title="${transcriptPublic ? 'Transcript visible to all — click to hide' : 'Transcript hidden from users — click to show'}" id="trvis-${a.id}" style="opacity:${transcriptPublic ? 1 : 0.45};">${transcriptPublic ? '👁️' : '🚫'}</button>`;
               })() : ''}
               <span id="del-${a.id}" class="admin-only"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
             </div>
@@ -4410,6 +4412,35 @@ async function saveStartOffset(id) {
     toast(seconds > 0 ? `Start set to ${fmtDur(seconds)} ✓` : 'Start cleared ✓');
   } catch (e) {
     toast('Start save failed ✕');
+  }
+}
+
+async function toggleTranscriptVisibility(id, currentlyVisible) {
+  const newVisible = !currentlyVisible;
+  try {
+    const r = await fetch(`/api/assets/${id}/transcript-visibility`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcriptPublic: newVisible })
+    });
+    if (!r.ok) throw new Error('save failed');
+    // Reflect in local cache so re-renders keep the value.
+    const a = allAssets.find(x => x.id === id);
+    if (a) {
+      const pt = parsePassthrough(a.passthrough);
+      if (newVisible) delete pt.transcriptPublic; else pt.transcriptPublic = 'false';
+      a.passthrough = JSON.stringify(pt);
+    }
+    // Update button in place
+    const btn = document.getElementById('trvis-' + id);
+    if (btn) {
+      btn.title = newVisible ? 'Transcript visible to all — click to hide' : 'Transcript hidden from users — click to show';
+      btn.textContent = newVisible ? '\uD83D\uDC41\uFE0F' : '\uD83D\uDEAB';
+      btn.style.opacity = newVisible ? 1 : 0.45;
+      btn.setAttribute('onclick', `toggleTranscriptVisibility('${id}', ${newVisible})`);
+    }
+    toast(newVisible ? 'Transcript visible to all ✓' : 'Transcript hidden from users ✓');
+  } catch (e) {
+    toast('Transcript visibility save failed ✕');
   }
 }
 

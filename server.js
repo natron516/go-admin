@@ -921,6 +921,26 @@ app.patch('/api/assets/:id/start-offset', async (req, res) => {
   }
 });
 
+// Toggle transcript visibility for ALL (non-pastorElder) users.
+// PATCH /api/assets/:id/transcript-visibility  body: { transcriptPublic: true|false }
+// Stored in passthrough JSON as `transcriptPublic`. Absence (existing assets) = true (default visible).
+app.patch('/api/assets/:id/transcript-visibility', editorOrAdmin, async (req, res) => {
+  try {
+    const visible = req.body?.transcriptPublic !== false; // default true
+    const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
+    const pt = parsePassthrough(current.data?.passthrough);
+    if (visible) delete pt.transcriptPublic; // absence = visible (saves space, backward compat)
+    else pt.transcriptPublic = 'false';
+    const data = await mux('PATCH', `/video/v1/assets/${req.params.id}`, {
+      passthrough: serializePassthrough(pt),
+    });
+    _updateCachedAsset(req.params.id, data.data);
+    res.json({ ok: true, transcriptPublic: visible, asset: data.data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Auto-set the start offset on the latest Sunday sermon recording so playback
 // begins when the pre-stream graphic comes down (~10:00 AM Pacific), minus a
 // safety margin. Time-anchored: offset = (10:00 AM Pacific - stream start) -
