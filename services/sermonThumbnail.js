@@ -21,13 +21,11 @@ const sharp = require('sharp');
 
 // Base template: 1376×768 (what the AI generated), but we compose at 1920×1080
 const BASE_IMG = path.join(__dirname, '..', 'assets', 'sermon_thumb_base.jpg');
-// Embedded serif font: CrimsonText Bold. Loaded once at startup and cached.
-const FONT_PATH = path.join(__dirname, '..', 'assets', 'sermon_font_bold.ttf');
-let _fontB64 = null;
-function getFontB64() {
-  if (!_fontB64) _fontB64 = fs.readFileSync(FONT_PATH).toString('base64');
-  return _fontB64;
-}
+// CrimsonText Bold serif font — loaded from filesystem so librsvg can resolve it
+// via a file:// URI (librsvg does NOT support data: URIs for fonts).
+const FONT_PATH = path.resolve(__dirname, '..', 'assets', 'sermon_font_bold.ttf');
+const FONT_URI = `file://${FONT_PATH}`; // absolute path, works on any OS
+console.log('[sermon-thumb] Font URI:', FONT_URI, 'exists:', fs.existsSync(FONT_PATH));
 
 const OUT_W = 1920;
 const OUT_H = 1080;
@@ -92,15 +90,13 @@ async function generateSermonThumbnail(dateStr) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  const fontB64 = getFontB64();
-
   const svg = `<svg width="${OUT_W}" height="${OUT_H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <style>
       @font-face {
         font-family: 'CrimsonText';
         font-weight: bold;
-        src: url('data:font/truetype;base64,${fontB64}') format('truetype');
+        src: url('${FONT_URI}') format('truetype');
       }
     </style>
     <linearGradient id="metallic" x1="0%" y1="0%" x2="0%" y2="100%">
