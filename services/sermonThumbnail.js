@@ -6,26 +6,37 @@
  * cross emblem and title text baked in; we overlay the date in large
  * metallic-cream serif text matching the approved design reference.
  *
+ * Font notes: Railway's minimal Linux image has no system fonts, so
+ * we embed CrimsonText Bold (assets/sermon_font_bold.ttf) as a base64 data URI
+ * in the SVG <style> block. This guarantees rendering on any OS.
+ *
  * Exported helpers:
  *   generateSermonThumbnail(dateStr)  -> Buffer (JPEG)
  *   generateAndUploadSermonThumb(dateStr, label, { bucket }) -> { url }
  */
 
 const path = require('path');
+const fs = require('fs');
 const sharp = require('sharp');
 
 // Base template: 1376×768 (what the AI generated), but we compose at 1920×1080
 const BASE_IMG = path.join(__dirname, '..', 'assets', 'sermon_thumb_base.jpg');
+// Embedded serif font: CrimsonText Bold. Loaded once at startup and cached.
+const FONT_PATH = path.join(__dirname, '..', 'assets', 'sermon_font_bold.ttf');
+let _fontB64 = null;
+function getFontB64() {
+  if (!_fontB64) _fontB64 = fs.readFileSync(FONT_PATH).toString('base64');
+  return _fontB64;
+}
 
 const OUT_W = 1920;
 const OUT_H = 1080;
 
-// Empirically-tuned from the approved reference (see memory/2026-07-06.md):
-// - Right panel center x ≈ 1020/1376 * 1920 = 1423
-// - Date vertical center ≈ 490/768  * 1080 = 688
-// - Font size 88px at 1920 wide (fits with comfortable margin)
-const DATE_X = Math.round((1020 / 1376) * OUT_W); // 1423
-const DATE_Y = Math.round((490 / 768)  * OUT_H);  // 688
+// Positioning: right panel center x=1423, date at y=580 (~54% from top).
+// Kept well above the bottom 20% (216px) so the app's transcript badge doesn't
+// overlap. Font size 88px with embedded CrimsonText Bold serif.
+const DATE_X = 1423;
+const DATE_Y = 580;   // was 688 (too low); moved up to 580
 const FONT_SIZE = 88;
 
 const MONTHS = [
@@ -81,8 +92,17 @@ async function generateSermonThumbnail(dateStr) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+  const fontB64 = getFontB64();
+
   const svg = `<svg width="${OUT_W}" height="${OUT_H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
+    <style>
+      @font-face {
+        font-family: 'CrimsonText';
+        font-weight: bold;
+        src: url('data:font/truetype;base64,${fontB64}') format('truetype');
+      }
+    </style>
     <linearGradient id="metallic" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%"   stop-color="#f2e8cc"/>
       <stop offset="25%"  stop-color="#e8dcb8"/>
@@ -98,7 +118,7 @@ async function generateSermonThumbnail(dateStr) {
     x="${DATE_X}"
     y="${DATE_Y}"
     text-anchor="middle"
-    font-family="Georgia, 'Times New Roman', serif"
+    font-family="CrimsonText, Georgia, serif"
     font-size="${FONT_SIZE}"
     font-weight="bold"
     letter-spacing="3"

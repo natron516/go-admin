@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 246;
+const ADMIN_BUILD = 247;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
