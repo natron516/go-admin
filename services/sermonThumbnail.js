@@ -28,18 +28,38 @@ const DATE_X = Math.round((1020 / 1376) * OUT_W); // 1423
 const DATE_Y = Math.round((490 / 768)  * OUT_H);  // 688
 const FONT_SIZE = 88;
 
+const MONTHS = [
+  'JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE',
+  'JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER',
+];
+
 /**
  * Format a JS Date (or unix epoch seconds) as "JULY 5, 2026".
+ * Uses Pacific Time (UTC-7 PDT / UTC-8 PST) offset manually so this works on
+ * minimal Node/ICU builds (Railway's image may lack full timezone data).
  * @param {Date|number} date
  */
 function formatSermonDate(date) {
-  const d = typeof date === 'number' ? new Date(date * 1000) : new Date(date);
-  return d.toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).toUpperCase(); // "JULY 5, 2026"
+  const ms = typeof date === 'number' ? date * 1000 : Number(date instanceof Date ? date : new Date(date));
+  if (isNaN(ms)) return 'SERMON DATE';
+  // Determine Pacific offset: PDT = UTC-7 (second Sun Mar - first Sun Nov), else PST = UTC-8
+  // Simple approximation: check if the UTC date falls within PDT window
+  const utc = new Date(ms);
+  const year = utc.getUTCFullYear();
+  // DST starts: 2nd Sunday in March; ends: 1st Sunday in November
+  const dstStart = new Date(Date.UTC(year, 2, 1));
+  dstStart.setUTCDate(8 - ((dstStart.getUTCDay() + 6) % 7)); // 2nd Sunday
+  dstStart.setUTCDate(dstStart.getUTCDate() + 7);
+  dstStart.setUTCHours(10, 0, 0, 0); // 2:00 AM PST = 10:00 UTC
+  const dstEnd = new Date(Date.UTC(year, 10, 1));
+  dstEnd.setUTCDate(1 + (7 - dstEnd.getUTCDay()) % 7); // 1st Sunday
+  dstEnd.setUTCHours(9, 0, 0, 0); // 2:00 AM PDT = 09:00 UTC
+  const offsetMs = (ms >= dstStart.getTime() && ms < dstEnd.getTime()) ? -7 * 3600000 : -8 * 3600000;
+  const local = new Date(ms + offsetMs);
+  const month = MONTHS[local.getUTCMonth()];
+  const day = local.getUTCDate();
+  const yr = local.getUTCFullYear();
+  return `${month} ${day}, ${yr}`;
 }
 
 /**
