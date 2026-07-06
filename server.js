@@ -3491,10 +3491,11 @@ app.get('/api/users', async (req, res) => {
       console.warn('Mux watch time lookup failed:', e.message);
     }
 
-    // Look up privateAccess + pendingApproval + pastorElder from Firestore users collection
+    // Look up privateAccess + pendingApproval + pastorElder + sermonAccess from Firestore users collection
     const privateMap = {};
     const pendingMap = {};
     const pastorElderMap = {};
+    const sermonAccessMap = {};
     try {
       const privateSnap = await admin.firestore().collection('users').get();
       privateSnap.forEach(doc => {
@@ -3502,6 +3503,7 @@ app.get('/api/users', async (req, res) => {
         if (d.privateAccess) privateMap[doc.id] = true;
         if (d.pendingApproval) pendingMap[doc.id] = true;
         if (d.pastorElder) pastorElderMap[doc.id] = true;
+        if (d.sermonAccess) sermonAccessMap[doc.id] = true;
       });
     } catch (e) {
       console.warn('Private access lookup failed:', e.message);
@@ -3530,6 +3532,7 @@ app.get('/api/users', async (req, res) => {
       u.privateAccess = !!privateMap[u.uid];
       u.pendingApproval = !!pendingMap[u.uid];
       u.pastorElder = !!pastorElderMap[u.uid];
+      u.sermonAccess = !!sermonAccessMap[u.uid];
       u.appVersion = appVersionMap[u.uid] || null;
       u.appMinutes = Math.round((sessionTimeMap[u.uid] || 0) / 60);
       u.sessionCount = sessionCountMap[u.uid] || 0;
@@ -3691,6 +3694,21 @@ app.patch('/api/users/:uid/pastor-elder', adminOnly, async (req, res) => {
       { merge: true }
     );
     res.json({ ok: true, uid: req.params.uid, pastorElder: !!pastorElder });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Grant or revoke Sermon Access (bypasses sermon PIN on phone + CarPlay).
+app.patch('/api/users/:uid/sermon-access', adminOnly, async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { sermonAccess } = req.body; // true = grant, false = revoke
+    await admin.firestore().collection('users').doc(req.params.uid).set(
+      { sermonAccess: !!sermonAccess },
+      { merge: true }
+    );
+    res.json({ ok: true, uid: req.params.uid, sermonAccess: !!sermonAccess });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

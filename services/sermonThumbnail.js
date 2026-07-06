@@ -3,13 +3,15 @@
  *
  * Composites a dated 16:9 branded thumbnail (1920×1080) for every sermon
  * live-stream VOD. The base template (assets/sermon_thumb_base.jpg) has the
- * cross emblem and title text baked in; we overlay the date in large
- * metallic-cream serif text matching the approved design reference.
+ * cross emblem and title text baked in; we overlay the date in Cinzel Bold
+ * (a free Trajan-style serif) with a warm champagne-gold gradient, matching
+ * the approved Isaac reference design.
  *
- * Font strategy: use sharp's text input (Pango/FreeType path) with our bundled
- * CrimsonText Bold TTF specified via fontfile. This bypasses librsvg entirely
- * and works on minimal Linux containers where SVG font-face (data: or file:)
- * silently fails in librsvg.
+ * Text rendering: uses ImageMagick (`magick` CLI) for the text layers because
+ * it reliably loads custom TTF files without fontconfig/librsvg issues. Falls
+ * back to sharp-only (sans-serif) if magick is unavailable.
+ *
+ * Font: Cinzel Bold (assets/cinzel_bold.ttf) — free Trajan-style from Google Fonts
  *
  * Exported helpers:
  *   generateSermonThumbnail(dateStr)  -> Buffer (JPEG)
@@ -18,27 +20,33 @@
 
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 const sharp = require('sharp');
 
 // Base template: 1376×768 (what the AI generated), but we compose at 1920×1080
 const BASE_IMG = path.join(__dirname, '..', 'assets', 'sermon_thumb_base.jpg');
-// CrimsonText Bold serif font — used via sharp text input (Pango/FreeType).
-// Bypasses librsvg which can't load custom fonts in minimal Linux containers.
-const FONT_PATH = path.resolve(__dirname, '..', 'assets', 'sermon_font_bold.ttf');
-// Note: FONTCONFIG_FILE is set in server.js BEFORE sharp is required,
-// so fontconfig finds this TTF when libvips initialises.
-console.log('[sermon-thumb] Font path:', FONT_PATH, 'exists:', fs.existsSync(FONT_PATH));
+// Cinzel Bold: free Trajan-style serif from Google Fonts.
+const FONT_PATH = path.resolve(__dirname, '..', 'assets', 'cinzel_bold.ttf');
+
+// Detect ImageMagick availability (used for color-accurate text rendering)
+function getIMBin() {
+  for (const bin of ['/opt/homebrew/bin/magick', '/usr/local/bin/magick', '/usr/bin/magick', 'magick']) {
+    try { execSync(`${bin} --version`, { stdio: 'ignore' }); return bin; } catch(e) {}
+  }
+  return null;
+}
+const IM_BIN = getIMBin();
+console.log('[sermon-thumb] Font:', FONT_PATH, 'exists:', fs.existsSync(FONT_PATH), '| ImageMagick:', IM_BIN || 'NOT FOUND');
 
 const OUT_W = 1920;
 const OUT_H = 1080;
 
-// Positioning: right panel center x=1423, date top-of-text at y=515 (~48% from top).
-// Kept well above the bottom 20% (y>864) so the app's transcript badge doesn't
-// overlap. Font renders at ~88-100px equivalent via Pango.
+// Positioning: right panel center x=1423, date top-of-text at y=508 (~47% from top).
+// Kept well above the bottom 20% (y>864) so the app's transcript badge doesn't overlap.
 const DATE_CENTER_X = 1423;   // horizontal center of right panel
-const DATE_TOP_Y = 515;       // top edge of text block
-const DATE_TEXT_W = 960;      // Pango layout width (it will wrap if needed; wide enough for any date)
-const DATE_TEXT_H = 120;      // height budget for text layer
+const DATE_TOP_Y = 508;       // top edge of text block
+const DATE_TEXT_W = 960;      // text layer width
+const DATE_TEXT_H = 140;      // text layer height
 
 const MONTHS = [
   'JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE',
@@ -82,43 +90,104 @@ function formatSermonDate(date) {
   return `${month} ${day}, ${yr}`;
 }
 
+// Temp file helpers (unique per call to avoid race conditions)
+function tmpFile(suffix) {
+  return path.join(require('os').tmpdir(), `sermon_thumb_${Date.now()}_${Math.random().toString(36).slice(2)}${suffix}`);
+}
+
 /**
  * Generate a sermon thumbnail JPEG buffer for the given date string.
  *
- * Uses sharp's text input (Pango/FreeType) to render the date glyph — this
- * works reliably on Railway Linux because it bypasses librsvg entirely.
- * Two-layer approach:
- *   1. Shadow layer (dark, offset) rendered first
- *   2. Main cream-coloured text layer on top
+ * Primary path: ImageMagick renders Cinzel Bold text layers (shadow + warm gold
+ * gradient), then sharp composites them onto the base image.
+ *
+ * Fallback: if ImageMagick is not available, falls back to a plain sharp text
+ * overlay (may render sans-serif on systems without fontconfig).
  *
  * @param {string} dateStr  e.g. "JULY 5, 2026"
  * @returns {Promise<Buffer>}
  */
 async function generateSermonThumbnail(dateStr) {
+  if (IM_BIN) {
+    return generateWithImageMagick(dateStr);
+  }
+  return generateFallback(dateStr);
+}
+
+/**
+ * Primary path: ImageMagick + sharp composite.
+ * Renders Cinzel Bold with warm champagne-gold gradient matching the reference design.
+ */
+async function generateWithImageMagick(dateStr) {
+  // Escape single quotes for shell
+  const escaped = String(dateStr).replace(/'/g, "'\\''" );
+  const fontSize = 105;
+  const W = 960, H = 140;
+  const top = DATE_TOP_Y;
+  const centerX = DATE_CENTER_X;
+  
+  const tShadow = tmpFile('_shadow.png');
+  const tTop    = tmpFile('_top.png');
+  const tBot    = tmpFile('_bot.png');
+  const tVmask  = tmpFile('_vmask.png');
+  const tGold   = tmpFile('_gold.png');
+  const temps   = [tShadow, tTop, tBot, tVmask, tGold];
+  
+  const cleanup = () => temps.forEach(f => { try { fs.unlinkSync(f); } catch(e) {} });
+
+  try {
+    const IM = IM_BIN;
+    const FONT = FONT_PATH;
+
+    // Shadow layer (semi-transparent dark)
+    execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#00000099" -gravity Center -draw "text 0,0 '${escaped}'" "${tShadow}"`);
+
+    // Top color layer (light champagne)
+    execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#eeddb4" -gravity Center -draw "text 0,0 '${escaped}'" "${tTop}"`);
+
+    // Bottom color layer (deeper warm gold)
+    execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#b88840" -gravity Center -draw "text 0,0 '${escaped}'" "${tBot}"`);
+
+    // Vertical gradient mask (white-to-black = top to bottom)
+    execSync(`${IM} -size ${W}x${H} gradient:"white-black" "${tVmask}"`);
+
+    // Blend: bottom layer base, overlay top layer masked by gradient
+    execSync(`${IM} "${tBot}" \\( "${tTop}" "${tVmask}" -alpha off -compose CopyOpacity -composite \\) -compose Over -composite "${tGold}"`);
+
+    // Get text width to center it
+    const meta = await sharp(tGold).metadata();
+    const tw = meta.width || W;
+    const left = Math.max(680, centerX - Math.floor(tw / 2));
+
+    // Composite onto base image with sharp
+    const buf = await sharp(BASE_IMG)
+      .resize(OUT_W, OUT_H, { fit: 'fill' })
+      .composite([
+        { input: tShadow, left: left + 2, top: top + 5 },
+        { input: tGold,   left,           top           },
+      ])
+      .jpeg({ quality: 93 })
+      .toBuffer();
+
+    cleanup();
+    return buf;
+  } catch (err) {
+    cleanup();
+    console.error('[sermon-thumb] ImageMagick failed:', err.message, '— falling back to sharp');
+    return generateFallback(dateStr);
+  }
+}
+
+/**
+ * Fallback: sharp text input (may render sans-serif on servers without fontconfig).
+ * Provides readable text even when ImageMagick is unavailable.
+ */
+async function generateFallback(dateStr) {
   const safe = String(dateStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-  // Render shadow layer: dark offset text (for drop-shadow effect)
-  const shadowBuf = await sharp({
-    text: {
-      text: `<span foreground="#111111">${safe}</span>`,
-      font: 'CrimsonText Bold',
-      fontfile: FONT_PATH,
-      width: DATE_TEXT_W,
-      height: DATE_TEXT_H,
-      rgba: true,
-      align: 'centre',
-    }
-  }).png().toBuffer();
-
-  const shadowMeta = await sharp(shadowBuf).metadata();
-  const tw = shadowMeta.width || DATE_TEXT_W;
-  const th = shadowMeta.height || DATE_TEXT_H;
-
-  // Render main cream text layer
   const textBuf = await sharp({
     text: {
       text: `<span foreground="#e8dcb8">${safe}</span>`,
-      font: 'CrimsonText Bold',
+      font: 'Cinzel Bold',
       fontfile: FONT_PATH,
       width: DATE_TEXT_W,
       height: DATE_TEXT_H,
@@ -126,19 +195,11 @@ async function generateSermonThumbnail(dateStr) {
       align: 'centre',
     }
   }).png().toBuffer();
-
-  // Center in right panel: left = DATE_CENTER_X - textWidth/2
-  const left = Math.max(680, DATE_CENTER_X - Math.floor(tw / 2));
-  const top = DATE_TOP_Y;
-  const shadowLeft = Math.max(680, left + 3);
-  const shadowTop = top + 5;
-
+  const meta = await sharp(textBuf).metadata();
+  const left = Math.max(680, DATE_CENTER_X - Math.floor((meta.width || DATE_TEXT_W) / 2));
   return sharp(BASE_IMG)
     .resize(OUT_W, OUT_H, { fit: 'fill' })
-    .composite([
-      { input: shadowBuf, left: shadowLeft, top: shadowTop },
-      { input: textBuf,   left: left,       top: top },
-    ])
+    .composite([{ input: textBuf, left, top: DATE_TOP_Y }])
     .jpeg({ quality: 90 })
     .toBuffer();
 }
