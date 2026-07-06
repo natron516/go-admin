@@ -40,8 +40,16 @@ const MONTHS = [
  * @param {Date|number} date
  */
 function formatSermonDate(date) {
-  const ms = typeof date === 'number' ? date * 1000 : Number(date instanceof Date ? date : new Date(date));
-  if (isNaN(ms)) return 'SERMON DATE';
+  // Accept: number (unix seconds), numeric string (unix seconds), or Date
+  let ms;
+  if (date instanceof Date) {
+    ms = date.getTime();
+  } else {
+    const n = Number(date);
+    // If it parses as a finite number, treat as unix seconds
+    ms = isFinite(n) ? n * 1000 : NaN;
+  }
+  if (!isFinite(ms)) return 'SERMON DATE';
   // Determine Pacific offset: PDT = UTC-7 (second Sun Mar - first Sun Nov), else PST = UTC-8
   // Simple approximation: check if the UTC date falls within PDT window
   const utc = new Date(ms);
