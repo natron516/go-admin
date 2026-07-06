@@ -1,7 +1,4 @@
 {
-  "packages": {
-    "apt": {
-      "packages": ["libatomic1", "fontconfig", "fonts-liberation"]
-    }
-  }
+  "$schema": "https://schema.railpack.com",
+  "buildAptPackages": ["fontconfig", "fonts-liberation"]
 }
