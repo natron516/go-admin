@@ -1,4 +1,21 @@
-const ADMIN_BUILD = 251;
+const ADMIN_BUILD = 252;
+// ── Fontconfig bootstrap (MUST run before sharp/libvips loads) ─────────────────
+// Railway's minimal container has no fontconfig defaults; libvips/Pango reads
+// FONTCONFIG_FILE at initialization. We point it at our bundled fonts.conf so
+// CrimsonText Bold (assets/sermon_font_bold.ttf) is discoverable.
+// NOTE: this block MUST appear before any require('sharp') call.
+const _path = require('path');
+const _fs = require('fs');
+(function bootstrapFontconfig() {
+  if (process.env.FONTCONFIG_FILE) return; // already set (e.g. in Railway env)
+  const confFile = _path.resolve(__dirname, 'assets', 'fonts.conf');
+  const cacheDir = _path.resolve(__dirname, 'assets', '.fontcache');
+  if (!_fs.existsSync(confFile)) return;
+  try { if (!_fs.existsSync(cacheDir)) _fs.mkdirSync(cacheDir, { recursive: true }); } catch (_) { /* ignore */ }
+  process.env.FONTCONFIG_FILE = confFile;
+  process.env.FC_CACHEDIR = cacheDir;
+  console.log('[fontconfig] Using bundled config:', confFile);
+})();
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
