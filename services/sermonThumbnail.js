@@ -29,9 +29,15 @@ const FONTS_CONF = path.resolve(__dirname, '..', 'assets', 'fonts.conf');
 
 // On headless Linux (Railway), fontconfig needs to know where our fonts are.
 // We set FONTCONFIG_FILE at module load time so Pango can find CrimsonText.
+// Also create the font cache dir if needed so fontconfig can write its cache.
+const FONT_CACHE_DIR = path.resolve(__dirname, '..', 'assets', '.fontcache');
+if (!fs.existsSync(FONT_CACHE_DIR)) {
+  try { fs.mkdirSync(FONT_CACHE_DIR, { recursive: true }); } catch (e) { /* ok */ }
+}
 if (!process.env.FONTCONFIG_FILE && fs.existsSync(FONTS_CONF)) {
   process.env.FONTCONFIG_FILE = FONTS_CONF;
-  console.log('[sermon-thumb] Set FONTCONFIG_FILE =', FONTS_CONF);
+  process.env.FC_CACHEDIR = FONT_CACHE_DIR;
+  console.log('[sermon-thumb] Set FONTCONFIG_FILE =', FONTS_CONF, 'cache =', FONT_CACHE_DIR);
 }
 console.log('[sermon-thumb] Font path:', FONT_PATH, 'exists:', fs.existsSync(FONT_PATH));
 
