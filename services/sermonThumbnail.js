@@ -142,11 +142,11 @@ async function generateWithImageMagick(dateStr) {
     // Shadow layer (semi-transparent dark)
     execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#00000099" -gravity Center -draw "text 0,0 '${escaped}'" "${tShadow}"`);
 
-    // Top color layer (light champagne)
-    execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#eeddb4" -gravity Center -draw "text 0,0 '${escaped}'" "${tTop}"`);
+    // Top color layer — warm cream highlight (sampled from reference)
+    execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#f0e8da" -gravity Center -draw "text 0,0 '${escaped}'" "${tTop}"`);
 
-    // Bottom color layer (deeper warm gold)
-    execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#b88840" -gravity Center -draw "text 0,0 '${escaped}'" "${tBot}"`);
+    // Bottom color layer — deeper champagne/taupe (sampled from reference)
+    execSync(`${IM} -size ${W}x${H} xc:transparent -background transparent -font "${FONT}" -pointsize ${fontSize} -fill "#a6957f" -gravity Center -draw "text 0,0 '${escaped}'" "${tBot}"`);
 
     // Vertical gradient mask (white-to-black = top to bottom)
     execSync(`${IM} -size ${W}x${H} gradient:"white-black" "${tVmask}"`);

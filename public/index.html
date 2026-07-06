@@ -5398,7 +5398,7 @@ function renderUsers(users) {
     const blockChk = chk(u.disabled, 'danger', '🚫', `setUserBlocked('${u.uid}',${u.disabled?'false':'true'})`, u.disabled?'Unblock user':'Block user', false);
     const privateChk = chk(u.privateAccess, 'private', '🔒', `setUserPrivateAccess('${u.uid}',${u.privateAccess?'false':'true'})`, u.privateAccess?'Revoke private access':'Grant private access', false);
     const pastorChk = chk(u.pastorElder, 'pastor', '⛪', `setUserPastorElder('${u.uid}',${u.pastorElder?'false':'true'})`, u.pastorElder?'Remove Pastor/Elder role':'Make Pastor/Elder', !isAdmin());
-    const sermonChk = chk(u.sermonAccess, 'sermon', '🎤', `setUserSermonAccess('${u.uid}',${u.sermonAccess?'false':'true'})`, u.sermonAccess?'Revoke sermon PIN bypass':'Grant sermon PIN bypass', !isAdmin());
+    const sermonChk = chk(u.sermonAccess, 'sermon', '🪪', `setUserSermonAccess('${u.uid}',${u.sermonAccess?'false':'true'})`, u.sermonAccess?'Revoke Member status':'Make Member', !isAdmin());
     const isEd = !!portalEditorMap[u.uid];
     const editorChk = chk(isEd, 'editor', '✏️', isEd?`revokeEditorAccess('${u.uid}')`:`grantEditorAccess('${u.uid}')`, isEd?'Revoke portal editor access':'Make portal editor', !isAdmin());
     const approveBtn = u.pendingApproval && !u.disabled
@@ -5414,7 +5414,7 @@ function renderUsers(users) {
       <td style="font-size:13px;color:var(--text)">${u.musicMinutes ? (u.musicMinutes >= 60 ? Math.floor(u.musicMinutes/60) + 'h ' + (u.musicMinutes%60) + 'm' : u.musicMinutes + ' min') : '—'}</td>
       <td style="color:var(--muted);font-size:12px">${joined}</td>
       <td style="color:var(--muted);font-size:12px">${lastIn}</td>
-      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}${u.pastorElder ? '<span style="font-size:11px;font-weight:700;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:99px;padding:2px 8px;margin-left:4px">⛪ Pastor/Elder</span>' : ''}${u.sermonAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(52,211,153,.15);color:#34d399;border-radius:99px;padding:2px 8px;margin-left:4px">🎤 Sermon Access</span>' : ''}${approveBtn ? '<div style="margin-top:4px">'+approveBtn+'</div>' : ''}</td>
+      <td>${u.disabled ? '<span class="user-blocked-badge">🚫 Blocked</span>' : (u.pendingApproval ? '<span style="font-size:11px;font-weight:700;background:rgba(245,158,11,.18);color:var(--orange);border-radius:99px;padding:2px 8px">⏳ Pending</span>' : '<span style="font-size:12px;color:var(--green)">✓ Active</span>')} ${u.privateAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border-radius:99px;padding:2px 8px;margin-left:4px">🔒 Private</span>' : ''}${u.pastorElder ? '<span style="font-size:11px;font-weight:700;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:99px;padding:2px 8px;margin-left:4px">⛪ Pastor/Elder</span>' : ''}${u.sermonAccess ? '<span style="font-size:11px;font-weight:700;background:rgba(52,211,153,.15);color:#34d399;border-radius:99px;padding:2px 8px;margin-left:4px">🪪 Member</span>' : ''}${approveBtn ? '<div style="margin-top:4px">'+approveBtn+'</div>' : ''}</td>
       <td style="text-align:center">${blockChk}</td>
       <td style="text-align:center">${privateChk}</td>
       <td style="text-align:center">${pastorChk}</td>
@@ -5461,9 +5461,9 @@ function renderUsers(users) {
         : `<button class="btn btn-ghost btn-sm" onclick="setUserPastorElder('${u.uid}',true)">⛪ Make Pastor/Elder</button>`) : '';
       const pastorBadge = u.pastorElder ? ' <span style="font-size:11px;font-weight:700;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:99px;padding:2px 8px">⛪ Pastor/Elder</span>' : '';
       const sermonBtn = isAdmin() ? (u.sermonAccess
-        ? `<button class="btn btn-ghost btn-sm" onclick="setUserSermonAccess('${u.uid}',false)" style="color:var(--orange)">🎤 Sermon Access</button>`
-        : `<button class="btn btn-ghost btn-sm" onclick="setUserSermonAccess('${u.uid}',true)">🎤 Grant Sermon Access</button>`) : '';
-      const sermonBadge = u.sermonAccess ? ' <span style="font-size:11px;font-weight:700;background:rgba(52,211,153,.15);color:#34d399;border-radius:99px;padding:2px 8px">🎤 Sermon Access</span>' : '';
+        ? `<button class="btn btn-ghost btn-sm" onclick="setUserSermonAccess('${u.uid}',false)" style="color:var(--orange)">🪪 Member</button>`
+        : `<button class="btn btn-ghost btn-sm" onclick="setUserSermonAccess('${u.uid}',true)">🪪 Make Member</button>`) : '';
+      const sermonBadge = u.sermonAccess ? ' <span style="font-size:11px;font-weight:700;background:rgba(52,211,153,.15);color:#34d399;border-radius:99px;padding:2px 8px">🪪 Member</span>' : '';
       const approveBtn = u.pendingApproval && !u.disabled
         ? `<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="approveUser('${u.uid}')">✅ Approve</button>`
         : '';
@@ -5709,7 +5709,7 @@ async function setUserSermonAccess(uid, sermonAccess) {
     if (u) u.sermonAccess = sermonAccess;
     const q = document.getElementById('user-search')?.value || '';
     filterUsers(q);
-    toast(sermonAccess ? '🎤 Sermon PIN bypass granted' : 'Sermon PIN bypass removed');
+    toast(sermonAccess ? '🪪 Member status granted' : 'Member status removed');
   } catch(e) {
     toast('Failed: ' + e.message);
   }
