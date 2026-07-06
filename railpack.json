@@ -1,0 +1,7 @@
+{
+  "packages": {
+    "apt": {
+      "packages": ["libatomic1", "fontconfig", "fonts-liberation"]
+    }
+  }
+}
