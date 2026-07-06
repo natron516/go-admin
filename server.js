@@ -1,4 +1,4 @@
-const ADMIN_BUILD = 245;
+const ADMIN_BUILD = 246;
 const crypto = require('crypto');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
@@ -6,6 +6,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const { generateAndUploadSermonThumb, formatSermonDate } = require('./services/sermonThumbnail');
 
 // ── Firebase Admin SDK ───────────────────────────────────
 const sa = process.env.FIREBASE_SA ? JSON.parse(process.env.FIREBASE_SA) : null;
@@ -406,6 +407,30 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
           console.log(`[webhook] Enabled mp4_support for ${assetId}`);
         } catch (e) {
           console.error(`[webhook] Failed to enable mp4_support: ${e.message}`);
+        }
+      }
+
+      // ── Auto-generate branded sermon thumbnail ───────────────────────────
+      // For sermon live streams, generate a dated 16:9 branded thumbnail and
+      // store it as pt.thumbnail in the Mux passthrough so the app + portal
+      // show the custom image instead of the Mux auto-poster.
+      if (catLabel === 'Sermon') {
+        try {
+          const dateStr = formatSermonDate(asset.created_at);
+          const label = new Date(asset.created_at * 1000).toISOString().slice(0, 10);
+          const bucket = admin.storage().bucket();
+          const { url } = await generateAndUploadSermonThumb(dateStr, label, { bucket });
+          // Re-read current passthrough (may have been updated by title patch above)
+          const fresh = await mux('GET', `/video/v1/assets/${assetId}`);
+          const freshPt = parsePassthrough(fresh.data?.passthrough);
+          freshPt.thumbnail = url;
+          await mux('PATCH', `/video/v1/assets/${assetId}`, {
+            passthrough: serializePassthrough(freshPt),
+          });
+          _updateCachedAsset(assetId, { ...fresh.data, passthrough: serializePassthrough(freshPt) });
+          console.log(`[webhook] Sermon thumbnail generated for ${assetId}: ${url}`);
+        } catch (thumbErr) {
+          console.error(`[webhook] Sermon thumbnail failed for ${assetId}: ${thumbErr.message}`);
         }
       }
     } catch (err) {
@@ -2141,6 +2166,61 @@ app.post('/api/transcripts/cleanup-non-sermons', async (req, res) => {
     res.json({ removed, kept, failed });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Sermon Thumbnail Backfill ──────────────────────────────────────────────
+// POST /api/sermons/backfill-thumbnails
+// Iterates all Mux assets, finds sermons that lack a branded thumbnail
+// (pt.thumbnail), generates one from the asset's created_at date, uploads to
+// Firebase Storage, and sets pt.thumbnail. Skips assets that already have one
+// unless ?force=1 is passed. Throttles to one per 500 ms to avoid rate-limits.
+//
+// Response: { processed, skipped, failed, results: [{assetId, dateStr, url}] }
+app.post('/api/sermons/backfill-thumbnails', adminOnly, async (req, res) => {
+  const force = req.query.force === '1' || req.body?.force === true;
+  const dryRun = req.query.dry === '1' || req.body?.dry === true;
+  let processed = 0, skipped = 0, failed = 0;
+  const results = [];
+  try {
+    const bucket = admin.storage().bucket();
+    const allAssets = await fetchAllMuxAssets();
+    const sermons = allAssets.filter(a => isSermonAsset(a));
+    console.log(`[backfill-thumbs] Found ${sermons.length} sermon assets`);
+    for (const asset of sermons) {
+      const pt = parsePassthrough(asset.passthrough);
+      if (pt.thumbnail && !force) {
+        skipped++;
+        continue;
+      }
+      const dateStr = formatSermonDate(asset.created_at);
+      const label = new Date(asset.created_at * 1000).toISOString().slice(0, 10);
+      if (dryRun) {
+        results.push({ assetId: asset.id, dateStr, url: '(dry-run)', skipped: false });
+        processed++;
+        continue;
+      }
+      try {
+        const { url } = await generateAndUploadSermonThumb(dateStr, label, { bucket });
+        pt.thumbnail = url;
+        await mux('PATCH', `/video/v1/assets/${asset.id}`, {
+          passthrough: serializePassthrough(pt),
+        });
+        _updateCachedAsset(asset.id, { passthrough: serializePassthrough(pt) });
+        results.push({ assetId: asset.id, dateStr, url });
+        processed++;
+        console.log(`[backfill-thumbs] ${asset.id} (${dateStr}): ${url}`);
+      } catch (e) {
+        console.error(`[backfill-thumbs] ${asset.id} failed: ${e.message}`);
+        results.push({ assetId: asset.id, dateStr, error: e.message });
+        failed++;
+      }
+      // Polite throttle: 500 ms between asset updates
+      await new Promise(r => setTimeout(r, 500));
+    }
+    res.json({ processed, skipped, failed, dryRun, results });
+  } catch (e) {
+    res.status(500).json({ error: e.message, processed, skipped, failed });
   }
 });
 
