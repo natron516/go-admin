@@ -6,9 +6,10 @@
  * cross emblem and title text baked in; we overlay the date in large
  * metallic-cream serif text matching the approved design reference.
  *
- * Font notes: Railway's minimal Linux image has no system fonts, so
- * we embed CrimsonText Bold (assets/sermon_font_bold.ttf) as a base64 data URI
- * in the SVG <style> block. This guarantees rendering on any OS.
+ * Font strategy: use sharp's text input (Pango/FreeType path) with our bundled
+ * CrimsonText Bold TTF specified via fontfile. This bypasses librsvg entirely
+ * and works on minimal Linux containers where SVG font-face (data: or file:)
+ * silently fails in librsvg.
  *
  * Exported helpers:
  *   generateSermonThumbnail(dateStr)  -> Buffer (JPEG)
@@ -21,21 +22,21 @@ const sharp = require('sharp');
 
 // Base template: 1376×768 (what the AI generated), but we compose at 1920×1080
 const BASE_IMG = path.join(__dirname, '..', 'assets', 'sermon_thumb_base.jpg');
-// CrimsonText Bold serif font — loaded from filesystem so librsvg can resolve it
-// via a file:// URI (librsvg does NOT support data: URIs for fonts).
+// CrimsonText Bold serif font — used via sharp text input (Pango/FreeType).
+// Bypasses librsvg which can't load custom fonts in minimal Linux containers.
 const FONT_PATH = path.resolve(__dirname, '..', 'assets', 'sermon_font_bold.ttf');
-const FONT_URI = `file://${FONT_PATH}`; // absolute path, works on any OS
-console.log('[sermon-thumb] Font URI:', FONT_URI, 'exists:', fs.existsSync(FONT_PATH));
+console.log('[sermon-thumb] Font path:', FONT_PATH, 'exists:', fs.existsSync(FONT_PATH));
 
 const OUT_W = 1920;
 const OUT_H = 1080;
 
-// Positioning: right panel center x=1423, date at y=580 (~54% from top).
-// Kept well above the bottom 20% (216px) so the app's transcript badge doesn't
-// overlap. Font size 88px with embedded CrimsonText Bold serif.
-const DATE_X = 1423;
-const DATE_Y = 580;   // was 688 (too low); moved up to 580
-const FONT_SIZE = 88;
+// Positioning: right panel center x=1423, date top-of-text at y=515 (~48% from top).
+// Kept well above the bottom 20% (y>864) so the app's transcript badge doesn't
+// overlap. Font renders at ~88-100px equivalent via Pango.
+const DATE_CENTER_X = 1423;   // horizontal center of right panel
+const DATE_TOP_Y = 515;       // top edge of text block
+const DATE_TEXT_W = 960;      // Pango layout width (it will wrap if needed; wide enough for any date)
+const DATE_TEXT_H = 120;      // height budget for text layer
 
 const MONTHS = [
   'JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE',
@@ -81,51 +82,61 @@ function formatSermonDate(date) {
 
 /**
  * Generate a sermon thumbnail JPEG buffer for the given date string.
+ *
+ * Uses sharp's text input (Pango/FreeType) to render the date glyph — this
+ * works reliably on Railway Linux because it bypasses librsvg entirely.
+ * Two-layer approach:
+ *   1. Shadow layer (dark, offset) rendered first
+ *   2. Main cream-coloured text layer on top
+ *
  * @param {string} dateStr  e.g. "JULY 5, 2026"
  * @returns {Promise<Buffer>}
  */
 async function generateSermonThumbnail(dateStr) {
-  const escaped = String(dateStr)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const safe = String(dateStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  const svg = `<svg width="${OUT_W}" height="${OUT_H}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <style>
-      @font-face {
-        font-family: 'CrimsonText';
-        font-weight: bold;
-        src: url('${FONT_URI}') format('truetype');
-      }
-    </style>
-    <linearGradient id="metallic" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#f2e8cc"/>
-      <stop offset="25%"  stop-color="#e8dcb8"/>
-      <stop offset="50%"  stop-color="#d8cca0"/>
-      <stop offset="75%"  stop-color="#c4b484"/>
-      <stop offset="100%" stop-color="#b0a070"/>
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="rgba(0,0,0,0.65)"/>
-    </filter>
-  </defs>
-  <text
-    x="${DATE_X}"
-    y="${DATE_Y}"
-    text-anchor="middle"
-    font-family="CrimsonText, Georgia, serif"
-    font-size="${FONT_SIZE}"
-    font-weight="bold"
-    letter-spacing="3"
-    fill="url(#metallic)"
-    filter="url(#shadow)"
-  >${escaped}</text>
-</svg>`;
+  // Render shadow layer: dark offset text (for drop-shadow effect)
+  const shadowBuf = await sharp({
+    text: {
+      text: `<span foreground="#111111">${safe}</span>`,
+      font: 'CrimsonText Bold',
+      fontfile: FONT_PATH,
+      width: DATE_TEXT_W,
+      height: DATE_TEXT_H,
+      rgba: true,
+      align: 'centre',
+    }
+  }).png().toBuffer();
+
+  const shadowMeta = await sharp(shadowBuf).metadata();
+  const tw = shadowMeta.width || DATE_TEXT_W;
+  const th = shadowMeta.height || DATE_TEXT_H;
+
+  // Render main cream text layer
+  const textBuf = await sharp({
+    text: {
+      text: `<span foreground="#e8dcb8">${safe}</span>`,
+      font: 'CrimsonText Bold',
+      fontfile: FONT_PATH,
+      width: DATE_TEXT_W,
+      height: DATE_TEXT_H,
+      rgba: true,
+      align: 'centre',
+    }
+  }).png().toBuffer();
+
+  // Center in right panel: left = DATE_CENTER_X - textWidth/2
+  const left = Math.max(680, DATE_CENTER_X - Math.floor(tw / 2));
+  const top = DATE_TOP_Y;
+  const shadowLeft = Math.max(680, left + 3);
+  const shadowTop = top + 5;
 
   return sharp(BASE_IMG)
     .resize(OUT_W, OUT_H, { fit: 'fill' })
-    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .composite([
+      { input: shadowBuf, left: shadowLeft, top: shadowTop },
+      { input: textBuf,   left: left,       top: top },
+    ])
     .jpeg({ quality: 90 })
     .toBuffer();
 }
