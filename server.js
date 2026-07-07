@@ -3460,7 +3460,7 @@ app.get('/api/users', async (req, res) => {
     const sessionCountMap = {};
     try {
       const sessSnap = await admin.firestore().collection('sessions')
-        .limit(5000).get();
+        .orderBy('startedAt', 'desc').limit(5000).get();
       sessSnap.forEach(doc => {
         const d = doc.data();
         if (!d.uid) return;
@@ -3468,7 +3468,14 @@ app.get('/api/users', async (req, res) => {
           if (!platformsMap[d.uid]) platformsMap[d.uid] = new Set();
           platformsMap[d.uid].add(d.platform);
         }
-        if (d.appVersion) appVersionMap[d.uid] = d.appVersion;
+        if (d.appVersion) {
+          // Keep the version from the user's MOST RECENT session (by startedAt),
+          // not just whichever doc the scan hits last. (Isaac, 7/07)
+          const ts = d.startedAt?.toMillis ? d.startedAt.toMillis() : 0;
+          if (!appVersionMap[d.uid] || ts >= appVersionMap[d.uid].ts) {
+            appVersionMap[d.uid] = { v: d.appVersion, ts };
+          }
+        }
         sessionTimeMap[d.uid] = (sessionTimeMap[d.uid] || 0) + (d.durationSeconds || 0);
         sessionCountMap[d.uid] = (sessionCountMap[d.uid] || 0) + 1;
       });
@@ -3533,7 +3540,7 @@ app.get('/api/users', async (req, res) => {
       u.pendingApproval = !!pendingMap[u.uid];
       u.pastorElder = !!pastorElderMap[u.uid];
       u.sermonAccess = !!sermonAccessMap[u.uid];
-      u.appVersion = appVersionMap[u.uid] || null;
+      u.appVersion = appVersionMap[u.uid]?.v || null;
       u.appMinutes = Math.round((sessionTimeMap[u.uid] || 0) / 60);
       u.sessionCount = sessionCountMap[u.uid] || 0;
       u.musicMinutes = Math.round((musicMap[u.uid] || 0) / 60);
