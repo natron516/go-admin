@@ -1580,6 +1580,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="children">⭐ Children's</option>
             <option value="music">🎵 Music</option>
             <option value="performance">🎭 Performance</option>
+            <option value="event">🎪 Special Event</option>
             <option value="funzone">🎉 FunZone</option>
             <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
@@ -1594,6 +1595,7 @@ tr.dirty .at-save { display: inline-flex !important; }
               <label><input type="checkbox" value="children" onchange="filterAssets()"> ⭐ Children's</label>
               <label><input type="checkbox" value="music" onchange="filterAssets()"> 🎵 Music</label>
               <label><input type="checkbox" value="performance" onchange="filterAssets()"> 🎭 Performance</label>
+              <label><input type="checkbox" value="event" onchange="filterAssets()"> 🎪 Special Event</label>
               <label><input type="checkbox" value="funzone" onchange="filterAssets()"> 🎉 FunZone</label>
               <label><input type="checkbox" value="uncategorized" onchange="filterAssets()"> 📁 Uncategorized</label>
             </div>
@@ -3285,6 +3287,7 @@ const CATEGORIES = [
   { value: 'children',    label: "⭐ Children's" },
   { value: 'music',       label: '🎵 Music' },
   { value: 'performance', label: '🎭 Performance' },
+  { value: 'event',       label: '🎪 Special Event' },
   { value: 'funzone',     label: '🎉 FunZone' },
   { value: 'hidden',      label: '🔒 Pastor Content' },
   { value: 'archived',    label: '❌ Archived (none — hidden everywhere)' },
