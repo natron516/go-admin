@@ -2,11 +2,18 @@
 /**
  * Local sermon thumbnail generator.
  * Runs on this Mac (where fonts work) to generate + upload dated sermon
- * thumbnails for any sermon asset that needs one.
+ * thumbnails. Does TWO things every Sunday:
+ *
+ *   1. EXISTING assets: backfill any sermon asset missing a pt.thumbnail.
+ *   2. FUTURE Sundays: pre-generate thumbnails for the next N Sundays
+ *      (default 4) and upload to Firebase Storage as sermon_YYYY-MM-DD.jpg.
+ *      The server-side webhook reads these at stream-end and sets pt.thumbnail
+ *      immediately — no cron delay.
  *
  * Usage:
- *   node scripts/generate-sermon-thumbs.js          # skip assets with existing thumbs
- *   node scripts/generate-sermon-thumbs.js --force  # regenerate all
+ *   node scripts/generate-sermon-thumbs.js                  # normal run
+ *   node scripts/generate-sermon-thumbs.js --force          # regenerate all existing
+ *   node scripts/generate-sermon-thumbs.js --future-weeks=8 # pre-generate 8 weeks ahead
  *
  * Required env: FIREBASE_SA (JSON service account key)
  * Reads from go-admin API (admin:gomedia) to find sermon assets.
@@ -15,9 +22,10 @@
 process.chdir(require('path').resolve(__dirname, '..'));
 const { generateSermonThumbnail, formatSermonDate } = require('../services/sermonThumbnail');
 const admin = require('firebase-admin');
-const fs = require('fs');
 
 const force = process.argv.includes('--force');
+const futureWeeksArg = process.argv.find(a => a.startsWith('--future-weeks='));
+const FUTURE_WEEKS = futureWeeksArg ? parseInt(futureWeeksArg.split('=')[1], 10) : 4;
 
 const sa = JSON.parse(process.env.FIREBASE_SA || 'null');
 if (!sa) { console.error('FIREBASE_SA not set'); process.exit(1); }
@@ -36,10 +44,48 @@ async function mux(method, path, body) {
   return res.json();
 }
 
+/** Get the next N Sunday dates (Pacific time) starting from today or next Sunday. */
+function getUpcomingSundays(n, includeToday = true) {
+  const now = new Date();
+  // Work in Pacific time: offset in ms
+  const isPDT = (() => {
+    const y = now.getUTCFullYear();
+    const dstStart = new Date(Date.UTC(y, 2, 1));
+    dstStart.setUTCDate(8 - ((dstStart.getUTCDay() + 6) % 7));
+    dstStart.setUTCDate(dstStart.getUTCDate() + 7);
+    dstStart.setUTCHours(10, 0, 0, 0);
+    const dstEnd = new Date(Date.UTC(y, 10, 1));
+    dstEnd.setUTCDate(1 + (7 - dstEnd.getUTCDay()) % 7);
+    dstEnd.setUTCHours(9, 0, 0, 0);
+    return now >= dstStart && now < dstEnd;
+  })();
+  const offsetMs = isPDT ? -7 * 3600000 : -8 * 3600000;
+  const localNow = new Date(now.getTime() + offsetMs);
+  const dayOfWeek = localNow.getUTCDay(); // 0=Sun
+  // Days until next Sunday (0 if today is Sunday)
+  const daysUntilSunday = includeToday ? ((7 - dayOfWeek) % 7) : (7 - dayOfWeek) || 7;
+  const sundays = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date(localNow.getTime() + (daysUntilSunday + i * 7) * 86400000);
+    // Return as ISO date string (YYYY-MM-DD) in Pacific time
+    const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+    sundays.push(iso);
+  }
+  return sundays;
+}
+
+/** formatSermonDate from an ISO date string (YYYY-MM-DD) for display text on the thumbnail. */
+function formatDateStr(isoDate) {
+  // isoDate is already Pacific-local; just parse it for display
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
 async function run() {
   const bucket = admin.storage().bucket();
 
-  // Fetch all assets
+  // ── Part 1: Backfill existing sermon assets ──────────────────────────────
   const assetsRes = await fetch('https://go-admin-production-6be4.up.railway.app/api/assets', {
     headers: { 'Authorization': 'Basic ' + Buffer.from('admin:gomedia').toString('base64') }
   });
@@ -75,7 +121,14 @@ async function run() {
     const file = bucket.file(filename);
     await file.save(buf, { metadata: { contentType: 'image/jpeg' } });
     await file.makePublic();
-    const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    const baseUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+
+    // Cache-bust if overwriting existing URL
+    let url = baseUrl;
+    if (force && pt.thumbnail && pt.thumbnail.startsWith(baseUrl)) {
+      const vMatch = pt.thumbnail.match(/\?v=(\d+)$/);
+      url = `${baseUrl}?v=${vMatch ? parseInt(vMatch[1], 10) + 1 : 2}`;
+    }
 
     // Update Mux passthrough
     pt.thumbnail = url;
@@ -86,7 +139,37 @@ async function run() {
     await new Promise(r => setTimeout(r, 300));
   }
 
-  console.log(`Done: processed=${processed} skipped=${skipped}`);
+  console.log(`Backfill done: processed=${processed} skipped=${skipped}`);
+
+  // ── Part 2: Pre-generate thumbnails for upcoming Sundays ────────────────
+  // Upload to Storage so the server-side webhook can find them at stream-end.
+  // Skips dates that already have a file in Storage (unless --force).
+  console.log(`\nPre-generating thumbnails for next ${FUTURE_WEEKS} Sundays...`);
+  const upcomingSundays = getUpcomingSundays(FUTURE_WEEKS, false); // exclude today (just streamed)
+  let futureProcessed = 0, futureSkipped = 0;
+
+  for (const isoDate of upcomingSundays) {
+    const filename = `sermon-thumbs/sermon_${isoDate}.jpg`;
+    const file = bucket.file(filename);
+    if (!force) {
+      const [exists] = await file.exists();
+      if (exists) {
+        console.log(`⏭ ${isoDate}: already in Storage — skip`);
+        futureSkipped++;
+        continue;
+      }
+    }
+    const dateStr = formatDateStr(isoDate);
+    const buf = await generateSermonThumbnail(dateStr);
+    await file.save(buf, { metadata: { contentType: 'image/jpeg' } });
+    await file.makePublic();
+    const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+    console.log(`🗓 ${isoDate} (${dateStr}): pre-generated → ${url}`);
+    futureProcessed++;
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  console.log(`Future pre-gen done: generated=${futureProcessed} skipped=${futureSkipped}`);
   process.exit(0);
 }
 run().catch(e => { console.error('FATAL:', e.message); process.exit(1); });
