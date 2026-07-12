@@ -13,7 +13,7 @@
  */
 
 process.chdir(require('path').resolve(__dirname, '..'));
-const { generateSermonThumbnail, formatSermonDate } = require('./services/sermonThumbnail');
+const { generateSermonThumbnail, formatSermonDate } = require('../services/sermonThumbnail');
 const admin = require('firebase-admin');
 const fs = require('fs');
 

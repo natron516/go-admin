@@ -151,8 +151,11 @@ async function generateWithImageMagick(dateStr) {
     // Vertical gradient mask (white-to-black = top to bottom)
     execSync(`${IM} -size ${W}x${H} gradient:"white-black" "${tVmask}"`);
 
-    // Blend: bottom layer base, overlay top layer masked by gradient
-    execSync(`${IM} "${tBot}" \\( "${tTop}" "${tVmask}" -alpha off -compose CopyOpacity -composite \\) -compose Over -composite "${tGold}"`);
+    // Blend: bottom layer base, overlay top layer masked by (gradient × text alpha)
+    // so only the glyphs get the gradient — not the whole text box.
+    execSync(`${IM} "${tTop}" \\( +clone -alpha extract \\( "${tVmask}" -alpha off \\) -compose Multiply -composite \\) -alpha off -compose CopyOpacity -composite "${tGold}.masked.png"`);
+    execSync(`${IM} "${tBot}" "${tGold}.masked.png" -compose Over -composite "${tGold}"`);
+    try { fs.unlinkSync(`${tGold}.masked.png`); } catch(e) {}
 
     // Get text width to center it
     const meta = await sharp(tGold).metadata();

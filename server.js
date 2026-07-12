@@ -663,10 +663,13 @@ async function maybeGenerateWords(asset) {
     const res = await generateAndStoreWords(pid, asset.id);
     if (res.ok) console.log(`[words] Stored ${res.count} word timings for ${asset.id} (pid ${pid})${res.skipped ? ' [skipped, existed]' : ''}`);
     else console.warn(`[words] Skipped word timings for ${asset.id}: ${res.error}`);
-    // SERMONS: replace Mux's auto-captions (which mislabel speech as "[Music]")
-    // with a Deepgram-built caption track by default once words exist. (Isaac,
-    // 6/29) Guarded + fire-and-forget; non-sermon assets keep Mux captions.
-    if (res.ok && isSermonAsset(asset)) {
+    // ALL spoken-word assets (not just sermons): replace Mux's auto-captions
+    // (which mislabel speech as "[Music]") with a Deepgram-built caption track
+    // once words exist. Sermons, audiobooks, catechism series, video podcasts —
+    // anything shouldAutoTranscribe() approved gets clean Deepgram captions.
+    // (Extended from sermon-only on 7/12 — Luther's Small Catechism bug.)
+    // Guarded + fire-and-forget; music assets are excluded upstream.
+    if (res.ok && shouldAutoTranscribe(asset)) {
       try { await swapToDeepgramCaptions(pid, asset.id); }
       catch (e) { console.warn(`[deepgram-cc] swap failed for ${pid}: ${e.message}`); }
     }
