@@ -1930,6 +1930,34 @@ tr.dirty .at-save { display: inline-flex !important; }
             </div>
           </div>
 
+          <!-- Section Shuffle Card -->
+          <div class="card" style="grid-column:1/-1;">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Section Shuffle
+            </div>
+
+            <p style="font-size:13px;color:var(--muted);margin:0 0 16px;">
+              🔀 Section Shuffle — reshuffles Children's &amp; Music thumbnails every N days
+            </p>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);">
+                <input type="checkbox" id="ss-enabled" style="accent-color:var(--accent);width:16px;height:16px;"> Enabled
+              </label>
+            </div>
+
+            <div class="field" style="max-width:200px;">
+              <label>Reshuffle interval (days)</label>
+              <input id="ss-interval" type="number" min="1" step="1" placeholder="2" style="width:100%;">
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;margin-top:16px;">
+              <button class="btn btn-primary" id="ss-save-btn" onclick="saveSectionShuffleConfig()">Save Changes</button>
+              <span id="ss-status" style="font-size:12px;color:var(--muted);"></span>
+            </div>
+          </div>
+
           <!-- Version Distribution -->
           <div class="card" style="grid-column:1/-1;">
             <div class="card-title">
@@ -3577,7 +3605,7 @@ function showTab(name, btn) {
   if (name === 'feedback') loadFeedback();
   if (name === 'analytics') { loadMuxCost(); loadAnalytics(); }
   if (name === 'sessions') loadSessions();
-  if (name === 'settings') loadForceUpdateConfig();
+  if (name === 'settings') { loadForceUpdateConfig(); loadSectionShuffleConfig(); }
   if (name === 'dashboard') loadDashboard();
   if (name === 'books')    loadBooks();
   if (name === 'articles') loadArticles();
@@ -6408,6 +6436,46 @@ async function saveForceUpdateConfig() {
     status.style.color = 'var(--green)';
     status.textContent = '✓ Saved — changes are live immediately';
     toast('Force update config saved ✓');
+  } catch (e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Error: ' + e.message;
+    toast('Save failed: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+    setTimeout(() => { status.textContent = ''; }, 5000);
+  }
+}
+
+// ── Section Shuffle Settings ──────────────────────────────
+async function loadSectionShuffleConfig() {
+  try {
+    const res = await fetch('/api/config/section-shuffle');
+    const data = await res.json();
+    document.getElementById('ss-enabled').checked = data.enabled !== false;
+    document.getElementById('ss-interval').value = data.intervalDays ?? 2;
+  } catch (e) {
+    console.error('Failed to load section shuffle config:', e);
+  }
+}
+
+async function saveSectionShuffleConfig() {
+  const btn = document.getElementById('ss-save-btn');
+  const status = document.getElementById('ss-status');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const body = {
+      enabled: document.getElementById('ss-enabled').checked,
+      intervalDays: parseInt(document.getElementById('ss-interval').value, 10) || 2,
+    };
+    const res = await fetch('/api/config/section-shuffle', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('Save failed');
+    status.style.color = 'var(--green)';
+    status.textContent = '✓ Saved — changes are live immediately';
+    toast('Section shuffle config saved ✓');
   } catch (e) {
     status.style.color = 'var(--red)';
     status.textContent = 'Error: ' + e.message;

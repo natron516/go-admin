@@ -240,6 +240,8 @@ app.use((req, res, next) => {
   if (req.path === '/api/build') return next();
   if (req.path === '/upload-test.html') return next();
   if (req.path === '/cast-receiver.html') return next();
+  // Section Shuffle config: readable unauthenticated by the app
+  if (req.method === 'GET' && req.path === '/api/config/section-shuffle') return next();
   // Login endpoint: public (no auth needed to log in)
   if (req.path === '/api/login' && req.method === 'POST') return next();
   // HTML/static: serve publicly (login overlay handles auth)
@@ -3889,6 +3891,30 @@ app.patch('/api/config/force-update', async (req, res) => {
     if (recommendedVersion !== undefined) update.recommendedVersion = recommendedVersion;
     if (updateMessage !== undefined) update.updateMessage = updateMessage;
     if (forceUpdateEnabled !== undefined) update.forceUpdateEnabled = !!forceUpdateEnabled;
+    await admin.firestore().collection('config').doc('app').set(update, { merge: true });
+    res.json({ ok: true, ...update });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Section Shuffle Config ──────────────────────────────────────────────────
+
+app.get('/api/config/section-shuffle', async (req, res) => {
+  try {
+    const doc = await admin.firestore().collection('config').doc('app').get();
+    const data = doc.data() || {};
+    res.json({
+      enabled: data.sectionShuffleEnabled !== false, // default true
+      intervalDays: data.sectionShuffleIntervalDays ?? 2,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/config/section-shuffle', async (req, res) => {
+  try {
+    const { enabled, intervalDays } = req.body;
+    const update = {};
+    if (enabled !== undefined) update.sectionShuffleEnabled = !!enabled;
+    if (intervalDays !== undefined) update.sectionShuffleIntervalDays = Number(intervalDays);
     await admin.firestore().collection('config').doc('app').set(update, { merge: true });
     res.json({ ok: true, ...update });
   } catch (e) { res.status(500).json({ error: e.message }); }
