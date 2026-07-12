@@ -739,6 +739,58 @@ body.role-editor [data-admin-only] { display: none !important; }
 .at-select:hover { border-color: var(--border); }
 .at-select:focus { border-color: var(--accent); background-color: rgba(99,102,241,.07); }
 .at-select option { background: #1a1a24; }
+/* Multi-category picker */
+.at-multicat {
+  position: relative;
+  min-width: 140px;
+  font-size: 13px;
+}
+.at-multicat-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 5px 22px 5px 7px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color var(--transition);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  background-color: transparent;
+}
+.at-multicat-btn:hover { border-color: var(--border); }
+.at-multicat-open .at-multicat-btn { border-color: var(--accent); background-color: rgba(99,102,241,.07); }
+.at-multicat-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 180px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  z-index: 200;
+  padding: 4px 0;
+}
+.at-multicat-open .at-multicat-menu { display: block; }
+.at-multicat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+.at-multicat-item:hover { background: rgba(99,102,241,.1); }
+.at-multicat-item input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
 .at-status {
   display: inline-flex;
   align-items: center;
@@ -3466,6 +3518,51 @@ function catOptions(selected = '') {
 
 document.getElementById('ns-category').innerHTML = catOptions();
 
+// Multi-category picker: renders a custom checkbox dropdown for an asset row.
+// selectedCats = array of category values currently selected.
+function multicatPicker(assetId, selectedCats) {
+  const sel = selectedCats || [];
+  const label = sel.length === 0
+    ? '-- not set --'
+    : sel.map(v => { const c = CATEGORIES.find(x => x.value === v); return c ? c.label : v; }).join(', ');
+  const items = CATEGORIES.map(c =>
+    `<label class="at-multicat-item"><input type="checkbox" value="${escAttr(c.value)}" ${sel.includes(c.value) ? 'checked' : ''} onchange="multicatChange('${escAttr(assetId)}',this)">${escHtml(c.label)}</label>`
+  ).join('');
+  return `<div class="at-multicat" id="mc-${escAttr(assetId)}">
+    <button type="button" class="at-multicat-btn" onclick="toggleMulticat('${escAttr(assetId)}',event)" title="Categories">${escHtml(label)}</button>
+    <div class="at-multicat-menu">${items}</div>
+  </div>`;
+}
+
+function toggleMulticat(id, e) {
+  e.stopPropagation();
+  const el = document.getElementById('mc-' + id);
+  if (!el) return;
+  const isOpen = el.classList.contains('at-multicat-open');
+  // Close all others
+  document.querySelectorAll('.at-multicat-open').forEach(x => x.classList.remove('at-multicat-open'));
+  if (!isOpen) el.classList.add('at-multicat-open');
+}
+
+function multicatChange(assetId, checkbox) {
+  const el = document.getElementById('mc-' + assetId);
+  if (!el) return;
+  const checked = Array.from(el.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
+  setEdit(assetId, 'categories', checked);
+  // Update button label
+  const btn = el.querySelector('.at-multicat-btn');
+  if (btn) {
+    btn.textContent = checked.length === 0
+      ? '-- not set --'
+      : checked.map(v => { const c = CATEGORIES.find(x => x.value === v); return c ? c.label : v; }).join(', ');
+  }
+}
+
+// Close multi-cat dropdowns when clicking outside
+document.addEventListener('click', () => {
+  document.querySelectorAll('.at-multicat-open').forEach(x => x.classList.remove('at-multicat-open'));
+});
+
 // Tabs
 function showTab(name, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -4181,14 +4278,17 @@ function filterAssets() {
     const title   = (ptData.title || a.meta?.title || '').toLowerCase();
     const pt      = (a.passthrough || '').trim().toLowerCase();
     const assetCat = (ptData.category || a.passthrough || '').trim().toLowerCase();
+    // Build the full categories set (primary + extras)
+    const extraCats = (() => { try { const c = ptData.categories; return Array.isArray(c) ? c.map(x=>x.toLowerCase()) : (c ? JSON.parse(c).map(x=>x.toLowerCase()) : []); } catch { return []; } })();
+    const allCats = assetCat ? [...new Set([assetCat, ...extraCats])] : extraCats;
     if (hideSeries && !assetCat) return false;
-    // Multi-exclude: hide any checked categories ('uncategorized' = empty category)
+    // Multi-exclude: hide if ANY of the asset's categories is excluded
     if (excluded.length) {
-      const effectiveCat = assetCat || 'uncategorized';
-      if (excluded.includes(effectiveCat)) return false;
+      const effectiveCats = allCats.length ? allCats : ['uncategorized'];
+      if (effectiveCats.some(c => excluded.includes(c))) return false;
     }
     const matchQ   = !q   || title.includes(q) || pt.includes(q) || a.id.includes(q);
-    const matchCat = !cat || assetCat === cat.toLowerCase();
+    const matchCat = !cat || allCats.includes(cat.toLowerCase());
     return matchQ && matchCat;
   });
   const countEl = document.getElementById('asset-count');
@@ -4226,6 +4326,9 @@ function assetRowHtml(a) {
   const hasVideo    = (a.tracks || []).some(t => t.type === 'video');
   const rawCat      = ptData.category || (!a.passthrough?.startsWith('{') ? a.passthrough : '') || '';
   const category    = edits.category ?? rawCat.trim();
+  // Multi-category: pt.categories is a JSON array; fall back to [category] for compat
+  const rawCatsArr  = (() => { try { const c = ptData.categories; return Array.isArray(c) ? c : (c ? JSON.parse(c) : null); } catch { return null; } })();
+  const selCats     = edits.categories ?? (rawCatsArr || (category ? [category] : []));
   const customThumb = ptData.thumbnail || null;
   const thumbTime   = ptData.thumbnail_time || 10;
   const startOffset = Number(ptData.startOffset) || 0;
@@ -4264,7 +4367,7 @@ function assetRowHtml(a) {
             </div>
           </div>
           <div class="card-info-col">
-            <select class="at-select" onchange="setEdit('${a.id}','category',this.value)">${catOptions(category)}</select>
+            ${multicatPicker(a.id, selCats)}
             <div class="card-meta">${uploaded}</div>
             <div class="card-actions">
               <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button>
@@ -4316,9 +4419,16 @@ function setEdit(id, key, val) {
     const a = allAssets.find(x => x.id === id);
     const pt = parsePassthrough(a?.passthrough);
     const cat = pt.category || (!a?.passthrough?.startsWith('{') ? a?.passthrough : '') || '';
-    assetEdits[id] = { title: pt.title || a?.meta?.title || '', category: cat.trim() };
+    const catsArr = (() => { try { const c = pt.categories; return Array.isArray(c) ? c : (c ? JSON.parse(c) : null); } catch { return null; } })();
+    assetEdits[id] = {
+      title: pt.title || a?.meta?.title || '',
+      category: cat.trim(),
+      categories: catsArr || (cat.trim() ? [cat.trim()] : []),
+    };
   }
   assetEdits[id][key] = val;
+  // Keep category in sync with categories[0] when categories changes
+  if (key === 'categories') assetEdits[id].category = val[0] || '';
   const row = document.getElementById('arow-'+id);
   if (row) row.classList.add('dirty');
   updateDirtyCount();
@@ -4357,7 +4467,7 @@ async function saveAsset(id) {
   const row = document.getElementById('arow-'+id);
   if (row) { row.classList.add('saving'); row.classList.remove('dirty'); }
   try {
-    await fetch(`/api/assets/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: edits.title, passthrough: edits.category || '' }) });
+    await fetch(`/api/assets/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: edits.title, passthrough: edits.category || '', categories: edits.categories || [] }) });
     delete assetEdits[id];
     const a = allAssets.find(x => x.id === id);
     if (a) {
@@ -4365,6 +4475,8 @@ async function saveAsset(id) {
       a.meta.title = edits.title;
       const pt = parsePassthrough(a.passthrough);
       pt.category = edits.category || '';
+      if ((edits.categories || []).length > 1) pt.categories = edits.categories;
+      else delete pt.categories;
       if (edits.title && edits.title.trim()) pt.title = edits.title.trim();
       a.passthrough = JSON.stringify(pt);
     }

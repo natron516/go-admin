@@ -538,7 +538,10 @@ async function ensureLiveCaptions(streamId) {
 function isSermonAsset(asset) {
   if (asset.live_stream_id && SERMON_STREAM_IDS.has(asset.live_stream_id)) return true;
   const pt = parsePassthrough(asset.passthrough);
-  return (pt.category || '').toLowerCase().trim() === 'sermon';
+  // Check primary category OR any entry in pt.categories (multi-category support)
+  if ((pt.category || '').toLowerCase().trim() === 'sermon') return true;
+  const cats = (() => { try { const c = pt.categories; return Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch { return []; } })();
+  return cats.some(c => c.toLowerCase().trim() === 'sermon');
 }
 
 // Categories that are NOT spoken word — transcription/highlight is skipped.
@@ -552,7 +555,12 @@ function shouldAutoTranscribe(asset) {
   if (asset.live_stream_id && SERMON_STREAM_IDS.has(asset.live_stream_id)) return true;
   const pt = parsePassthrough(asset.passthrough);
   const cat = (pt.category || '').toLowerCase().trim();
-  return !NON_SPOKEN_CATEGORIES.has(cat);
+  // If primary category is music, don't transcribe (even if also tagged children etc.)
+  if (NON_SPOKEN_CATEGORIES.has(cat)) return false;
+  // Also check extra categories — if ALL are music, skip
+  const cats = (() => { try { const c = pt.categories; return Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch { return []; } })();
+  if (cats.length > 0 && cats.every(c => NON_SPOKEN_CATEGORIES.has(c.toLowerCase().trim()))) return false;
+  return true;
 }
 
 // Kick off Mux subtitle generation for any spoken-word asset (non-music) if it
@@ -884,11 +892,21 @@ app.get('/api/upload-status/:uploadId', async (req, res) => {
 // Update asset metadata (title + category) — preserves thumbnail and other JSON keys
 app.patch('/api/assets/:id', async (req, res) => {
   try {
-    const { title, passthrough: category } = req.body;
+    const { title, passthrough: category, categories } = req.body;
     // Fetch current asset so we can preserve existing passthrough fields + title
     const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
     const existing = parsePassthrough(current.data?.passthrough);
-    existing.category = category || '';
+    // Multi-category support: categories is an array of all selected category values.
+    // primary category = categories[0] (for backward compat with pt.category).
+    // pt.categories stores the full array only when more than one category is set.
+    if (Array.isArray(categories) && categories.length > 0) {
+      existing.category = categories[0];
+      if (categories.length > 1) existing.categories = categories;
+      else delete existing.categories;
+    } else {
+      existing.category = category || '';
+      delete existing.categories;
+    }
     // Never clobber a real title with 'Untitled'. Only update the title when a
     // non-empty title is explicitly provided; otherwise keep the current one.
     // Mux DROPS meta.title on assets a few seconds after PATCH (observed 7/01:
