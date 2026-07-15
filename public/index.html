@@ -708,9 +708,32 @@ body.role-editor [data-admin-only] { display: none !important; }
 .card-meta { font-size: 11px; color: var(--muted); }
 .card-actions {
   display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  gap: 4px;
   margin-top: auto;
+  align-items: center;
+}
+.card-actions .btn-slot {
+  display: inline-flex;
+  min-width: 32px;
+  width: 32px;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+.card-actions .btn-slot.btn-slot-wide {
+  width: auto;
+  min-width: unset;
+}
+.card-actions .btn-slot-disabled {
+  opacity: 0.22;
+  pointer-events: none;
+  cursor: default;
+}
+.card-actions .start-offset-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 /* Download button states */
 .dl-preparing { opacity: 0.5; pointer-events: none; }
@@ -4398,20 +4421,29 @@ function assetRowHtml(a) {
             ${multicatPicker(a.id, selCats)}
             <div class="card-meta">${uploaded}</div>
             <div class="card-actions">
-              <button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button>
-              <button class="btn btn-ghost btn-sm ${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'dl-ready' : ''}" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' ? 'Download MP4' : 'No MP4 available'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '✅' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button>
-              ${a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="notifyUsers('${a.id}','${escAttr(title)}','${camPid}')" title="Notify" id="notify-${a.id}">🔔</button>` : ''}
-              ${pid && a.status === 'ready' ? `<button class="btn btn-ghost btn-sm" onclick="openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})" title="Trim">✂️</button>` : ''}
-              ${a.status === 'ready' ? `<span class="start-offset-wrap" title="Viewer start time — playback begins here (skips pre-stream graphic). Enter seconds or mm:ss."><span style="font-size:11px;color:var(--muted);">▶ start</span><input class="at-input start-offset-input" id="soff-${a.id}" type="text" value="${startOffset ? fmtDur(startOffset) : ''}" placeholder="0:00" style="width:58px;padding:4px 6px;font-size:12px;"><button class="btn btn-ghost btn-sm" onclick="saveStartOffset('${a.id}')" title="Save start time">⏱️</button></span>` : ''}
-              ${a.status === 'ready' ? (() => {
+              <!-- Slot 1: Save (hidden until dirty) -->
+              <span class="btn-slot"><button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button></span>
+              <!-- Slot 2: Download MP4 (always) -->
+              <span class="btn-slot"><button class="btn btn-ghost btn-sm ${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? 'dl-ready' : ''}" onclick="startDownloadMp4('${a.id}','${escAttr(title)}')" title="${a.mp4_support === 'standard' ? 'Download MP4' : 'No MP4 available'}" id="dl-${a.id}">${a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' ? '✅' : a.mp4_support === 'standard' ? '<span class=dl-pulse>⏳</span>' : '⬇️'}</button></span>
+              <!-- Slot 3: Notify (grayed if not ready) -->
+              <span class="btn-slot${a.status !== 'ready' ? ' btn-slot-disabled' : ''}"><button class="btn btn-ghost btn-sm" onclick="${a.status === 'ready' ? `notifyUsers('${a.id}','${escAttr(title)}','${camPid}')` : ''}" title="Notify" id="notify-${a.id}">🔔</button></span>
+              <!-- Slot 4: Trim (grayed if no pid or not ready) -->
+              <span class="btn-slot${!(pid && a.status === 'ready') ? ' btn-slot-disabled' : ''}"><button class="btn btn-ghost btn-sm" onclick="${pid && a.status === 'ready' ? `openTrimModal('${a.id}','${camPid}','${camTitle}',${a.duration || 0})` : ''}" title="Trim">✂️</button></span>
+              <!-- Slot 5: Start offset (grayed if not ready) -->
+              <span class="btn-slot btn-slot-wide${a.status !== 'ready' ? ' btn-slot-disabled' : ''}" title="Viewer start time — playback begins here (skips pre-stream graphic). Enter seconds or mm:ss."><span class="start-offset-wrap"><span style="font-size:11px;color:var(--muted);">▶ start</span><input class="at-input start-offset-input" id="soff-${a.id}" type="text" value="${startOffset ? fmtDur(startOffset) : ''}" placeholder="0:00" style="width:58px;padding:4px 6px;font-size:12px;"${a.status !== 'ready' ? ' disabled' : ''}><button class="btn btn-ghost btn-sm" onclick="${a.status === 'ready' ? `saveStartOffset('${a.id}')` : ''}" title="Save start time">⏱️</button></span></span>
+              ${(() => {
                 const tt = (a.tracks || []).find(t => t.type === 'text');
                 const trReady = tt && tt.status === 'ready';
                 const trPrep = tt && tt.status === 'preparing';
-                return `<button class="btn btn-ghost btn-sm ${trReady ? 'dl-ready' : ''}" onclick="openTranscript('${a.id}','${escAttr(title)}')" title="${trReady ? 'View transcript' : trPrep ? 'Transcribing…' : 'Generate transcript'}" id="tr-${a.id}">${trPrep ? '<span class=dl-pulse>📜</span>' : '📜'}</button>` +
-                  (trReady && pid ? `<button class="btn btn-ghost btn-sm" onclick="openScriptureRefs('${a.id}','${camPid}','${escAttr(title)}')" title="Scripture references">📖</button>` : '') +
-                  `<button class="btn btn-ghost btn-sm" onclick="toggleTranscriptVisibility('${a.id}', ${transcriptPublic})" title="${transcriptPublic ? 'Transcript visible to all — click to hide' : 'Transcript hidden from users — click to show'}" id="trvis-${a.id}" style="opacity:${transcriptPublic ? 1 : 0.45};">${transcriptPublic ? '👁️' : '🚫'}</button>`;
-              })() : ''}
-              <span id="del-${a.id}" class="admin-only"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
+                const notReady = a.status !== 'ready';
+                return (
+                  `<span class="btn-slot${notReady ? ' btn-slot-disabled' : ''}"><button class="btn btn-ghost btn-sm ${trReady ? 'dl-ready' : ''}" onclick="${!notReady ? `openTranscript('${a.id}','${escAttr(title)}')` : ''}" title="${trReady ? 'View transcript' : trPrep ? 'Transcribing…' : notReady ? 'Not ready' : 'Generate transcript'}" id="tr-${a.id}">${trPrep ? '<span class=dl-pulse>📜</span>' : '📜'}</button></span>` +
+                  `<span class="btn-slot${!(trReady && pid) ? ' btn-slot-disabled' : ''}"><button class="btn btn-ghost btn-sm" onclick="${trReady && pid ? `openScriptureRefs('${a.id}','${camPid}','${escAttr(title)}')` : ''}" title="Scripture references">📖</button></span>` +
+                  `<span class="btn-slot${notReady ? ' btn-slot-disabled' : ''}"><button class="btn btn-ghost btn-sm" onclick="${!notReady ? `toggleTranscriptVisibility('${a.id}', ${transcriptPublic})` : ''}" title="${transcriptPublic ? 'Transcript visible to all — click to hide' : 'Transcript hidden from users — click to show'}" id="trvis-${a.id}" style="opacity:${transcriptPublic ? 1 : 0.45};">${transcriptPublic ? '👁️' : '🚫'}</button></span>`
+                );
+              })()}
+              <!-- Slot 9: Delete (admin) -->
+              <span id="del-${a.id}" class="btn-slot admin-only"><button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}')">🗑</button></span>
             </div>
           </div>
         </div>
