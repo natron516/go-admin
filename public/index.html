@@ -556,16 +556,17 @@ body.role-editor [data-admin-only] { display: none !important; }
   top: calc(100% + 4px);
   left: 0;
   z-index: 100;
-  background: var(--card);
+  background: var(--surface2);
   border: 1px solid var(--border2);
   border-radius: var(--radius-sm);
   padding: 8px;
-  min-width: 200px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  min-width: 210px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.7);
 }
 .exclude-menu.open { display: block; }
 .exclude-menu label {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px 1fr;
   align-items: center;
   gap: 8px;
   font-size: 13px;
@@ -575,7 +576,7 @@ body.role-editor [data-admin-only] { display: none !important; }
   white-space: nowrap;
 }
 .exclude-menu label:hover { background: var(--accent-dim); }
-.exclude-menu input { accent-color: var(--accent); }
+.exclude-menu input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; cursor: pointer; }
 .assets-toolbar input {
   background: var(--surface);
   border: 1px solid var(--border);
