@@ -4718,7 +4718,7 @@ app.get('/api/audio', async (req, res) => {
 app.post('/api/audio', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, artist, description, audioUrl, coverImageUrl, featuredImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
+    const { title, artist, description, audioUrl, coverImageUrl, featuredImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType, originalDate } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const data = {
       title,
@@ -4736,6 +4736,7 @@ app.post('/api/audio', async (req, res) => {
     };
     if (seriesId) data.seriesId = seriesId;
     if (episodeNumber !== undefined && episodeNumber !== null && episodeNumber !== '') data.episodeNumber = Number(episodeNumber);
+    if (originalDate && /^\d{4}-\d{2}-\d{2}$/.test(originalDate)) data.originalDate = originalDate;
     const ref = await db.collection('audioAssets').add(data);
     res.json({ id: ref.id, ...data });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -4744,7 +4745,7 @@ app.post('/api/audio', async (req, res) => {
 app.patch('/api/audio/:id', async (req, res) => {
   try {
     const db = admin.firestore();
-    const { title, artist, description, audioUrl, coverImageUrl, featuredImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType } = req.body;
+    const { title, artist, description, audioUrl, coverImageUrl, featuredImageUrl, category, duration, featured, sortOrder, seriesId, episodeNumber, mediaType, originalDate } = req.body;
     const update = {};
     if (title !== undefined) update.title = title;
     if (artist !== undefined) update.artist = artist;
@@ -4757,6 +4758,7 @@ app.patch('/api/audio/:id', async (req, res) => {
     if (featured !== undefined) update.featured = !!featured;
     if (sortOrder !== undefined) update.sortOrder = Number(sortOrder);
     if (mediaType !== undefined) update.mediaType = mediaType;
+    if (originalDate !== undefined) update.originalDate = (originalDate && /^\d{4}-\d{2}-\d{2}$/.test(originalDate)) ? originalDate : admin.firestore.FieldValue.delete();
     if (seriesId !== undefined) update.seriesId = seriesId || null;
     if (episodeNumber !== undefined) update.episodeNumber = (episodeNumber !== null && episodeNumber !== '') ? Number(episodeNumber) : null;
     await db.collection('audioAssets').doc(req.params.id).update(update);

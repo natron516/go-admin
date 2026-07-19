@@ -2603,6 +2603,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="music">Music</option>
             <option value="children">Children's</option>
             <option value="sermons">Sermons</option>
+            <option value="archive_sermon">🗄️ Archive Sermon</option>
             <option value="spoken-word">Spoken Word</option>
             <option value="audiobook">Audiobook</option>
             <option value="hidden">🔒 Pastor Content</option>
@@ -2612,6 +2613,10 @@ tr.dirty .at-save { display: inline-flex !important; }
         <div class="field">
           <label>Duration (sec)</label>
           <input type="number" id="audio-duration" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>Original date</label>
+          <input type="date" id="audio-original-date" title="When it was recorded/preached — used for archive year sorting">
         </div>
         <div class="field">
           <label>Sort Order</label>
@@ -5999,7 +6004,7 @@ async function loadFeatured() {
 // Per-type category option sets for the inline Pastor Content category dropdown.
 const PASTOR_CATS = {
   video:  [['sermon','\ud83d\udcd6 Sermon'],['audiobook','\ud83d\udcda Audiobook'],['children','\u2b50 Children\u2019s'],['music','\ud83c\udfb5 Music'],['performance','\ud83c\udfad Performance'],['event','\u26ea Church Event'],['archive_sermon','\ud83d\uddc4\ufe0f Archive Sermon'],['funzone','\ud83c\udf89 FunZone'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
-  audio:  [['music','\ud83c\udfb5 Music'],['children','\u2b50 Children\u2019s'],['sermons','\ud83d\udcd6 Sermons'],['spoken-word','\ud83d\udde3 Spoken Word'],['audiobook','\ud83d\udcda Audiobook'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
+  audio:  [['music','\ud83c\udfb5 Music'],['children','\u2b50 Children\u2019s'],['sermons','\ud83d\udcd6 Sermons'],['archive_sermon','\ud83d\uddc4\ufe0f Archive Sermon'],['spoken-word','\ud83d\udde3 Spoken Word'],['audiobook','\ud83d\udcda Audiobook'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
   book:   [['books-for-boys','Books for Boys'],['books-for-girls','Books for Girls'],['theology','Theology'],['books-for-mothers','Books for Mothers'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
   article:[['articles','All'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
   series: [['sermons','Sermons'],['teaching','Teaching'],['audiobook','Audiobook'],['children','Children\u2019s'],['devotional','Devotional'],['music','Music'],['general','General'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
@@ -7760,6 +7765,7 @@ async function openAudioModal(audio) {
   document.getElementById('audio-featured-preview').innerHTML = '';
   document.getElementById('audio-category').value = audio?.category || 'music';
   document.getElementById('audio-duration').value = audio?.duration ?? 0;
+  document.getElementById('audio-original-date').value = audio?.originalDate || '';
   document.getElementById('audio-sort').value = audio?.sortOrder ?? 0;
 
   document.getElementById('audio-media-type').value = audio?.mediaType || 'audio';
@@ -7818,6 +7824,7 @@ async function saveAudio() {
     featuredImageUrl: document.getElementById('audio-featured').value.trim(),
     category: document.getElementById('audio-category').value,
     duration: Number(document.getElementById('audio-duration').value) || 0,
+    originalDate: document.getElementById('audio-original-date').value || '',
     sortOrder: Number(document.getElementById('audio-sort').value) || 0,
     mediaType: document.getElementById('audio-media-type').value,
     seriesId: seriesId || null,
