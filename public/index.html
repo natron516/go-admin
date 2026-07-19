@@ -4443,6 +4443,20 @@ function arcPollUpload(uploadId) {
   });
 }
 
+let arcItems = {}; // key -> item (for edit/action handlers)
+
+function arcPastorFromTitle(title) {
+  const m = /Pastor\s+(.+)\s*$/.exec(title || '');
+  return m ? m[1].trim() : '';
+}
+
+function arcTitleWithPastor(title, pastor) {
+  // Titles follow "YYYY-M-D Sermon - Pastor <Name>". Replace or append the pastor portion.
+  let base = (title || '').replace(/\s*[-—]\s*Pastor\s+.+\s*$/, '').trim();
+  if (!pastor) return base;
+  return `${base} - Pastor ${pastor}`;
+}
+
 async function loadArchive() {
   const el = document.getElementById('archive-recent');
   el.innerHTML = '<div class="spinner"></div>';
@@ -4458,15 +4472,25 @@ async function loadArchive() {
       let cats = [];
       try { const c = pt.categories; cats = Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch {}
       if (cat === 'archive_sermon' || cats.includes('archive_sermon')) {
-        items.push({ kind: '🎬', title: pt.title || a.meta?.title || '(untitled)', originalDate: pt.originalDate || '', uploaded: a.created_at ? new Date(+a.created_at * 1000) : null, status: a.status });
+        items.push({ key: 'v-' + a.id, type: 'video', id: a.id, pid: a.playback_ids?.[0]?.id || '', kind: '🎬',
+          title: pt.title || a.meta?.title || '(untitled)', originalDate: pt.originalDate || '',
+          uploaded: a.created_at ? new Date(+a.created_at * 1000) : null, status: a.status,
+          mp4Ready: a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' });
       }
     }
     for (const a of (audioRes.audio || [])) {
       if (a.category === 'archive_sermon') {
-        items.push({ kind: '🎧', title: a.title || '(untitled)', originalDate: a.originalDate || '', uploaded: a.createdAt ? new Date(a.createdAt) : null, status: 'ready' });
+        const pidM = /stream\.mux\.com\/([A-Za-z0-9]+)\./.exec(a.audioUrl || '');
+        items.push({ key: 'a-' + a.id, type: 'audio', id: a.id, pid: pidM ? pidM[1] : '', kind: '🎧',
+          title: a.title || '(untitled)', originalDate: a.originalDate || '',
+          uploaded: a.createdAt ? new Date(a.createdAt) : null, status: 'ready', mp4Ready: !!pidM });
       }
     }
     if (!items.length) { el.innerHTML = '<div class="empty"><div class="icon">🗄️</div><p>No archive sermons yet — upload some above.</p></div>'; return; }
+    arcItems = {};
+    items.forEach(it => { arcItems[it.key] = it; });
+    // Distinct pastor names from existing archive titles (for the dropdown)
+    const pastors = [...new Set(items.map(it => arcPastorFromTitle(it.title)).filter(Boolean))].sort();
     // Group by year of originalDate
     const groups = {};
     for (const it of items) {
@@ -4475,17 +4499,145 @@ async function loadArchive() {
     }
     const years = Object.keys(groups).sort((a, b) => b.localeCompare(a));
     el.innerHTML = years.map(yr => {
-      const rows = groups[yr].sort((a, b) => (b.originalDate || '').localeCompare(a.originalDate || '')).map(it =>
-        `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+      const rows = groups[yr].sort((a, b) => (b.originalDate || '').localeCompare(a.originalDate || '')).map(it => {
+        const curPastor = arcPastorFromTitle(it.title);
+        const pastorOpts = ['<option value="">— pastor —</option>']
+          .concat(pastors.map(p => `<option value="${escAttr(p)}"${p === curPastor ? ' selected' : ''}>${escHtml(p)}</option>`))
+          .concat(['<option value="__other__">Other…</option>']).join('');
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;">
           <span>${it.kind}</span>
-          <span style="flex:1;font-size:14px;font-weight:500;">${escHtml(it.title)}</span>
-          <span style="font-size:12px;color:${it.originalDate ? 'var(--muted)' : 'var(--red, #e5484d)'};">${it.originalDate || '⚠️ no date'}</span>
+          <span style="flex:1;min-width:180px;font-size:14px;font-weight:500;" id="arc-title-${it.key}">${escHtml(it.title)}</span>
+          <input class="at-input" type="date" value="${escAttr(it.originalDate)}" onchange="arcSaveDate('${it.key}', this.value)" title="Original date (when preached)" style="padding:2px 6px;font-size:12px;width:130px;${it.originalDate ? '' : 'border-color:var(--red, #e5484d);'}">
+          <select class="at-select" onchange="arcSetPastor('${it.key}', this)" title="Pastor" style="padding:2px 6px;font-size:12px;max-width:150px;">${pastorOpts}</select>
+          <span class="btn-slot"><button class="btn btn-ghost btn-sm" onclick="arcViewTranscript('${it.key}')" title="View transcript">📄</button></span>
+          <span class="btn-slot"><button class="btn btn-ghost btn-sm" onclick="arcDownloadTranscript('${it.key}')" title="Download transcript (.txt)">📄⬇️</button></span>
+          <span class="btn-slot"><button class="btn btn-ghost btn-sm" id="arc-dl-${it.key}" onclick="arcDownloadMedia('${it.key}')" title="${it.type === 'audio' ? 'Download audio (.m4a)' : it.mp4Ready ? 'Download MP4' : 'Prepare MP4 for download'}">${it.mp4Ready ? '⬇️' : '🛠️'}</button></span>
           ${it.status && it.status !== 'ready' ? '<span style="font-size:11px;color:var(--muted);">⏳ processing</span>' : ''}
-        </div>`).join('');
+        </div>`;
+      }).join('');
       return `<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--accent2, var(--text));">${yr === '⚠️ No date' ? yr : '📅 ' + yr} <span style="color:var(--muted);font-weight:400;font-size:12px;">(${groups[yr].length})</span></div>${rows}</div>`;
     }).join('');
   } catch (e) {
     el.innerHTML = `<p style="color:var(--red)">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+async function arcSaveDate(key, value) {
+  const it = arcItems[key];
+  if (!it) return;
+  try {
+    const url = it.type === 'video' ? `/api/assets/${it.id}` : `/api/audio/${it.id}`;
+    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(it.type === 'video' ? { originalDate: value, passthrough: 'archive_sermon' } : { originalDate: value }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    it.originalDate = value;
+    toast('Original date saved');
+    loadArchive();
+  } catch (e) { toast('Date save failed: ' + e.message, true); }
+}
+
+async function arcSetPastor(key, sel) {
+  const it = arcItems[key];
+  if (!it) return;
+  let pastor = sel.value;
+  if (pastor === '__other__') {
+    pastor = (prompt('Pastor name:') || '').trim();
+    if (!pastor) { loadArchive(); return; }
+  }
+  const newTitle = arcTitleWithPastor(it.title, pastor);
+  if (newTitle === it.title) return;
+  try {
+    const url = it.type === 'video' ? `/api/assets/${it.id}` : `/api/audio/${it.id}`;
+    const body = it.type === 'video' ? { title: newTitle, passthrough: 'archive_sermon' } : { title: newTitle };
+    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    it.title = newTitle;
+    const tEl = document.getElementById('arc-title-' + key);
+    if (tEl) tEl.textContent = newTitle;
+    toast('Pastor saved');
+  } catch (e) { toast('Pastor save failed: ' + e.message, true); }
+}
+
+async function arcFetchTranscriptText(it) {
+  if (it.type === 'video') {
+    const r = await fetch(`/api/assets/${it.id}/transcript.txt`);
+    if (!r.ok) throw new Error(r.status === 404 ? 'Transcript not ready yet.' : 'HTTP ' + r.status);
+    return r.text();
+  }
+  if (!it.pid) throw new Error('No playback ID for this audio item.');
+  const r = await fetch(`/api/audio-transcript/${it.pid}/cues`);
+  const j = await r.json();
+  if (j.status !== 'ready' || !j.cues?.length) throw new Error(j.message || 'Transcript not ready yet.');
+  return j.cues.map(c => c.text).join('\n');
+}
+
+async function arcViewTranscript(key) {
+  const it = arcItems[key];
+  if (!it) return;
+  toast('Loading transcript…');
+  try {
+    const text = await arcFetchTranscriptText(it);
+    let bd = document.getElementById('arc-transcript-modal');
+    if (!bd) {
+      bd = document.createElement('div');
+      bd.id = 'arc-transcript-modal';
+      bd.className = 'modal-backdrop';
+      bd.onclick = (e) => { if (e.target === bd) bd.classList.remove('open'); };
+      bd.innerHTML = `<div class="modal" style="max-width:720px;width:92%;">
+        <h3 id="arc-tm-title"></h3>
+        <pre id="arc-tm-body" style="white-space:pre-wrap;max-height:60vh;overflow-y:auto;font-size:13px;line-height:1.6;font-family:inherit;"></pre>
+        <div class="modal-actions"><button class="btn btn-ghost" onclick="document.getElementById('arc-transcript-modal').classList.remove('open')">Close</button></div>
+      </div>`;
+      document.body.appendChild(bd);
+    }
+    document.getElementById('arc-tm-title').textContent = '📄 ' + it.title;
+    document.getElementById('arc-tm-body').textContent = text;
+    bd.classList.add('open');
+  } catch (e) { toast('Transcript: ' + e.message, true); }
+}
+
+async function arcDownloadTranscript(key) {
+  const it = arcItems[key];
+  if (!it) return;
+  if (it.type === 'video') { window.open(`/api/assets/${it.id}/transcript.txt`, '_blank'); return; }
+  try {
+    const text = await arcFetchTranscriptText(it);
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (it.title.replace(/[^a-z0-9 \-_]/gi, '').trim() || 'transcript') + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast('Transcript: ' + e.message, true); }
+}
+
+async function arcDownloadMedia(key) {
+  const it = arcItems[key];
+  if (!it) return;
+  if (it.type === 'audio') {
+    if (!it.pid) { toast('No downloadable file for this audio item.', true); return; }
+    window.open(`https://stream.mux.com/${it.pid}/audio.m4a?download=${encodeURIComponent(it.title)}`, '_blank');
+    return;
+  }
+  const btn = document.getElementById('arc-dl-' + key);
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const r = await fetch(`/api/assets/${it.id}/mp4`, { method: 'POST' });
+    const data = await r.json();
+    if (data.status === 'ready' && data.files?.length) {
+      const best = data.files.reduce((a, b) => ((b.height || 0) > (a.height || 0) ? b : a), data.files[0]);
+      window.open(`/api/assets/${it.id}/mp4/download?quality=${encodeURIComponent(best.name.replace('.mp4',''))}&title=${encodeURIComponent(it.title)}`, '_blank');
+      if (btn) { btn.textContent = '⬇️'; btn.disabled = false; }
+    } else if (data.status === 'preparing') {
+      toast('MP4 is being generated — try again in 1-2 minutes.');
+      if (btn) { btn.textContent = '🛠️'; btn.disabled = false; }
+    } else {
+      toast(data.message || 'MP4 not available.', true);
+      if (btn) { btn.textContent = '🛠️'; btn.disabled = false; }
+    }
+  } catch (e) {
+    toast('Download error: ' + e.message, true);
+    if (btn) { btn.textContent = '🛠️'; btn.disabled = false; }
   }
 }
 
