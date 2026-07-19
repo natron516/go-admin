@@ -942,14 +942,22 @@ app.get('/api/assets', async (req, res) => {
 // Create a direct upload URL
 app.post('/api/create-upload', async (req, res) => {
   try {
-    const { title, passthrough } = req.body;
+    const { title, passthrough, originalDate } = req.body;
+    // passthrough arrives as a plain category string; if an originalDate is
+    // provided, upgrade to JSON passthrough so both survive.
+    let ptValue = passthrough || '';
+    if (originalDate && /^\d{4}-\d{2}-\d{2}$/.test(originalDate)) {
+      const pt = parsePassthrough(ptValue);
+      pt.originalDate = originalDate;
+      ptValue = serializePassthrough(pt);
+    }
     const data = await mux('POST', '/video/v1/uploads', {
       cors_origin: '*',
       new_asset_settings: {
         playback_policy: ['public'],
         mp4_support: 'standard',
         meta: { title: title || 'Untitled' },
-        passthrough: passthrough || '',
+        passthrough: ptValue,
       },
     });
     res.json(data);
@@ -987,7 +995,7 @@ app.get('/api/upload-status/:uploadId', async (req, res) => {
 // Update asset metadata (title + category) — preserves thumbnail and other JSON keys
 app.patch('/api/assets/:id', async (req, res) => {
   try {
-    const { title, passthrough: category, categories } = req.body;
+    const { title, passthrough: category, categories, originalDate } = req.body;
     // Fetch current asset so we can preserve existing passthrough fields + title
     const current = await mux('GET', `/video/v1/assets/${req.params.id}`);
     const existing = parsePassthrough(current.data?.passthrough);
@@ -1008,6 +1016,11 @@ app.patch('/api/assets/:id', async (req, res) => {
     // meta comes back null), so the title RESETS on refresh. Passthrough JSON
     // persists reliably, so store the title there (and mirror to meta for the
     // Mux dashboard). Reads prefer pt.title. (Nate, 7/01)
+    // Original date (YYYY-MM-DD): only touch when explicitly sent; empty clears.
+    if (originalDate !== undefined) {
+      if (originalDate && /^\d{4}-\d{2}-\d{2}$/.test(originalDate)) existing.originalDate = originalDate;
+      else delete existing.originalDate;
+    }
     const curTitle = existing.title || current.data?.meta?.title;
     const newTitle = (title && title.trim() && title.trim() !== 'Untitled') ? title.trim() : (curTitle || '');
     if (newTitle) existing.title = newTitle; else delete existing.title;

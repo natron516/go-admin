@@ -1657,6 +1657,7 @@ tr.dirty .at-save { display: inline-flex !important; }
             <option value="music">🎵 Music</option>
             <option value="performance">🎭 Performance</option>
             <option value="event">⛪ Church Event</option>
+            <option value="archive_sermon">🗄️ Archive Sermon</option>
             <option value="funzone">🎉 FunZone</option>
             <option value="hidden">🔒 Pastor Content</option>
             <option value="archived">❌ Archived (none — hidden everywhere)</option>
@@ -1672,6 +1673,7 @@ tr.dirty .at-save { display: inline-flex !important; }
               <label><input type="checkbox" value="music" onchange="filterAssets()"> 🎵 Music</label>
               <label><input type="checkbox" value="performance" onchange="filterAssets()"> 🎭 Performance</label>
               <label><input type="checkbox" value="event" onchange="filterAssets()"> ⛪ Church Event</label>
+              <label><input type="checkbox" value="archive_sermon" onchange="filterAssets()"> 🗄️ Archive Sermon</label>
               <label><input type="checkbox" value="funzone" onchange="filterAssets()"> 🎉 FunZone</label>
               <label><input type="checkbox" value="uncategorized" onchange="filterAssets()"> 📁 Uncategorized</label>
             </div>
@@ -3392,6 +3394,7 @@ const CATEGORIES = [
   { value: 'music',       label: '🎵 Music' },
   { value: 'performance', label: '🎭 Performance' },
   { value: 'event',       label: '⛪ Church Event' },
+  { value: 'archive_sermon', label: '🗄️ Archive Sermon' },
   { value: 'funzone',     label: '🎉 FunZone' },
   { value: 'hidden',      label: '🔒 Pastor Content' },
   { value: 'archived',    label: '❌ Archived (none — hidden everywhere)' },
@@ -4079,7 +4082,7 @@ function handleFiles(list) { addFiles(list); }
 
 function addFiles(list) {
   for (const file of list) {
-    pendingFiles.push({ uid: Math.random().toString(36).slice(2), file, title: slugToTitle(file.name), passthrough: 'sermon', status: 'pending', progress: 0, notify: true, featured: false });
+    pendingFiles.push({ uid: Math.random().toString(36).slice(2), file, title: slugToTitle(file.name), passthrough: 'sermon', originalDate: '', status: 'pending', progress: 0, notify: true, featured: false });
   }
   renderFileList();
 }
@@ -4117,6 +4120,7 @@ function renderFileList() {
       </div>
       <div style="margin-bottom:6px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Title</label><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="updateFile('${item.uid}','title',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"></div>
       <div style="margin-bottom:8px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Category</label><select class="ut-select" onchange="updateFile('${item.uid}','passthrough',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);">${catOptions(item.passthrough)}</select></div>
+      <div style="margin-bottom:8px;"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Original date <span style="opacity:.7;">(optional — when it was recorded/preached)</span></label><input class="ut-input" type="date" value="${escAttr(item.originalDate || '')}" onchange="updateFile('${item.uid}','originalDate',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"></div>
       <div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--border);padding-top:8px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" ${notifyChecked} onchange="updateFile('${item.uid}','notify',this.checked)" ${dis?'disabled':''} style="width:18px;height:18px;"> 🔔 Notify users</label>
       </div>
@@ -4160,7 +4164,7 @@ async function uploadOne(item) {
   item.status = 'uploading'; item.progress = 0;
   updateCard(item);
   try {
-    const res = await fetch('/api/create-upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: item.title, passthrough: item.passthrough }) });
+    const res = await fetch('/api/create-upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: item.title, passthrough: item.passthrough, originalDate: item.originalDate || '' }) });
     const json = await res.json();
     if (!json.data?.url) throw new Error(json.error || 'No upload URL');
     await new Promise((resolve, reject) => {
@@ -4385,6 +4389,7 @@ function assetRowHtml(a) {
   const thumbTime   = ptData.thumbnail_time || 10;
   const startOffset = Number(ptData.startOffset) || 0;
   const transcriptPublic = ptData.transcriptPublic !== 'false'; // absence = true (default visible)
+  const originalDate = edits.originalDate ?? (ptData.originalDate || '');
   const thumbUrl    = customThumb || (hasVideo && pid ? `https://image.mux.com/${pid}/thumbnail.jpg?width=480&time=${thumbTime}` : '');
   const dur         = a.duration ? fmtDur(a.duration) : '';
   const uploaded    = a.created_at ? new Date(+a.created_at * 1000).toLocaleDateString() : '—';
@@ -4420,7 +4425,7 @@ function assetRowHtml(a) {
           </div>
           <div class="card-info-col">
             ${multicatPicker(a.id, selCats)}
-            <div class="card-meta">${uploaded}</div>
+            <div class="card-meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${uploaded}<span style="display:inline-flex;align-items:center;gap:4px;" title="Original date — when this was recorded/preached (used for archive sorting)"><span style="font-size:11px;color:var(--muted);">📅 orig</span><input class="at-input" type="date" value="${escAttr(originalDate)}" onchange="setEdit('${a.id}','originalDate',this.value)" style="padding:2px 6px;font-size:12px;width:130px;"></span></div>
             <div class="card-actions">
               <!-- Slot 1: Save (hidden until dirty) -->
               <span class="btn-slot"><button class="btn btn-primary btn-sm at-save" onclick="saveAsset('${a.id}')">💾</button></span>
@@ -4528,7 +4533,9 @@ async function saveAsset(id) {
   const row = document.getElementById('arow-'+id);
   if (row) { row.classList.add('saving'); row.classList.remove('dirty'); }
   try {
-    await fetch(`/api/assets/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: edits.title, passthrough: edits.category || '', categories: edits.categories || [] }) });
+    const patchBody = { title: edits.title, passthrough: edits.category || '', categories: edits.categories || [] };
+    if ('originalDate' in edits) patchBody.originalDate = edits.originalDate || '';
+    await fetch(`/api/assets/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patchBody) });
     delete assetEdits[id];
     const a = allAssets.find(x => x.id === id);
     if (a) {
@@ -4538,6 +4545,7 @@ async function saveAsset(id) {
       pt.category = edits.category || '';
       if ((edits.categories || []).length > 1) pt.categories = edits.categories;
       else delete pt.categories;
+      if ('originalDate' in edits) { if (edits.originalDate) pt.originalDate = edits.originalDate; else delete pt.originalDate; }
       if (edits.title && edits.title.trim()) pt.title = edits.title.trim();
       a.passthrough = JSON.stringify(pt);
     }
@@ -5990,7 +5998,7 @@ async function loadFeatured() {
 // ── Pastor Content (admin portal page) ──────────────────
 // Per-type category option sets for the inline Pastor Content category dropdown.
 const PASTOR_CATS = {
-  video:  [['sermon','\ud83d\udcd6 Sermon'],['audiobook','\ud83d\udcda Audiobook'],['children','\u2b50 Children\u2019s'],['music','\ud83c\udfb5 Music'],['performance','\ud83c\udfad Performance'],['funzone','\ud83c\udf89 FunZone'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
+  video:  [['sermon','\ud83d\udcd6 Sermon'],['audiobook','\ud83d\udcda Audiobook'],['children','\u2b50 Children\u2019s'],['music','\ud83c\udfb5 Music'],['performance','\ud83c\udfad Performance'],['event','\u26ea Church Event'],['archive_sermon','\ud83d\uddc4\ufe0f Archive Sermon'],['funzone','\ud83c\udf89 FunZone'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
   audio:  [['music','\ud83c\udfb5 Music'],['children','\u2b50 Children\u2019s'],['sermons','\ud83d\udcd6 Sermons'],['spoken-word','\ud83d\udde3 Spoken Word'],['audiobook','\ud83d\udcda Audiobook'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
   book:   [['books-for-boys','Books for Boys'],['books-for-girls','Books for Girls'],['theology','Theology'],['books-for-mothers','Books for Mothers'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
   article:[['articles','All'],['hidden','\ud83d\udd12 Pastor Content'],['archived','\u274c Archived']],
