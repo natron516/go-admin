@@ -4492,7 +4492,7 @@ async function loadArchive() {
       let cats = [];
       try { const c = pt.categories; cats = Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch {}
       if (cat === 'archive_sermon' || cats.includes('archive_sermon')) {
-        items.push({ key: 'v-' + a.id, type: 'video', id: a.id, pid: a.playback_ids?.[0]?.id || '', kind: '🎬',
+        items.push({ key: 'v-' + a.id, type: 'video', id: a.id, pid: a.playback_ids?.[0]?.id || '', kind: '🎬', duration: a.duration || 0,
           title: pt.title || a.meta?.title || '(untitled)', originalDate: pt.originalDate || '',
           uploaded: a.created_at ? new Date(+a.created_at * 1000) : null, status: a.status,
           mp4Ready: a.mp4_support === 'standard' && a.static_renditions?.status === 'ready' });
@@ -4522,12 +4522,16 @@ async function loadArchive() {
     const years = Object.keys(groups).sort((a, b) => b.localeCompare(a));
     el.innerHTML = years.map(yr => {
       const rows = groups[yr].sort((a, b) => (b.originalDate || '').localeCompare(a.originalDate || '')).map(it => {
+        const thumbTime = Math.max(0, Math.round((it.duration || 0) - 900));
+        const thumb = it.type === 'video' && it.pid
+          ? `<img src="https://image.mux.com/${it.pid}/thumbnail.jpg?time=${thumbTime}&width=128&height=72&fit_mode=smartcrop" loading="lazy" style="width:64px;height:36px;border-radius:4px;object-fit:cover;background:#111;flex-shrink:0;" onerror="this.style.visibility='hidden'">`
+          : `<span style="width:64px;height:36px;border-radius:4px;background:var(--surface2, #1e293b);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🔊</span>`;
         const curPastor = arcPastorFromTitle(it.title);
         const pastorOpts = ['<option value="">— pastor —</option>']
           .concat(pastors.map(p => `<option value="${escAttr(p)}"${p === curPastor ? ' selected' : ''}>${escHtml(p)}</option>`))
           .concat(['<option value="__other__">Other…</option>']).join('');
         return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;">
-          <span>${it.kind}</span>
+          ${thumb}
           <span style="flex:1;min-width:180px;font-size:14px;font-weight:500;" id="arc-title-${it.key}">${escHtml(it.title)}</span>
           <input class="at-input" type="date" value="${escAttr(it.originalDate)}" onchange="arcSaveDate('${it.key}', this.value)" title="Original date (when preached)" style="padding:2px 6px;font-size:12px;width:130px;${it.originalDate ? '' : 'border-color:var(--red, #e5484d);'}">
           <select class="at-select" onchange="arcSetPastor('${it.key}', this)" title="Pastor" style="padding:2px 6px;font-size:12px;max-width:150px;">${pastorOpts}</select>
