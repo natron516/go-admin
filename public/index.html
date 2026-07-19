@@ -4310,14 +4310,24 @@ let arcPending = [];
   fi.addEventListener('change',    e => { arcAddFiles(e.target.files); fi.value = ''; });
 })();
 
+// Uniform archive-sermon title: "YYYY-M-D Sermon" (+ " - Pastor <Name>" when the
+// filename mentions one). Isaac's spec 2026-07-18. Falls back to slugToTitle when no date.
+function arcFormatTitle(od, rawName) {
+  if (!od) return slugToTitle(rawName);
+  const [y, m, d] = od.split('-');
+  const pm = String(rawName).match(/Pastor[\s._-]+([A-Za-z'’-]+)/i);
+  return `${+y}-${+m}-${+d} Sermon` + (pm ? ` - Pastor ${pm[1]}` : '');
+}
+
 function arcAddFiles(list) {
   for (const file of list) {
     const ext = file.name.split('.').pop().toLowerCase();
     const kind = ARC_AUDIO_EXT.includes(ext) ? 'audio' : 'video';
+    const od = parseDateFromTitle(file.name) || '';
     arcPending.push({
       uid: Math.random().toString(36).slice(2), file, kind,
-      title: slugToTitle(file.name),
-      originalDate: parseDateFromTitle(file.name) || '',
+      title: arcFormatTitle(od, file.name),
+      originalDate: od,
       status: 'pending', progress: 0,
     });
   }
