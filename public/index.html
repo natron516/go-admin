@@ -4445,16 +4445,36 @@ function arcPollUpload(uploadId) {
 
 let arcItems = {}; // key -> item (for edit/action handlers)
 
+// Fixed pastor list, in Isaac's requested order (7/19). Labels are used verbatim in titles.
+const ARC_PASTORS = [
+  'Pastor O’Connor', 'Pastor Williams', 'Pastor Waters', 'Pastor J. O’Connor',
+  'Pastor Taylor', 'Pastor Hicks', 'James Nestingen', 'Stephen Paulson',
+];
+
 function arcPastorFromTitle(title) {
-  const m = /Pastor\s+(.+)\s*$/.exec(title || '');
-  return m ? m[1].trim() : '';
+  const t = (title || '').trim();
+  // Match a known list entry at the end of the title (tolerate straight/curly apostrophes)
+  const norm = s => s.replace(/[’']/g, "'");
+  for (const p of ARC_PASTORS) {
+    if (norm(t).endsWith(norm(p))) return p;
+  }
+  const m = /Pastor\s+(.+)\s*$/.exec(t);
+  return m ? 'Pastor ' + m[1].trim() : '';
 }
 
-function arcTitleWithPastor(title, pastor) {
-  // Titles follow "YYYY-M-D Sermon - Pastor <Name>". Replace or append the pastor portion.
-  let base = (title || '').replace(/\s*[-—]\s*Pastor\s+.+\s*$/, '').trim();
-  if (!pastor) return base;
-  return `${base} - Pastor ${pastor}`;
+function arcTitleWithPastor(title, pastorLabel) {
+  // Titles follow "YYYY-M-D Sermon - <Pastor Label>". Replace or append the pastor portion.
+  let base = (title || '').trim();
+  const cur = arcPastorFromTitle(base);
+  if (cur) {
+    const norm = s => s.replace(/[’']/g, "'");
+    const idx = norm(base).lastIndexOf(norm(cur));
+    if (idx > 0) base = base.slice(0, idx).replace(/\s*[-—]\s*$/, '').trim();
+  } else {
+    base = base.replace(/\s*[-—]\s*Pastor\s+.+\s*$/, '').trim();
+  }
+  if (!pastorLabel) return base;
+  return `${base} - ${pastorLabel}`;
 }
 
 async function loadArchive() {
@@ -4489,8 +4509,10 @@ async function loadArchive() {
     if (!items.length) { el.innerHTML = '<div class="empty"><div class="icon">🗄️</div><p>No archive sermons yet — upload some above.</p></div>'; return; }
     arcItems = {};
     items.forEach(it => { arcItems[it.key] = it; });
-    // Distinct pastor names from existing archive titles (for the dropdown)
-    const pastors = [...new Set(items.map(it => arcPastorFromTitle(it.title)).filter(Boolean))].sort();
+    // Fixed pastor list (Isaac's order), plus any extra names found in existing titles
+    const extras = [...new Set(items.map(it => arcPastorFromTitle(it.title)).filter(Boolean))]
+      .filter(p => !ARC_PASTORS.includes(p)).sort();
+    const pastors = ARC_PASTORS.concat(extras);
     // Group by year of originalDate
     const groups = {};
     for (const it of items) {
@@ -4541,7 +4563,7 @@ async function arcSetPastor(key, sel) {
   if (!it) return;
   let pastor = sel.value;
   if (pastor === '__other__') {
-    pastor = (prompt('Pastor name:') || '').trim();
+    pastor = (prompt('Pastor name (full label, e.g. "Pastor Smith"):') || '').trim();
     if (!pastor) { loadArchive(); return; }
   }
   const newTitle = arcTitleWithPastor(it.title, pastor);
