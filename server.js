@@ -512,6 +512,15 @@ app.post('/webhooks/mux', express.raw({ type: 'application/json' }), async (req,
     // fully guarded). For sermons this often no-ops here (rendition not ready)
     // and succeeds on static_renditions.ready instead.
     maybeGenerateWords(event.data);
+    // RELIABLE path for UPLOADS: static_renditions.ready may have already fired
+    // for HLS renditions BEFORE mp4_support was enabled above, and Mux won't
+    // re-fire it for the new MP4s — so portal uploads never got Deepgram words.
+    // Schedule the same rendition-poller used for live-to-VOD; it's idempotent
+    // (skips if words already exist) and deduped against double-scheduling.
+    if (shouldAutoTranscribe(event.data) && event.data?.id) {
+      scheduleSermonDeepgram(event.data.id).catch(e =>
+        console.error(`[upload-deepgram] schedule failed for ${event.data.id}: ${e.message}`));
+    }
   }
 
   // Static renditions (MP4/audio) finished generating — NOW Deepgram can read
@@ -646,13 +655,17 @@ async function deepgramWordsForPlayback(playbackId) {
     `https://stream.mux.com/${playbackId}/low.mp4`,
     `https://stream.mux.com/${playbackId}/medium.mp4`,
   ];
-  let audioUrl = candidates[0];
+  let audioUrl = null;
   for (const url of candidates) {
     try {
       const head = await fetch(url, { method: 'HEAD' });
       if (head.ok) { audioUrl = url; break; }
     } catch { /* try next */ }
   }
+  // No rendition available yet → fail fast with a clear error instead of
+  // blindly POSTing audio.m4a to Deepgram (guaranteed 404 → corrupt-data error).
+  // Callers (poller / manual redo) retry once renditions exist.
+  if (!audioUrl) throw new Error(`no static rendition available yet for ${playbackId} (tried audio.m4a/low.mp4/medium.mp4)`);
   const params = new URLSearchParams({
     model: 'nova-2', language: 'en', smart_format: 'true', punctuate: 'true',
   });
@@ -706,8 +719,21 @@ async function generateAndStoreWords(playbackId, assetId, { force = false } = {}
 // before mp4 renditions exist, and static_renditions.ready may have already
 // fired for HLS delivery renditions before mp4_support was enabled, so Mux
 // may never re-fire it for the new MP4 renditions.
+const _deepgramPollersInFlight = new Set();
 async function scheduleSermonDeepgram(assetId) {
   if (!DEEPGRAM_KEY) return;
+  if (_deepgramPollersInFlight.has(assetId)) {
+    console.log(`[live-deepgram] ${assetId}: poller already in flight — skipping duplicate`);
+    return;
+  }
+  _deepgramPollersInFlight.add(assetId);
+  try {
+    await _scheduleSermonDeepgramInner(assetId);
+  } finally {
+    _deepgramPollersInFlight.delete(assetId);
+  }
+}
+async function _scheduleSermonDeepgramInner(assetId) {
   const MAX_ATTEMPTS = 20; // 20 * 90s = 30 min
   const POLL_MS = 90_000;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
