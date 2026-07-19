@@ -4274,7 +4274,7 @@ function parseDateFromTitle(name) {
   };
   let m, r;
   // ISO: YYYY-MM-DD (also _ . /)
-  if ((m = s.match(/(?:^|\D)(19\d{2}|20\d{2})[-_./](\d{1,2})[-_./](\d{1,2})(?!\d)/)) && (r = mk(m[1], m[2], m[3]))) return r;
+  if ((m = s.match(/(?:^|\D)(19\d{2}|20\d{2})[-_./ ](\d{1,2})[-_./ ](\d{1,2})(?!\d)/)) && (r = mk(m[1], m[2], m[3]))) return r;
   const mn = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
   // "March 14 1999", "Mar 14, 99", "Sept 3rd 2004"
   if ((m = s.match(new RegExp(mn + '[\\s._-]+(\\d{1,2})(?:st|nd|rd|th)?[,\\s._-]+(\\d{2,4})', 'i')))) {
