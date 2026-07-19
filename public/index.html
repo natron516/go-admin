@@ -1430,6 +1430,11 @@ tr.dirty .at-save { display: inline-flex !important; }
         <span class="nav-label">Pastor Content</span>
       </button>
 
+      <button class="tab" data-label="Archive Sermons" onclick="navTo('archive', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" stroke-linecap="round"/><path d="M10 12h4" stroke-linecap="round"/></svg></span>
+        <span class="nav-label">🗄️ Archive Sermons</span>
+      </button>
+
       <!-- Watch -->
       <div style="padding:12px 10px 2px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;opacity:.7;" class="nav-label">Watch</div>
 
@@ -1514,7 +1519,7 @@ tr.dirty .at-save { display: inline-flex !important; }
       </button>
     </nav>
     <div class="sidebar-footer" style="font-size:11px;color:var(--muted);text-align:center;" title="Admin portal build">
-      <span class="nav-label">Portal build <span id="portal-build">240</span></span>
+      <span class="nav-label">Portal build <span id="portal-build">241</span></span>
     </div>
   </aside>
 
@@ -1609,6 +1614,43 @@ tr.dirty .at-save { display: inline-flex !important; }
             </button>
           </div>
           <div id="file-list"></div>
+        </div>
+      </section>
+
+      <!-- ── ARCHIVE SERMONS ─────────────────────────── -->
+      <section id="tab-archive" class="section">
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="page-title">🗄️ Archive Sermons</div>
+            <div class="page-subtitle">Upload old sermons (video or audio). The original date is auto-detected from the filename — double-check before uploading.</div>
+          </div>
+        </div>
+
+        <div id="archive-drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:36px 20px;text-align:center;cursor:pointer;color:var(--muted);transition:border-color .15s;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;">
+            <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
+          </svg>
+          <div class="dz-title" style="font-weight:700;color:var(--text);margin-top:6px;">Drop archive sermon files here</div>
+          <div class="dz-sub" style="font-size:13px;">Video (MP4, MOV, MKV) or Audio (MP3, M4A, WAV) · category is set to 🗄️ Archive Sermon automatically</div>
+        </div>
+        <input type="file" id="archive-file-input" multiple style="font-size:16px;display:block;margin:12px 0;">
+
+        <div id="archive-pending-wrap" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin:16px 0;flex-wrap:wrap;">
+            <h3 style="font-size:16px;font-weight:700;flex:1;" id="archive-pending-count"></h3>
+            <button class="btn btn-ghost btn-sm" onclick="arcClearDone()">Clear Done</button>
+            <button class="btn btn-primary" id="archive-upload-btn" onclick="arcUploadAll()">Upload All</button>
+          </div>
+          <div id="archive-file-list"></div>
+        </div>
+
+        <div style="margin-top:28px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <h3 style="font-size:16px;font-weight:700;">Recently uploaded archive items</h3>
+            <button class="btn btn-ghost btn-sm" onclick="loadArchive()">↻ Refresh</button>
+          </div>
+          <div id="archive-recent" style="margin-top:10px;"><div class="spinner"></div></div>
         </div>
       </section>
 
@@ -3670,6 +3712,7 @@ function showTab(name, btn) {
   if (name === 'audio')    loadAudio();
   if (name === 'series')   loadSeries();
   if (name === 'music')    loadMusic();
+  if (name === 'archive')  loadArchive();
 }
 
 // ── Sessions ─────────────────────────────────────────────
@@ -4212,6 +4255,228 @@ async function uploadOne(item) {
     window._preUploadFeat = item.featured;
     showUploadDoneModal(item.title, '', '');
   } catch (err) { console.error(err); item.status = 'error'; updateCard(item); }
+}
+
+// ── Archive Sermons tab ──────────────────────────────────
+// Robust original-date parser: pulls a date out of a filename/title.
+// Supports ISO (1999-03-14), numeric M-D-YY(YY) with - / . _ separators,
+// month names/abbrevs ("March 14 1999", "14 Mar 99"), compact YYYYMMDD.
+// 2-digit years: greater than the current 2-digit year → 19xx, else 20xx.
+function parseDateFromTitle(name) {
+  const s = String(name || '').replace(/\.[^/.]+$/, '');
+  const MONTHS = { jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12 };
+  const fixYear = y => { y = +y; if (y >= 1000) return y; const cur = new Date().getFullYear() % 100; return y > cur ? 1900 + y : 2000 + y; };
+  const mk = (y, m, d) => {
+    y = +y; m = +m; d = +d;
+    if (m < 1 || m > 12 || d < 1 || y < 1900 || y > new Date().getFullYear() + 1) return null;
+    if (d > new Date(y, m, 0).getDate()) return null;
+    return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  };
+  let m, r;
+  // ISO: YYYY-MM-DD (also _ . /)
+  if ((m = s.match(/(?:^|\D)(19\d{2}|20\d{2})[-_./](\d{1,2})[-_./](\d{1,2})(?!\d)/)) && (r = mk(m[1], m[2], m[3]))) return r;
+  const mn = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+  // "March 14 1999", "Mar 14, 99", "Sept 3rd 2004"
+  if ((m = s.match(new RegExp(mn + '[\\s._-]+(\\d{1,2})(?:st|nd|rd|th)?[,\\s._-]+(\\d{2,4})', 'i')))) {
+    if ((r = mk(fixYear(m[3]), MONTHS[m[1].toLowerCase()], m[2]))) return r;
+  }
+  // "14 Mar 99", "14 March 1999"
+  if ((m = s.match(new RegExp('(\\d{1,2})(?:st|nd|rd|th)?[\\s._-]+' + mn + '[,\\s._-]+(\\d{2,4})', 'i')))) {
+    if ((r = mk(fixYear(m[3]), MONTHS[m[2].toLowerCase()], m[1]))) return r;
+  }
+  // Numeric: M-D-YYYY / M-D-YY (also / . _); if first number >12 treat as D-M
+  if ((m = s.match(/(?:^|\D)(\d{1,2})[-_./](\d{1,2})[-_./](\d{2,4})(?!\d)/))) {
+    const y = fixYear(m[3]), a = +m[1], b = +m[2];
+    if (a > 12 && b <= 12 && (r = mk(y, b, a))) return r;
+    if ((r = mk(y, a, b))) return r;
+    if ((r = mk(y, b, a))) return r;
+  }
+  // Compact: YYYYMMDD
+  if ((m = s.match(/(?:^|\D)(19\d{2}|20\d{2})(\d{2})(\d{2})(?!\d)/)) && (r = mk(m[1], m[2], m[3]))) return r;
+  return null;
+}
+
+const ARC_AUDIO_EXT = ['mp3','m4a','aac','wav','flac','ogg','wma'];
+let arcPending = [];
+
+(function initArchiveDropZone() {
+  const dz = document.getElementById('archive-drop-zone');
+  const fi = document.getElementById('archive-file-input');
+  if (!dz || !fi) return;
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.style.borderColor = 'var(--accent)'; });
+  dz.addEventListener('dragleave', () => { dz.style.borderColor = 'var(--border)'; });
+  dz.addEventListener('drop',      e => { e.preventDefault(); dz.style.borderColor = 'var(--border)'; arcAddFiles(e.dataTransfer.files); });
+  dz.addEventListener('click',     () => fi.click());
+  fi.addEventListener('change',    e => { arcAddFiles(e.target.files); fi.value = ''; });
+})();
+
+function arcAddFiles(list) {
+  for (const file of list) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const kind = ARC_AUDIO_EXT.includes(ext) ? 'audio' : 'video';
+    arcPending.push({
+      uid: Math.random().toString(36).slice(2), file, kind,
+      title: slugToTitle(file.name),
+      originalDate: parseDateFromTitle(file.name) || '',
+      status: 'pending', progress: 0,
+    });
+  }
+  renderArcList();
+}
+function arcUpdate(uid, key, val) { const it = arcPending.find(f => f.uid === uid); if (it) it[key] = val; if (key === 'originalDate') renderArcList(); }
+function arcRemove(uid) { arcPending = arcPending.filter(f => f.uid !== uid); renderArcList(); }
+function arcClearDone() { arcPending = arcPending.filter(f => f.status !== 'done'); renderArcList(); }
+
+function renderArcList() {
+  const wrap = document.getElementById('archive-pending-wrap');
+  if (!arcPending.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  document.getElementById('archive-pending-count').textContent = `${arcPending.length} file${arcPending.length > 1 ? 's' : ''} queued`;
+  document.getElementById('archive-file-list').innerHTML = arcPending.map(item => {
+    const dis = item.status !== 'pending';
+    const noDate = !item.originalDate;
+    const kindBadge = item.kind === 'audio' ? '🎧 Audio' : '🎬 Video';
+    return `<div class="upload-card" id="arc-card-${item.uid}" style="background:var(--surface);border:1px solid ${noDate ? 'var(--red, #e5484d)' : 'var(--border)'};border-radius:10px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div><div style="font-size:13px;font-weight:600;">${escHtml(item.file.name)} <span style="font-size:11px;color:var(--muted);font-weight:400;">· ${kindBadge} · ${formatSize(item.file.size)}</span></div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="arc-status-${item.uid}">${utBadge(item)}</span>
+          <button class="btn btn-danger btn-sm" onclick="arcRemove('${item.uid}')" ${dis?'disabled':''} style="padding:4px 8px;">✕</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 200px;gap:8px;">
+        <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:2px;">Title</label><input class="ut-input" type="text" value="${escAttr(item.title)}" onchange="arcUpdate('${item.uid}','title',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"></div>
+        <div><label style="font-size:12px;color:${noDate ? 'var(--red, #e5484d)' : 'var(--muted)'};display:block;margin-bottom:2px;">${noDate ? '⚠️ Original date — needs a date!' : '📅 Original date (auto-detected)'}</label><input class="ut-input" type="date" value="${escAttr(item.originalDate)}" onchange="arcUpdate('${item.uid}','originalDate',this.value)" ${dis?'disabled':''} style="width:100%;padding:8px;font-size:14px;background:var(--surface2);border:1px solid ${noDate ? 'var(--red, #e5484d)' : 'var(--border)'};border-radius:6px;color:var(--text);"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Category: 🗄️ Archive Sermon (fixed)</div>
+    </div>`;
+  }).join('');
+}
+
+function arcUpdateCard(item) {
+  const sc = document.getElementById('arc-status-' + item.uid);
+  if (sc) sc.innerHTML = utBadge(item);
+}
+
+async function arcUploadAll() {
+  const pending = arcPending.filter(f => f.status === 'pending');
+  if (!pending.length) { toast('Nothing to upload!'); return; }
+  const missing = pending.filter(f => !f.originalDate);
+  if (missing.length && !confirm(`${missing.length} file(s) have no original date. Upload anyway?`)) return;
+  const btn = document.getElementById('archive-upload-btn');
+  btn.disabled = true;
+  for (const item of pending) {
+    if (item.kind === 'audio') await arcUploadAudio(item);
+    else await arcUploadVideo(item);
+  }
+  btn.disabled = false;
+  toast('Archive uploads complete! 🎉');
+  loadArchive();
+}
+
+function arcPutFile(item, url) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener('progress', e => { if (e.lengthComputable) { item.progress = Math.round(e.loaded / e.total * 100); arcUpdateCard(item); } });
+    xhr.addEventListener('load', () => { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new Error('HTTP ' + xhr.status)); });
+    xhr.addEventListener('error', () => reject(new Error('Network error')));
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', item.file.type || 'application/octet-stream');
+    xhr.send(item.file);
+  });
+}
+
+async function arcUploadVideo(item) {
+  item.status = 'uploading'; item.progress = 0; arcUpdateCard(item);
+  try {
+    window._preUploadNotify = false; window._preUploadFeat = false;
+    const res = await fetch('/api/create-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: item.title, passthrough: 'archive_sermon', originalDate: item.originalDate || '' }) });
+    const json = await res.json();
+    if (!json.data?.url) throw new Error(json.error || 'No upload URL');
+    await arcPutFile(item, json.data.url);
+    item.status = 'done'; item.progress = 100; arcUpdateCard(item);
+  } catch (err) { console.error(err); item.status = 'error'; arcUpdateCard(item); }
+}
+
+async function arcUploadAudio(item) {
+  item.status = 'uploading'; item.progress = 0; arcUpdateCard(item);
+  try {
+    const res = await fetch('/api/create-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: item.title }) });
+    const json = await res.json();
+    if (!json.data?.url) throw new Error(json.error || 'No upload URL');
+    await arcPutFile(item, json.data.url);
+    // Wait for Mux to encode, then create the audio record
+    const streamUrl = await arcPollUpload(json.data.id);
+    const payload = { title: item.title, artist: '', description: '', audioUrl: streamUrl || '', coverImageUrl: '', featuredImageUrl: '', category: 'archive_sermon', duration: 0, originalDate: item.originalDate || '', sortOrder: 0, mediaType: 'audio', seriesId: null, episodeNumber: null };
+    const r = await fetch('/api/audio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Failed to save audio record'); }
+    item.status = 'done'; item.progress = 100; arcUpdateCard(item);
+  } catch (err) { console.error(err); item.status = 'error'; arcUpdateCard(item); toast('Audio upload error: ' + err.message, 'error'); }
+}
+
+function arcPollUpload(uploadId) {
+  return new Promise(resolve => {
+    let tries = 0;
+    const poll = async () => {
+      tries++;
+      try {
+        const r = await fetch('/api/upload-status/' + uploadId);
+        if (r.ok) {
+          const d = await r.json();
+          if (d.status === 'ready' && d.streamUrl) return resolve(d.streamUrl);
+          if (d.status === 'errored') return resolve('');
+        }
+      } catch {}
+      if (tries < 40) setTimeout(poll, 3000); else resolve('');
+    };
+    setTimeout(poll, 3000);
+  });
+}
+
+async function loadArchive() {
+  const el = document.getElementById('archive-recent');
+  el.innerHTML = '<div class="spinner"></div>';
+  try {
+    const [assetsRes, audioRes] = await Promise.all([
+      fetch('/api/assets').then(r => r.json()).catch(() => ({ data: [] })),
+      fetch('/api/audio').then(r => r.json()).catch(() => ({ audio: [] })),
+    ]);
+    const items = [];
+    for (const a of (assetsRes.data || [])) {
+      const pt = parsePassthrough(a.passthrough);
+      const cat = (pt.category || (!String(a.passthrough || '').startsWith('{') ? a.passthrough : '') || '').trim();
+      let cats = [];
+      try { const c = pt.categories; cats = Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch {}
+      if (cat === 'archive_sermon' || cats.includes('archive_sermon')) {
+        items.push({ kind: '🎬', title: pt.title || a.meta?.title || '(untitled)', originalDate: pt.originalDate || '', uploaded: a.created_at ? new Date(+a.created_at * 1000) : null, status: a.status });
+      }
+    }
+    for (const a of (audioRes.audio || [])) {
+      if (a.category === 'archive_sermon') {
+        items.push({ kind: '🎧', title: a.title || '(untitled)', originalDate: a.originalDate || '', uploaded: a.createdAt ? new Date(a.createdAt) : null, status: 'ready' });
+      }
+    }
+    if (!items.length) { el.innerHTML = '<div class="empty"><div class="icon">🗄️</div><p>No archive sermons yet — upload some above.</p></div>'; return; }
+    // Group by year of originalDate
+    const groups = {};
+    for (const it of items) {
+      const yr = it.originalDate ? it.originalDate.slice(0, 4) : '⚠️ No date';
+      (groups[yr] = groups[yr] || []).push(it);
+    }
+    const years = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+    el.innerHTML = years.map(yr => {
+      const rows = groups[yr].sort((a, b) => (b.originalDate || '').localeCompare(a.originalDate || '')).map(it =>
+        `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+          <span>${it.kind}</span>
+          <span style="flex:1;font-size:14px;font-weight:500;">${escHtml(it.title)}</span>
+          <span style="font-size:12px;color:${it.originalDate ? 'var(--muted)' : 'var(--red, #e5484d)'};">${it.originalDate || '⚠️ no date'}</span>
+          ${it.status && it.status !== 'ready' ? '<span style="font-size:11px;color:var(--muted);">⏳ processing</span>' : ''}
+        </div>`).join('');
+      return `<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--accent2, var(--text));">${yr === '⚠️ No date' ? yr : '📅 ' + yr} <span style="color:var(--muted);font-weight:400;font-size:12px;">(${groups[yr].length})</span></div>${rows}</div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--red)">Error: ${escHtml(e.message)}</p>`;
+  }
 }
 
 // ── Live Streams ──────────────────────────────────────────
