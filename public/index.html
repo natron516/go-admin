@@ -792,15 +792,17 @@ body.role-editor [data-admin-only] { display: none !important; }
 .at-multicat-open .at-multicat-btn { border-color: var(--accent); background-color: rgba(99,102,241,.07); }
 .at-multicat-menu {
   display: none;
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
+  /* fixed so ancestor overflow:hidden (card-row/td-card) can't clip the panel;
+     positioned via JS in toggleMulticat(). (Isaac's clipping bug, 7/18) */
+  position: fixed;
   min-width: 180px;
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
   background: var(--surface2);
   border: 1px solid var(--border2);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
-  z-index: 200;
+  z-index: 500;
   padding: 4px 0;
 }
 .at-multicat-open .at-multicat-menu { display: block; }
@@ -3601,7 +3603,26 @@ function toggleMulticat(id, e) {
   const isOpen = el.classList.contains('at-multicat-open');
   // Close all others
   document.querySelectorAll('.at-multicat-open').forEach(x => x.classList.remove('at-multicat-open'));
-  if (!isOpen) el.classList.add('at-multicat-open');
+  if (!isOpen) {
+    el.classList.add('at-multicat-open');
+    // Menu is position:fixed (escapes card overflow:hidden) — place it under
+    // the button, flipping above when there isn't enough room below.
+    const btn = el.querySelector('.at-multicat-btn');
+    const menu = el.querySelector('.at-multicat-menu');
+    if (btn && menu) {
+      const r = btn.getBoundingClientRect();
+      const menuH = Math.min(340, window.innerHeight * 0.6);
+      const below = window.innerHeight - r.bottom;
+      menu.style.left = Math.min(r.left, window.innerWidth - 200) + 'px';
+      if (below < menuH + 10 && r.top > menuH + 10) {
+        menu.style.top = 'auto';
+        menu.style.bottom = (window.innerHeight - r.top + 2) + 'px';
+      } else {
+        menu.style.bottom = 'auto';
+        menu.style.top = (r.bottom + 2) + 'px';
+      }
+    }
+  }
 }
 
 function multicatChange(assetId, checkbox) {
@@ -3618,10 +3639,14 @@ function multicatChange(assetId, checkbox) {
   }
 }
 
-// Close multi-cat dropdowns when clicking outside
+// Close multi-cat dropdowns when clicking outside (and on scroll — the panel
+// is position:fixed, so it would otherwise detach from its row)
 document.addEventListener('click', () => {
   document.querySelectorAll('.at-multicat-open').forEach(x => x.classList.remove('at-multicat-open'));
 });
+window.addEventListener('scroll', () => {
+  document.querySelectorAll('.at-multicat-open').forEach(x => x.classList.remove('at-multicat-open'));
+}, { passive: true });
 
 // Tabs
 function showTab(name, btn) {
