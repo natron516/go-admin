@@ -950,7 +950,11 @@ app.get('/api/home', async (req, res) => {
       mux('GET', '/video/v1/live-streams').then(r => r.data || []).catch(() => []),
     ]);
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.json({ assets, audio, series, podcasts, books, articles, liveStreams: live });
+    // archive_sermon audio is pastor/elder-only (Archive page pulls /api/audio
+    // directly) — keep it OUT of the aggregated home feed so it never appears
+    // in the public Listen tab on ANY app version. (Isaac, 7/19)
+    const publicAudio = audio.filter(a => a.category !== 'archive_sermon');
+    res.json({ assets, audio: publicAudio, series, podcasts, books, articles, liveStreams: live });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
