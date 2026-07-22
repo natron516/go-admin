@@ -830,12 +830,32 @@ app.get('/watch/:playbackId', async (req, res) => {
   const pid = req.params.playbackId;
   if (!/^[A-Za-z0-9]+$/.test(pid)) return res.status(400).send('Bad playback id');
   let title = 'GO Media';
+  let hidden = false;
   try {
     const assets = await fetchAllMuxAssets();
     const asset = assets.find(a => (a.playback_ids || []).some(p => p.id === pid));
-    if (asset) title = asset.meta?.title || title;
-  } catch { /* title lookup is best-effort */ }
+    if (asset) {
+      title = asset.meta?.title || title;
+      hidden = parsePassthrough(asset.passthrough).category === 'hidden';
+    }
+  } catch { /* lookup is best-effort */ }
+  const streamURL = `https://stream.mux.com/${pid}.m3u8`;
   const poster = `https://image.mux.com/${pid}/thumbnail.jpg?width=1200`;
+  const player = hidden
+    ? `<img class="poster" src="${poster}" alt="">\n  <h1>${escapeHtml(title)}</h1>\n  <div class="brand">Gospel Outreach — GO Media</div>\n  <p style="color:#9a9aa3;font-size:14px;margin:0 4px 20px;">This video is available in the GO Media app.</p>`
+    : `<video id="v" controls playsinline poster="${poster}"></video>\n  <h1>${escapeHtml(title)}</h1>\n  <div class="brand">Gospel Outreach — GO Media</div>`;
+  const playerScript = hidden ? '' : `<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script>
+  const video = document.getElementById('v');
+  const src = ${JSON.stringify(streamURL)};
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = src;
+  } else if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls();
+    hls.loadSource(src);
+    hls.attachMedia(video);
+  }
+</script>`;
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -852,7 +872,7 @@ app.get('/watch/:playbackId', async (req, res) => {
   * { box-sizing: border-box; margin: 0; }
   body { background: #0b0b0f; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
   .wrap { width: 100%; max-width: 900px; padding: 20px 16px 40px; }
-  .poster { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 16/9; object-fit: cover; display: block; }
+  .poster, video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 16/9; object-fit: cover; display: block; }
   h1 { font-size: 20px; font-weight: 600; margin: 16px 4px 4px; }
   .brand { display: flex; align-items: center; gap: 8px; margin: 6px 4px 20px; color: #9a9aa3; font-size: 14px; }
   .appstore { display: inline-flex; align-items: center; gap: 10px; background: #1c1c22; border: 1px solid #2c2c34; border-radius: 12px; padding: 12px 18px; color: #fff; text-decoration: none; font-size: 15px; }
@@ -862,12 +882,10 @@ app.get('/watch/:playbackId', async (req, res) => {
 </head>
 <body>
 <div class="wrap">
-  <img class="poster" src="${poster}" alt="">
-  <h1>${escapeHtml(title)}</h1>
-  <div class="brand">Gospel Outreach — GO Media</div>
-  <p style="color:#9a9aa3;font-size:14px;margin:0 4px 20px;">Watch this video in the GO Media app.</p>
+  ${player}
   <a class="appstore" href="https://apps.apple.com/app/id6764472420">📱 <span><b>Get the GO Media app</b><span>Watch on iPhone, iPad &amp; Apple&nbsp;TV</span></span></a>
 </div>
+${playerScript}
 </body>
 </html>`);
 });
