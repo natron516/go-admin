@@ -237,6 +237,8 @@ app.use((req, res, next) => {
   if (req.method === 'GET' && req.path.startsWith('/api/deepgram-vtt/')) return next();
   if (req.path === '/webhooks/mux') return next();
   if (req.path === '/api/fcm-token' && req.method === 'POST') return next();
+  // Share push notifications: called by the app after writing a share (no basic auth in app)
+  if (req.path === '/api/notify-share' && req.method === 'POST') return next();
   if (req.path === '/api/build') return next();
   if (req.path === '/upload-test.html') return next();
   if (req.path === '/cast-receiver.html') return next();
@@ -4257,6 +4259,69 @@ app.post('/api/notify', async (req, res) => {
     res.json({ ok: true, messageId: result });
   } catch (e) {
     console.error('[notify] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Notify recipients that a video was shared with them in-app.
+// Body: { recipientUids: [uid], senderName, title, assetId, playbackId }
+// Sends to FCM tokens stored on users/{uid}.fcmTokens (array) or .fcmToken (string).
+app.post('/api/notify-share', async (req, res) => {
+  if (!sa) return res.status(503).json({ error: 'Firebase Admin not configured' });
+  try {
+    const { recipientUids, senderName, title, assetId, playbackId } = req.body || {};
+    if (!Array.isArray(recipientUids) || !recipientUids.length) {
+      return res.status(400).json({ error: 'recipientUids required' });
+    }
+    const db = admin.firestore();
+    const body = `${senderName || 'Someone'} shared "${title || 'a video'}" with you`;
+    const results = [];
+    for (const uid of recipientUids.slice(0, 50)) {
+      try {
+        const doc = await db.collection('users').doc(String(uid)).get();
+        const data = doc.exists ? doc.data() : {};
+        const tokens = [...new Set([
+          ...(Array.isArray(data.fcmTokens) ? data.fcmTokens : []),
+          ...(typeof data.fcmToken === 'string' && data.fcmToken ? [data.fcmToken] : []),
+        ])].filter(t => typeof t === 'string' && t.length > 20);
+        if (!tokens.length) { results.push({ uid, ok: false, reason: 'no tokens' }); continue; }
+        let sent = 0;
+        const dead = [];
+        for (const token of tokens) {
+          try {
+            await admin.messaging().send({
+              token,
+              notification: { title: 'Shared with you', body },
+              data: {
+                type: 'shared_video',
+                assetId: assetId || '',
+                playbackId: playbackId || '',
+              },
+              apns: { payload: { aps: { sound: 'default' } } },
+            });
+            sent++;
+          } catch (e) {
+            if (/not-registered|invalid-registration|invalid-argument/i.test(e.message || '') ||
+                (e.code && String(e.code).includes('registration-token-not-registered'))) {
+              dead.push(token);
+            }
+          }
+        }
+        // Prune dead tokens so they don't accumulate
+        if (dead.length && Array.isArray(data.fcmTokens)) {
+          await db.collection('users').doc(String(uid))
+            .update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...dead) })
+            .catch(() => {});
+        }
+        results.push({ uid, ok: sent > 0, sent, pruned: dead.length });
+      } catch (e) {
+        results.push({ uid, ok: false, error: e.message });
+      }
+    }
+    console.log(`[notify-share] ${senderName} -> ${recipientUids.length} recipient(s):`, JSON.stringify(results));
+    res.json({ ok: true, results });
+  } catch (e) {
+    console.error('[notify-share] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
