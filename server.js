@@ -692,26 +692,113 @@ async function deepgramWordsForPlayback(playbackId) {
   return words;
 }
 
+// ── Chunk-safe transcript word storage / retrieval ──────────────────────────
+// Firestore documents cap at 1 MB. A 3+ hour sermon can produce 60,000+ words
+// whose serialized JSON payload easily exceeds that limit. To stay safe we:
+//   • Estimate the serialized size of the words array before writing.
+//   • If it fits in a single doc (≤ 900 KB) we write it the classic way:
+//       transcriptWords/{pid}  →  { words: [...], assetId, model, updatedAt }
+//   • If it is too large we split into numbered chunk docs under a subcollection:
+//       transcriptWords/{pid}  →  { chunked: true, chunkCount: N, count: total,
+//                                   assetId, model, updatedAt }
+//       transcriptWords/{pid}/wordChunks/0  →  { words: [...slice 0] }
+//       transcriptWords/{pid}/wordChunks/1  →  { words: [...slice 1] }
+//       ...
+// Readers call readTranscriptWords(pid) which reassembles transparently, so
+// all existing paths (captions, sentence cues, /words endpoint, transcript
+// builder, scripture refs) work unchanged.
+
+const WORDS_CHUNK_BYTES = 900 * 1024; // 900 KB — comfortable under 1 MB limit
+
+// Estimate serialized size of a words array (fast — avoids full JSON.stringify).
+function estimateWordsBytes(words) {
+  // Each word object: {"w":"word","s":1.234,"e":1.567} ≈ avg ~30 bytes incl. overhead.
+  // Use JSON.stringify for accuracy (words may vary widely in length).
+  return Buffer.byteLength(JSON.stringify(words), 'utf8');
+}
+
+// Write words to Firestore, chunking if the payload approaches 1 MB.
+async function storeTranscriptWords(db, pid, words, { assetId = null } = {}) {
+  const ref = db.collection('transcriptWords').doc(pid);
+  const meta = { assetId: assetId || null, model: 'nova-2',
+                 updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+
+  const totalBytes = estimateWordsBytes(words);
+  if (totalBytes <= WORDS_CHUNK_BYTES) {
+    // Single-doc path (backward-compat, most sermons).
+    await ref.set({ words, ...meta }, { merge: true });
+    return;
+  }
+
+  // Multi-chunk path: split words into slices that each fit under the limit.
+  // We binary-search slice sizes to stay safe without guessing.
+  const chunks = [];
+  let start = 0;
+  while (start < words.length) {
+    // Start with a generous estimate, then shrink if needed.
+    let end = Math.min(words.length, start + Math.floor(words.length * WORDS_CHUNK_BYTES / totalBytes) + 100);
+    while (end > start + 1 && estimateWordsBytes(words.slice(start, end)) > WORDS_CHUNK_BYTES) end--;
+    chunks.push(words.slice(start, end));
+    start = end;
+  }
+
+  // Write chunk docs first (atomic: each is well under 1 MB).
+  const chunkColl = ref.collection('wordChunks');
+  for (let i = 0; i < chunks.length; i++) {
+    await chunkColl.doc(String(i)).set({ words: chunks[i] });
+  }
+  // Write the index doc last — readers treat chunked:true as the signal.
+  await ref.set({ chunked: true, chunkCount: chunks.length, count: words.length, ...meta }, { merge: false });
+  console.log(`[transcriptWords] ${pid}: stored ${words.length} words in ${chunks.length} chunks (~${Math.round(totalBytes/1024)}KB)`);
+}
+
+// Read words for a playback id, transparently reassembling chunks if needed.
+// Returns null if no words stored yet.
+async function readTranscriptWords(pid) {
+  const db = admin.firestore();
+  const ref = db.collection('transcriptWords').doc(pid);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const data = snap.data();
+  if (data?.chunked) {
+    // Reassemble from subcollection chunks.
+    const chunkSnaps = await ref.collection('wordChunks').orderBy(admin.firestore.FieldPath.documentId()).get();
+    const all = [];
+    for (const cs of chunkSnaps.docs) {
+      const cw = cs.data()?.words;
+      if (Array.isArray(cw)) all.push(...cw);
+    }
+    return all.length ? all : null;
+  }
+  const words = data?.words;
+  return Array.isArray(words) && words.length ? words : null;
+}
+
+// Check whether words exist without loading them all (fast skip check).
+async function transcriptWordsExist(db, pid) {
+  const snap = await db.collection('transcriptWords').doc(pid).get();
+  if (!snap.exists) return false;
+  const d = snap.data();
+  if (d?.chunked) return (d.count || 0) > 0;
+  return Array.isArray(d?.words) && d.words.length > 0;
+}
+
 // Generate + persist word timings for one playback id (idempotent unless force).
 // Returns { ok, count, skipped? }. Never throws into callers that wrap it.
 async function generateAndStoreWords(playbackId, assetId, { force = false } = {}) {
   if (!DEEPGRAM_KEY) return { ok: false, error: 'DEEPGRAM_API_KEY not set' };
   const db = admin.firestore();
-  const ref = db.collection('transcriptWords').doc(playbackId);
   if (!force) {
-    const existing = await ref.get();
-    if (existing.exists && Array.isArray(existing.data()?.words) && existing.data().words.length) {
-      return { ok: true, count: existing.data().words.length, skipped: true };
+    if (await transcriptWordsExist(db, playbackId)) {
+      const snap = await db.collection('transcriptWords').doc(playbackId).get();
+      const d = snap.data();
+      const count = d?.chunked ? (d.count || 0) : (d?.words?.length || 0);
+      return { ok: true, count, skipped: true };
     }
   }
   const words = await deepgramWordsForPlayback(playbackId);
   if (!words.length) return { ok: false, error: 'no words returned' };
-  await ref.set({
-    words,
-    assetId: assetId || null,
-    model: 'nova-2',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
+  await storeTranscriptWords(db, playbackId, words, { assetId });
   return { ok: true, count: words.length };
 }
 
@@ -756,8 +843,7 @@ async function _scheduleSermonDeepgramInner(assetId) {
       }
       if (renditionReady) {
         // Check if Deepgram words already exist (safety-net cron may have run)
-        const existing = await admin.firestore().collection('transcriptWords').doc(pid).get();
-        if (existing.exists && (existing.data()?.words || []).length) {
+        if (await transcriptWordsExist(admin.firestore(), pid)) {
           console.log(`[live-deepgram] ${assetId} (${pid}): words already exist — skipping re-run`);
           return;
         }
@@ -1456,8 +1542,7 @@ const SERMON_CUES_TTL = 60 * 60 * 1000; // 1h; sermon transcripts don't change
 // (Isaac, 6/29 — replace Mux's mislabeled "[Music]" captions with Deepgram.)
 async function deepgramCaptionCues(pid, maxWords = 7) {
   try {
-    const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
-    const words = snap.exists ? snap.data()?.words : null;
+    const words = await readTranscriptWords(pid);
     if (!Array.isArray(words) || !words.length) return [];
     const cues = [];
     let buf = [], startT = null, lastE = null;
@@ -1558,8 +1643,7 @@ app.post('/api/sermons/use-deepgram-captions', adminOnly, async (req, res) => {
 // (Isaac, 6/29)
 async function deepgramSentenceCues(pid) {
   try {
-    const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
-    const words = snap.exists ? snap.data()?.words : null;
+    const words = await readTranscriptWords(pid);
     if (!Array.isArray(words) || !words.length) return [];
     const cues = [];
     let buf = [], startT = null;
@@ -1682,8 +1766,7 @@ app.get('/api/sermons/search-transcripts', async (req, res) => {
 app.get('/api/audio-transcript/:playbackId/words', async (req, res) => {
   try {
     const pid = req.params.playbackId;
-    const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
-    const words = snap.exists ? snap.data()?.words : null;
+    const words = await readTranscriptWords(pid);
     if (!Array.isArray(words) || !words.length) {
       return res.json({ status: 'none', message: 'No word-level timing for this track.' });
     }
@@ -2348,11 +2431,14 @@ app.post('/api/sermons/ensure-latest-transcript', adminOnly, async (req, res) =>
     if (!pid) return res.json({ status: 'none', message: 'Sermon asset has no playback id.' });
 
     // Already transcribed?
-    const existing = await admin.firestore().collection('transcriptWords').doc(pid).get();
-    if (existing.exists && (existing.data()?.words || []).length) {
+    if (await transcriptWordsExist(admin.firestore(), pid)) {
+      const db = admin.firestore();
+      const snap = await db.collection('transcriptWords').doc(pid).get();
+      const d = snap.data();
+      const wordCount = d?.chunked ? (d.count || 0) : (d?.words?.length || 0);
       const built = await buildTranscriptFromWords(pid, null);
       return res.json({ status: 'ready', playbackId: pid, assetId: asset.id,
-        words: existing.data().words.length, chars: built?.text?.length || 0 });
+        words: wordCount, chars: built?.text?.length || 0 });
     }
 
     // Make sure mp4_support is on so a rendition will generate.
@@ -2648,8 +2734,7 @@ function detectSermonStartFromWords(words) {
 // When `startSeconds` is null/undefined, auto-detect the sermon start from the
 // words (trims pre-sermon worship automatically).
 async function buildTranscriptFromWords(playbackId, startSeconds = null) {
-  const snap = await admin.firestore().collection('transcriptWords').doc(playbackId).get();
-  const words = snap.exists ? snap.data()?.words : null;
+  const words = await readTranscriptWords(playbackId);
   if (!Array.isArray(words) || !words.length) return null;
   const start = (startSeconds == null) ? detectSermonStartFromWords(words) : startSeconds;
   const kept = words.filter(w => (w.s ?? 0) >= start && w.w);
@@ -2914,8 +2999,7 @@ function parseVtt(vtt) {
 // Builds a rolling text window with each word's start time so refs keep an
 // accurate timestamp, honoring the same manual start as the transcript.
 async function extractScriptureRefsFromWords(playbackId, startSeconds = 0) {
-  const snap = await admin.firestore().collection('transcriptWords').doc(playbackId).get();
-  const words = (snap.exists ? snap.data()?.words : null) || [];
+  const words = (await readTranscriptWords(playbackId)) || [];
   const kept = words.filter(w => (w.s ?? 0) >= startSeconds && w.w);
   if (!kept.length) return [];
   const text = kept.map(w => w.w).join(' ');
@@ -2971,8 +3055,7 @@ async function extractScriptureRefs(asset) {
     if (useDeepgram) {
       let start = await resolveDeepgramStart(pid, ov);
       if (start == null) {
-        const snap = await admin.firestore().collection('transcriptWords').doc(pid).get();
-        const words = snap.exists ? snap.data()?.words : null;
+        const words = await readTranscriptWords(pid);
         start = detectSermonStartFromWords(words || []);
       }
       const refs = await extractScriptureRefsFromWords(pid, start);
