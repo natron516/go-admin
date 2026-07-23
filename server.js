@@ -588,13 +588,17 @@ async function ensureLiveCaptions(streamId) {
   return { ok: true, enabled: true };
 }
 
+// Categories treated as spoken-word sermon-class assets for Deepgram pipeline.
+const SERMON_CATEGORIES = new Set(['sermon', 'archive_sermon']);
+
 function isSermonAsset(asset) {
   if (asset.live_stream_id && SERMON_STREAM_IDS.has(asset.live_stream_id)) return true;
   const pt = parsePassthrough(asset.passthrough);
-  // Check primary category OR any entry in pt.categories (multi-category support)
-  if ((pt.category || '').toLowerCase().trim() === 'sermon') return true;
+  // Check primary category OR any entry in pt.categories (multi-category support).
+  // Includes archive_sermon so archived 2018+ videos use the same Deepgram pipeline.
+  if (SERMON_CATEGORIES.has((pt.category || '').toLowerCase().trim())) return true;
   const cats = (() => { try { const c = pt.categories; return Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch { return []; } })();
-  return cats.some(c => c.toLowerCase().trim() === 'sermon');
+  return cats.some(c => SERMON_CATEGORIES.has(c.toLowerCase().trim()));
 }
 
 // Categories that are NOT spoken word — transcription/highlight is skipped.
