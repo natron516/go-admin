@@ -4160,26 +4160,6 @@ function addFiles(list) {
   renderFileList();
 }
 function updateFile(uid, key, val) { const item = pendingFiles.find(f => f.uid === uid); if (item) item[key] = val; }
-function toggleSelectFile(uid, checked) { const item = pendingFiles.find(f => f.uid === uid); if (item) item.selected = checked; syncBulkBar(); }
-function bulkSelectAll(checked) { pendingFiles.forEach(f => { if (f.status === 'pending') f.selected = checked; }); renderFileList(); }
-function bulkSelected() { return pendingFiles.filter(f => f.selected && f.status === 'pending'); }
-function bulkSetCategory(val) {
-  if (!val) return;
-  const sel = bulkSelected(); if (!sel.length) { toast('Select some files first'); return; }
-  sel.forEach(f => f.passthrough = val);
-  renderFileList();
-  toast(`Category set on ${sel.length} file${sel.length>1?'s':''}`);
-}
-function bulkSetNotify(on) {
-  const sel = bulkSelected(); if (!sel.length) { toast('Select some files first'); return; }
-  sel.forEach(f => f.notify = on);
-  renderFileList();
-  toast(`Notify ${on?'ON':'OFF'} for ${sel.length} file${sel.length>1?'s':''}`);
-}
-function syncBulkBar() {
-  const n = bulkSelected().length;
-  document.querySelectorAll('.bulk-sel-count').forEach(el => el.textContent = n ? `${n} selected` : 'none selected');
-}
 function removeFile(uid) { pendingFiles = pendingFiles.filter(f => f.uid !== uid); renderFileList(); }
 function clearDone() { pendingFiles = pendingFiles.filter(f => f.status !== 'done'); renderFileList(); }
 
@@ -4199,23 +4179,13 @@ function renderFileList() {
   countEl.textContent = `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} queued`;
   // Render file list into the wrap that's currently active
   const listTarget = wrap.querySelector('#file-list');
-  const pendingOnly = pendingFiles.filter(f => f.status === 'pending');
-  const allSelected = pendingOnly.length > 0 && pendingOnly.every(f => f.selected);
-  const selCount = pendingOnly.filter(f => f.selected).length;
-  const bulkBar = pendingOnly.length > 1 ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;"><input type="checkbox" ${allSelected?'checked':''} onchange="bulkSelectAll(this.checked)" style="width:18px;height:18px;"> Select all</label>
-      <span class="bulk-sel-count" style="font-size:12px;color:var(--muted);white-space:nowrap;">${selCount ? selCount + ' selected' : 'none selected'}</span>
-      <select onchange="bulkSetCategory(this.value); this.value='';" style="padding:6px 8px;font-size:13px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);"><option value="" selected disabled>Set category for selected…</option>${CATEGORIES.map(c=>`<option value="${c.value}">${c.label}</option>`).join('')}</select>
-      <button class="btn btn-ghost btn-sm" onclick="bulkSetNotify(false)" style="padding:6px 10px;">🔕 Notify OFF</button>
-      <button class="btn btn-ghost btn-sm" onclick="bulkSetNotify(true)" style="padding:6px 10px;">🔔 Notify ON</button>
-    </div>` : '';
-  const listHtml = bulkBar + pendingFiles.map(item => {
+  const listHtml = pendingFiles.map(item => {
     const dis = item.status !== 'pending';
     const notifyChecked = item.notify !== false ? 'checked' : '';
     const featChecked = item.featured ? 'checked' : '';
     return `<div class="upload-card" id="card-${item.uid}" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="display:flex;align-items:center;gap:10px;">${dis?'':`<input type="checkbox" ${item.selected?'checked':''} onchange="toggleSelectFile('${item.uid}',this.checked)" style="width:18px;height:18px;flex-shrink:0;">`}<div><div style="font-size:13px;font-weight:600;">${escHtml(item.file.name)}</div><div style="font-size:11px;color:var(--muted);">${formatSize(item.file.size)}</div></div></div>
+        <div><div style="font-size:13px;font-weight:600;">${escHtml(item.file.name)}</div><div style="font-size:11px;color:var(--muted);">${formatSize(item.file.size)}</div></div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="status-${item.uid}">${utBadge(item)}</span>
           <button class="btn btn-danger btn-sm admin-only" onclick="removeFile('${item.uid}')" ${dis?'disabled':''} style="padding:4px 8px;">✕</button>
